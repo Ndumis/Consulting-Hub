@@ -1,5 +1,5 @@
 <?php
-    
+
     require_once '../config/session.php';
     if (!isset($_SESSION['user_id'])) {
         header("Location: ../auth/login.php");
@@ -11,14 +11,11 @@
     require_once '../includes/functions.php';
     require_once '../includes/page_tracker.php';
 
-    // Check department access
     Security::requireDepartmentAccess('Marketing');
 
     $database = new Database();
     $db = $database->getConnection();
 
-    // Auto-migrate blog_posts: add columns introduced in the 2026-06-08 migration
-    // if they don't exist yet so the page works before a manual DB migration is run.
     try {
         $col_check = $db->query("SHOW COLUMNS FROM `blog_posts` LIKE 'client_id'");
         if ($col_check->rowCount() === 0) {
@@ -32,1974 +29,1352 @@
         error_log("blog_posts auto-migration error: " . $e->getMessage());
     }
 
-    // Get user info
-    $user_id = $_SESSION['user_id'];
-    $username = $_SESSION['username'];
-    $role = $_SESSION['role'];
-    $department = $_SESSION['department'];
-    $email = $_SESSION['email'];
+    $user_id   = $_SESSION['user_id'];
+    $username  = $_SESSION['username'];
+    $role      = $_SESSION['role'];
+    $department= $_SESSION['department'];
+    $email     = $_SESSION['email'];
 
-    // Handle new campaign creation
     if ($_POST && isset($_POST['create_campaign'])) {
         Security::checkCSRFToken();
         Security::requireWriteAccess('Marketing');
-        
-        $client_id = (int)$_POST['client_id'];
-        $campaign_name = Security::sanitizeInput($_POST['campaign_name']);
-        $campaign_type = Security::sanitizeInput($_POST['campaign_type']);
-        $budget = floatval($_POST['budget']);
-        $start_date = Security::sanitizeInput($_POST['start_date']);
-        $end_date = Security::sanitizeInput($_POST['end_date']);
-        
-        $query = "INSERT INTO marketing_campaigns (client_id, campaign_name, campaign_type, budget, start_date, end_date) 
-                  VALUES (?, ?, ?, ?, ?, ?)";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$client_id, $campaign_name, $campaign_type, $budget, $start_date, $end_date]);
+        $db->prepare("INSERT INTO marketing_campaigns (client_id,campaign_name,campaign_type,budget,start_date,end_date) VALUES (?,?,?,?,?,?)")
+           ->execute([(int)$_POST['client_id'],Security::sanitizeInput($_POST['campaign_name']),Security::sanitizeInput($_POST['campaign_type']),floatval($_POST['budget']),Security::sanitizeInput($_POST['start_date']),Security::sanitizeInput($_POST['end_date'])]);
+        header("Location: marketing.php?view=campaigns&msg=campaign_added"); exit();
     }
 
-    // Handle campaign updates
     if ($_POST && isset($_POST['update_campaign'])) {
         Security::checkCSRFToken();
         Security::requireWriteAccess('Marketing');
-        
-        $campaign_id = (int)$_POST['campaign_id'];
-        $status = Security::sanitizeInput($_POST['status']);
-        $metrics = Security::sanitizeInput($_POST['metrics']);
-        
-        $query = "UPDATE marketing_campaigns SET status = ?, metrics = ? WHERE id = ?";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$status, $metrics, $campaign_id]);
+        $db->prepare("UPDATE marketing_campaigns SET status=?,metrics=? WHERE id=?")
+           ->execute([Security::sanitizeInput($_POST['status']),Security::sanitizeInput($_POST['metrics']),(int)$_POST['campaign_id']]);
+        header("Location: marketing.php?view=campaigns&msg=campaign_updated"); exit();
     }
 
-    // Handle social media post creation
     if ($_POST && isset($_POST['create_social_post'])) {
         Security::checkCSRFToken();
         Security::requireWriteAccess('Marketing');
-        
-        $client_id = (int)$_POST['client_id'];
-        $campaign_id = !empty($_POST['campaign_id']) ? (int)$_POST['campaign_id'] : null;
-        $platform = Security::sanitizeInput($_POST['platform']);
-        $content = Security::sanitizeInput($_POST['content']);
-        $scheduled_for = Security::sanitizeInput($_POST['scheduled_date']);
-        
-        $query = "INSERT INTO social_media_posts (client_id, campaign_id, platform, content, scheduled_for) 
-                  VALUES (?, ?, ?, ?, ?)";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$client_id, $campaign_id, $platform, $content, $scheduled_for]);
+        $db->prepare("INSERT INTO social_media_posts (client_id,campaign_id,platform,content,scheduled_for) VALUES (?,?,?,?,?)")
+           ->execute([(int)$_POST['client_id'],!empty($_POST['campaign_id'])?(int)$_POST['campaign_id']:null,Security::sanitizeInput($_POST['platform']),Security::sanitizeInput($_POST['content']),Security::sanitizeInput($_POST['scheduled_date'])]);
+        header("Location: marketing.php?view=social-posts&msg=post_added"); exit();
     }
 
-    // Handle social media post updates
     if ($_POST && isset($_POST['update_social_post'])) {
         Security::checkCSRFToken();
         Security::requireWriteAccess('Marketing');
-        
-        $post_id = (int)$_POST['post_id'];
-        $platform = Security::sanitizeInput($_POST['platform']);
-        $content = Security::sanitizeInput($_POST['content']);
-        $scheduled_for = Security::sanitizeInput($_POST['scheduled_date']);
-        $status = Security::sanitizeInput($_POST['status']);
-        $engagement_metrics = Security::sanitizeInput($_POST['engagement_metrics']);
-        
-        $query = "UPDATE social_media_posts SET platform = ?, content = ?, scheduled_for = ?, status = ?, engagement_stats = ? WHERE id = ?";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$platform, $content, $scheduled_for, $status, $engagement_metrics, $post_id]);
+        $db->prepare("UPDATE social_media_posts SET platform=?,content=?,scheduled_for=?,status=?,engagement_stats=? WHERE id=?")
+           ->execute([Security::sanitizeInput($_POST['platform']),Security::sanitizeInput($_POST['content']),Security::sanitizeInput($_POST['scheduled_date']),Security::sanitizeInput($_POST['status']),Security::sanitizeInput($_POST['engagement_metrics']),(int)$_POST['post_id']]);
+        header("Location: marketing.php?view=social-posts&msg=post_updated"); exit();
     }
 
-    // Handle social media post deletion
     if ($_POST && isset($_POST['delete_social_post'])) {
         Security::checkCSRFToken();
         Security::requireWriteAccess('Marketing');
-        
-        $post_id = (int)$_POST['post_id'];
-        $query = "DELETE FROM social_media_posts WHERE id = ?";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$post_id]);
+        $db->prepare("DELETE FROM social_media_posts WHERE id=?")->execute([(int)$_POST['post_id']]);
+        header("Location: marketing.php?view=social-posts&msg=post_deleted"); exit();
     }
 
-    // Handle email campaign creation
     if ($_POST && isset($_POST['create_email_campaign'])) {
         Security::checkCSRFToken();
         Security::requireWriteAccess('Marketing');
-        
-        $client_id = (int)$_POST['client_id'];
-        $campaign_name = Security::sanitizeInput($_POST['campaign_name']);
-        $subject = Security::sanitizeInput($_POST['subject']);
-        $content = Security::sanitizeInput($_POST['content']);
-        $send_date = Security::sanitizeInput($_POST['send_date']);
-        
-        $query = "INSERT INTO email_campaigns (client_id, campaign_name, subject, content, scheduled_date) 
-                  VALUES (?, ?, ?, ?, ?)";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$client_id, $campaign_name, $subject, $content, $send_date]);
+        $db->prepare("INSERT INTO email_campaigns (client_id,campaign_name,subject,content,scheduled_date) VALUES (?,?,?,?,?)")
+           ->execute([(int)$_POST['client_id'],Security::sanitizeInput($_POST['campaign_name']),Security::sanitizeInput($_POST['subject']),Security::sanitizeInput($_POST['content']),Security::sanitizeInput($_POST['send_date'])]);
+        header("Location: marketing.php?view=email-campaigns&msg=email_added"); exit();
     }
 
-    // Handle email campaign updates
     if ($_POST && isset($_POST['update_email_campaign'])) {
         Security::checkCSRFToken();
         Security::requireWriteAccess('Marketing');
-        
-        $campaign_id = (int)$_POST['campaign_id'];
-        $subject = Security::sanitizeInput($_POST['subject']);
-        $content = Security::sanitizeInput($_POST['content']);
-        $send_date = Security::sanitizeInput($_POST['send_date']);
-        $status = Security::sanitizeInput($_POST['status']);
-        
-        $query = "UPDATE email_campaigns SET subject = ?, content = ?, scheduled_date = ?, status = ? WHERE id = ?";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$subject, $content, $send_date, $status, $campaign_id]);
+        $db->prepare("UPDATE email_campaigns SET subject=?,content=?,scheduled_date=?,status=? WHERE id=?")
+           ->execute([Security::sanitizeInput($_POST['subject']),Security::sanitizeInput($_POST['content']),Security::sanitizeInput($_POST['send_date']),Security::sanitizeInput($_POST['status']),(int)$_POST['campaign_id']]);
+        header("Location: marketing.php?view=email-campaigns&msg=email_updated"); exit();
     }
 
-    // Handle email campaign sending
     if ($_POST && isset($_POST['send_email_campaign'])) {
         Security::checkCSRFToken();
         Security::requireWriteAccess('Marketing');
-        
-        $campaign_id = (int)$_POST['campaign_id'];
-        $query = "UPDATE email_campaigns SET status = 'sent', sent_date = NOW() WHERE id = ?";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$campaign_id]);
-        
-        // Update recipients status
-        $query = "UPDATE email_recipients SET status = 'sent', sent_at = CURRENT_TIMESTAMP WHERE email_campaign_id = ?";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$campaign_id]);
+        $db->prepare("UPDATE email_campaigns SET status='sent',sent_date=NOW() WHERE id=?")->execute([(int)$_POST['campaign_id']]);
+        $db->prepare("UPDATE email_recipients SET status='sent',sent_at=CURRENT_TIMESTAMP WHERE email_campaign_id=?")->execute([(int)$_POST['campaign_id']]);
+        header("Location: marketing.php?view=email-campaigns&msg=email_sent"); exit();
     }
 
-    // Handle email recipient addition
     if ($_POST && isset($_POST['add_email_recipient'])) {
         Security::checkCSRFToken();
         Security::requireWriteAccess('Marketing');
-        
-        $campaign_id = (int)$_POST['campaign_id'];
-        $email = Security::sanitizeInput($_POST['email']);
-        $name = Security::sanitizeInput($_POST['name']);
-        
-        $query = "INSERT INTO email_recipients (email_campaign_id, email, name) VALUES (?, ?, ?)";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$campaign_id, $email, $name]);
-        
-        // Update total recipients count
-        $query = "UPDATE email_campaigns SET total_recipients = (SELECT COUNT(*) FROM email_recipients WHERE email_campaign_id = ?) WHERE id = ?";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$campaign_id, $campaign_id]);
+        $cid = (int)$_POST['campaign_id'];
+        $db->prepare("INSERT INTO email_recipients (email_campaign_id,email,name) VALUES (?,?,?)")
+           ->execute([$cid,Security::sanitizeInput($_POST['email']),Security::sanitizeInput($_POST['name'])]);
+        $db->prepare("UPDATE email_campaigns SET total_recipients=(SELECT COUNT(*) FROM email_recipients WHERE email_campaign_id=?) WHERE id=?")->execute([$cid,$cid]);
+        header("Location: marketing.php?view=email-campaigns&msg=recipient_added"); exit();
     }
 
-    // Handle blog post creation
     if ($_POST && isset($_POST['create_blog_post'])) {
         Security::checkCSRFToken();
         Security::requireWriteAccess('Marketing');
-        
-        $client_id = !empty($_POST['client_id']) ? (int)$_POST['client_id'] : null;
-        $campaign_id = !empty($_POST['campaign_id']) ? (int)$_POST['campaign_id'] : null;
-        $title = Security::sanitizeInput($_POST['title']);
-        $content = Security::sanitizeInput($_POST['content']);
-        $author_id = !empty($_POST['author_id']) ? (int)$_POST['author_id'] : $_SESSION['user_id']; // Default to current user
-        $category = Security::sanitizeInput($_POST['category']);
-        $tags = Security::sanitizeInput($_POST['tags']);
-        $publish_date = Security::sanitizeInput($_POST['publish_date']);
-        $status = Security::sanitizeInput($_POST['status']);
-        $featured_image = Security::sanitizeInput($_POST['featured_image'] ?? '');
-        $excerpt = Security::sanitizeInput($_POST['excerpt'] ?? '');
-        
-        // Resolve author name from user id
+        $author_id   = !empty($_POST['author_id']) ? (int)$_POST['author_id'] : $_SESSION['user_id'];
         $author_name = $_SESSION['username'];
-        if ($author_id && $author_id !== (int)$_SESSION['user_id']) {
-            $a_stmt = $db->prepare("SELECT username FROM users WHERE id = ?");
-            $a_stmt->execute([$author_id]);
-            $a_row = $a_stmt->fetch(PDO::FETCH_ASSOC);
-            if ($a_row) $author_name = $a_row['username'];
+        if ($author_id !== (int)$_SESSION['user_id']) {
+            $ar = $db->prepare("SELECT username FROM users WHERE id=?"); $ar->execute([$author_id]);
+            $row = $ar->fetch(PDO::FETCH_ASSOC); if ($row) $author_name = $row['username'];
         }
-
-        // Generate a unique URL slug from the title
-        $slug = strtolower(preg_replace('/[^A-Za-z0-9]+/', '-', trim($title)));
-        $slug = trim($slug, '-') . '-' . substr(md5(uniqid()), 0, 6);
-
-        $query = "INSERT INTO blog_posts (client_id, campaign_id, slug, title, content, author, author_id, category, tags, published_at, status, featured_image, excerpt)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$client_id, $campaign_id, $slug, $title, $content, $author_name, $author_id, $category, $tags, $publish_date, $status, $featured_image, $excerpt]);
+        $slug = trim(strtolower(preg_replace('/[^A-Za-z0-9]+/','-',trim(Security::sanitizeInput($_POST['title'])))),'-') . '-' . substr(md5(uniqid()),0,6);
+        $db->prepare("INSERT INTO blog_posts (client_id,campaign_id,slug,title,content,author,author_id,category,tags,published_at,status,featured_image,excerpt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
+           ->execute([!empty($_POST['client_id'])?(int)$_POST['client_id']:null,!empty($_POST['campaign_id'])?(int)$_POST['campaign_id']:null,$slug,Security::sanitizeInput($_POST['title']),Security::sanitizeInput($_POST['content']),$author_name,$author_id,Security::sanitizeInput($_POST['category']),Security::sanitizeInput($_POST['tags']),Security::sanitizeInput($_POST['publish_date']),Security::sanitizeInput($_POST['status']),Security::sanitizeInput($_POST['featured_image']??''),Security::sanitizeInput($_POST['excerpt']??'')]);
+        header("Location: marketing.php?view=blog-posts&msg=post_created"); exit();
     }
 
-    // Handle blog post updates
     if ($_POST && isset($_POST['update_blog_post'])) {
         Security::checkCSRFToken();
         Security::requireWriteAccess('Marketing');
-        
-        $post_id = (int)$_POST['post_id'];
-        $title = Security::sanitizeInput($_POST['title']);
-        $content = Security::sanitizeInput($_POST['content']);
-        $category = Security::sanitizeInput($_POST['category']);
-        $tags = Security::sanitizeInput($_POST['tags']);
-        $publish_date = Security::sanitizeInput($_POST['publish_date']);
-        $status = Security::sanitizeInput($_POST['status']);
-        $featured_image = Security::sanitizeInput($_POST['featured_image'] ?? '');
-        $excerpt = Security::sanitizeInput($_POST['excerpt'] ?? '');
-        
-        $query = "UPDATE blog_posts SET title = ?, content = ?, category = ?, tags = ?, published_at = ?, status = ?, featured_image = ?, excerpt = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$title, $content, $category, $tags, $publish_date, $status, $featured_image, $excerpt, $post_id]);
+        $db->prepare("UPDATE blog_posts SET title=?,content=?,category=?,tags=?,published_at=?,status=?,featured_image=?,excerpt=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")
+           ->execute([Security::sanitizeInput($_POST['title']),Security::sanitizeInput($_POST['content']),Security::sanitizeInput($_POST['category']),Security::sanitizeInput($_POST['tags']),Security::sanitizeInput($_POST['publish_date']),Security::sanitizeInput($_POST['status']),Security::sanitizeInput($_POST['featured_image']??''),Security::sanitizeInput($_POST['excerpt']??''),(int)$_POST['post_id']]);
+        header("Location: marketing.php?view=blog-posts&msg=post_updated"); exit();
     }
 
-    // Handle blog post deletion (soft delete)
     if ($_POST && isset($_POST['delete_blog_post'])) {
         Security::checkCSRFToken();
         Security::requireWriteAccess('Marketing');
-        
-        $post_id = (int)$_POST['post_id'];
-        
-        // Soft delete by changing status to 'deleted'
-        $query = "UPDATE blog_posts SET status = 'deleted', updated_at = CURRENT_TIMESTAMP WHERE id = ?";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$post_id]);
+        $db->prepare("UPDATE blog_posts SET status='deleted',updated_at=CURRENT_TIMESTAMP WHERE id=?")->execute([(int)$_POST['post_id']]);
+        header("Location: marketing.php?view=blog-posts&msg=post_deleted"); exit();
     }
 
-    // Get current view parameter
     $view = $_GET['view'] ?? 'overview';
+    $msg  = $_GET['msg']  ?? '';
 
-    // Get all campaigns with client info
-    $query = "SELECT mc.*, c.name as client_name, c.company as client_company 
-              FROM marketing_campaigns mc 
-              LEFT JOIN clients c ON mc.client_id = c.id 
-              ORDER BY mc.created_at DESC";
-    $stmt = $db->prepare($query);
-    $stmt->execute();
-    $campaigns = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $campaigns = $db->query("SELECT mc.*,c.name as client_name,c.company as client_company FROM marketing_campaigns mc LEFT JOIN clients c ON mc.client_id=c.id ORDER BY mc.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+    $clients   = $db->query("SELECT id,name,company FROM clients ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+    $client_overview = $db->query("SELECT c.*,COUNT(mc.id) as total_campaigns,SUM(CASE WHEN mc.status='active' THEN 1 ELSE 0 END) as active_campaigns,SUM(mc.budget) as total_budget FROM clients c LEFT JOIN marketing_campaigns mc ON c.id=mc.client_id WHERE c.status='active' GROUP BY c.id ORDER BY total_campaigns DESC")->fetchAll(PDO::FETCH_ASSOC);
+    $social_posts    = $db->query("SELECT smp.*,c.name as client_name,mc.campaign_name FROM social_media_posts smp LEFT JOIN clients c ON smp.client_id=c.id LEFT JOIN marketing_campaigns mc ON smp.campaign_id=mc.id ORDER BY smp.scheduled_for ASC")->fetchAll(PDO::FETCH_ASSOC);
+    $email_campaigns = $db->query("SELECT ec.*,c.name as client_name,c.company as client_company,mc.campaign_name FROM email_campaigns ec LEFT JOIN marketing_campaigns mc ON ec.marketing_campaign_id=mc.id LEFT JOIN clients c ON mc.client_id=c.id ORDER BY ec.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
 
-    // Get clients for dropdown
-    $query = "SELECT id, name, company FROM clients ORDER BY name";
-    $stmt = $db->prepare($query);
-    $stmt->execute();
-    $clients = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    // Get client overview data
-    $query = "SELECT c.*, 
-              COUNT(mc.id) as total_campaigns,
-              SUM(CASE WHEN mc.status = 'active' THEN 1 ELSE 0 END) as active_campaigns,
-              SUM(mc.budget) as total_budget
-              FROM clients c 
-              LEFT JOIN marketing_campaigns mc ON c.id = mc.client_id 
-              WHERE c.status = 'active'
-              GROUP BY c.id 
-              ORDER BY total_campaigns DESC";
-    $stmt = $db->prepare($query);
-    $stmt->execute();
-    $client_overview = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    // Get social media posts
-    $query = "SELECT smp.*, c.name as client_name, mc.campaign_name 
-              FROM social_media_posts smp 
-              LEFT JOIN clients c ON smp.client_id = c.id 
-              LEFT JOIN marketing_campaigns mc ON smp.campaign_id = mc.id 
-              ORDER BY smp.scheduled_for ASC";
-    $stmt = $db->prepare($query);
-    $stmt->execute();
-    $social_posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    // Get email campaigns
-    $query = "SELECT ec.*, c.name as client_name, c.company as client_company, mc.campaign_name
-              FROM email_campaigns ec 
-              LEFT JOIN marketing_campaigns mc ON ec.marketing_campaign_id = mc.id
-              LEFT JOIN clients c ON mc.client_id = c.id 
-              ORDER BY ec.created_at DESC";
-    $stmt = $db->prepare($query);
-    $stmt->execute();
-    $email_campaigns = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    // Get email recipients for campaigns
     $email_recipients = [];
-    foreach ($email_campaigns as $campaign) {
-        $query = "SELECT * FROM email_recipients WHERE email_campaign_id = ? ORDER BY created_at ASC";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$campaign['id']]);
-        $email_recipients[$campaign['id']] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($email_campaigns as $ec) {
+        $s = $db->prepare("SELECT * FROM email_recipients WHERE email_campaign_id=? ORDER BY created_at ASC"); $s->execute([$ec['id']]);
+        $email_recipients[$ec['id']] = $s->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    // Get blog posts with client and campaign info (exclude deleted posts)
-    $query = "SELECT bp.*, c.name as client_name, c.company as client_company, mc.campaign_name,
-                     DATE(bp.published_at) as publish_date
-              FROM blog_posts bp
-              LEFT JOIN clients c ON bp.client_id = c.id
-              LEFT JOIN marketing_campaigns mc ON bp.campaign_id = mc.id
-              WHERE bp.status != 'deleted'
-              ORDER BY bp.published_at DESC, bp.created_at DESC";
-    $stmt = $db->prepare($query);
-    $stmt->execute();
-    $blog_posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $blog_posts = $db->query("SELECT bp.*,c.name as client_name,c.company as client_company,mc.campaign_name,DATE(bp.published_at) as publish_date FROM blog_posts bp LEFT JOIN clients c ON bp.client_id=c.id LEFT JOIN marketing_campaigns mc ON bp.campaign_id=mc.id WHERE bp.status!='deleted' ORDER BY bp.published_at DESC,bp.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
 
-    // Calendar helper functions
-    function getCalendarData($posts, $campaigns, $year, $month) {
-        $calendar_posts = [];
-        
-        // Add social media posts
-        foreach ($posts as $post) {
-            $scheduled_date = $post['scheduled_for'] ?? null;
-            if (!$scheduled_date) continue;
-            
-            $post_date = date('Y-m-d', strtotime($scheduled_date));
-            $post_year = date('Y', strtotime($scheduled_date));
-            $post_month = date('m', strtotime($scheduled_date));
-            
-            if ($post_year == $year && $post_month == $month) {
-                $day = date('j', strtotime($scheduled_date));
-                if (!isset($calendar_posts[$day])) {
-                    $calendar_posts[$day] = [];
-                }
-                $post['type'] = 'social_post';
-                $calendar_posts[$day][] = $post;
+    function getCalendarData($posts,$campaigns,$year,$month) {
+        $out=[];
+        foreach ($posts as $p) {
+            if (!($p['scheduled_for']??null)) continue;
+            if (date('Y',strtotime($p['scheduled_for']))==$year && date('m',strtotime($p['scheduled_for']))==$month) {
+                $d=date('j',strtotime($p['scheduled_for'])); $p['type']='social_post'; $out[$d][]=$p;
             }
         }
-        
-        // Add marketing campaigns (start dates)
-        foreach ($campaigns as $campaign) {
-            $start_date = $campaign['start_date'] ?? null;
-            if ($start_date) {
-                $campaign_year = date('Y', strtotime($start_date));
-                $campaign_month = date('m', strtotime($start_date));
-                
-                if ($campaign_year == $year && $campaign_month == $month) {
-                    $day = date('j', strtotime($start_date));
-                    if (!isset($calendar_posts[$day])) {
-                        $calendar_posts[$day] = [];
-                    }
-                    $campaign['type'] = 'campaign_start';
-                    $campaign['display_date'] = $start_date;
-                    $calendar_posts[$day][] = $campaign;
-                }
-            }
-            
-            // Add campaign end dates
-            $end_date = $campaign['end_date'] ?? null;
-            if ($end_date && $end_date != $start_date) {
-                $campaign_year = date('Y', strtotime($end_date));
-                $campaign_month = date('m', strtotime($end_date));
-                
-                if ($campaign_year == $year && $campaign_month == $month) {
-                    $day = date('j', strtotime($end_date));
-                    if (!isset($calendar_posts[$day])) {
-                        $calendar_posts[$day] = [];
-                    }
-                    $campaign_end = $campaign;
-                    $campaign_end['type'] = 'campaign_end';
-                    $campaign_end['display_date'] = $end_date;
-                    $calendar_posts[$day][] = $campaign_end;
+        foreach ($campaigns as $c) {
+            foreach (['start_date'=>'campaign_start','end_date'=>'campaign_end'] as $field=>$type) {
+                if (!($c[$field]??null)) continue;
+                if ($type==='campaign_end' && $c['end_date']===$c['start_date']) continue;
+                if (date('Y',strtotime($c[$field]))==$year && date('m',strtotime($c[$field]))==$month) {
+                    $d=date('j',strtotime($c[$field])); $c['type']=$type; $c['display_date']=$c[$field]; $out[$d][]=$c;
                 }
             }
         }
-        
-        return $calendar_posts;
+        return $out;
     }
 
-
-
-    $current_year = date('Y');
+    $current_year  = date('Y');
     $current_month = date('m');
-    $calendar_year = $_GET['year'] ?? $current_year;
+    $calendar_year  = $_GET['year']  ?? $current_year;
     $calendar_month = $_GET['month'] ?? $current_month;
-    $calendar_posts = getCalendarData($social_posts, $campaigns, $calendar_year, $calendar_month);
+    $calendar_posts = getCalendarData($social_posts,$campaigns,$calendar_year,$calendar_month);
+
+    $all_users = $db->query("SELECT id,username FROM users ORDER BY username")->fetchAll(PDO::FETCH_ASSOC);
+
+    $total_campaigns    = count($campaigns);
+    $active_campaigns   = count(array_filter($campaigns, fn($c) => $c['status']==='active'));
+    $total_budget       = array_sum(array_column($campaigns,'budget'));
+    $total_social_posts = count($social_posts);
+    $scheduled_posts    = count(array_filter($social_posts, fn($p) => $p['status']==='scheduled'));
+    $total_blog_posts   = count($blog_posts);
+    $total_emails       = count($email_campaigns);
+
+    $avatar_colors   = ['#ec4899','#8b5cf6','#6366f1','#0ea5e9','#f59e0b','#22c55e','#ef4444','#14b8a6'];
+    $cat_icons       = ['technology'=>'💻','business'=>'💼','marketing'=>'📣','industry-insights'=>'🔍','case-study'=>'📋','tutorial'=>'🎓','news'=>'📰','company-update'=>'🏢'];
+    $platform_emojis = ['Instagram'=>'📸','Facebook'=>'👍','Twitter'=>'🐦','LinkedIn'=>'💼','TikTok'=>'🎵'];
+    $blog_categories = ['technology','business','marketing','industry-insights','case-study','tutorial','news','company-update'];
+    $campaign_types  = ['social_media'=>'Social Media','email'=>'Email Marketing','brand_work'=>'Brand Work','seo'=>'SEO'];
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Marketing Department - Business Management</title>
-    <link rel="stylesheet" href="../css/main.css">
-    <style>
-        /* Enhanced Marketing Styles */
-        /*.marketing-container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 0 20px;
-        }*/
-        
-        .marketing-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid #eaeaea;
-        }
-        
-        .marketing-title {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #333;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .marketing-title i {
-            color: #4361ee;
-        }
-        
-        .marketing-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-        
-        .marketing-stat-card {
-            background: white;
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            border-left: 4px solid #4361ee;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-        
-        .marketing-stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 16px rgba(0,0,0,0.12);
-        }
-        
-        .marketing-stat-card:nth-child(2) {
-            border-left-color: #3a0ca3;
-        }
-        
-        .marketing-stat-card:nth-child(3) {
-            border-left-color: #f72585;
-        }
-        
-        .marketing-stat-card:nth-child(4) {
-            border-left-color: #4cc9f0;
-        }
-        
-        .marketing-stat-number {
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: #333;
-            line-height: 1;
-            margin-bottom: 0.5rem;
-        }
-        
-        .marketing-stat-label {
-            color: #666;
-            font-size: 0.9rem;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .marketing-tabs {
-            display: flex;
-            background: white;
-            border-radius: 12px 12px 0 0;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            margin-bottom: 0;
-        }
-        
-        .marketing-tab {
-            flex: 1;
-            padding: 1.25rem 1.5rem;
-            background: #f8f9fa;
-            border: none;
-            border-right: 1px solid #eaeaea;
-            cursor: pointer;
-            font-size: 1rem;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            color: #666;
-            text-align: center;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        
-        .marketing-tab:last-child {
-            border-right: none;
-        }
-        
-        .marketing-tab.active {
-            background: #4361ee;
-            color: white;
-        }
-        
-        .marketing-tab:hover:not(.active) {
-            background: #e9ecef;
-        }
-        
-        .marketing-section {
-            background: white;
-            margin-bottom: 2rem;
-            border-radius: 0 0 12px 12px;
-            overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        }
-        
-        .marketing-section-header {
-            background: #4361ee;
-            color: white;
-            padding: 1.25rem 1.5rem;
-            font-size: 1.3rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .marketing-section-content {
-            padding: 1.5rem;
-        }
-        
-        .marketing-card {
-            background: white;
-            border-radius: 10px;
-            padding: 1.5rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-            border: 1px solid #f0f0f0;
-            margin-bottom: 1.5rem;
-            transition: all 0.3s ease;
-        }
-        
-        .marketing-card:hover {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            transform: translateY(-2px);
-        }
-        
-        .marketing-card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 1rem;
-        }
-        
-        .marketing-card-title {
-            font-size: 1.2rem;
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 0.25rem;
-        }
-        
-        .marketing-card-subtitle {
-            color: #666;
-            font-size: 0.9rem;
-        }
-        
-        .marketing-card-content {
-            margin-bottom: 1.5rem;
-        }
-        
-        .marketing-card-actions {
-            display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-        }
-        
-        .marketing-badge {
-            display: inline-flex;
-            align-items: center;
-            padding: 0.4rem 0.8rem;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .badge-platform {
-            background: #e9ecef;
-            color: #495057;
-        }
-        
-        .badge-instagram {
-            background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
-            color: white;
-        }
-        
-        .badge-facebook {
-            background: #1877f2;
-            color: white;
-        }
-        
-        .badge-twitter {
-            background: #1da1f2;
-            color: white;
-        }
-        
-        .badge-linkedin {
-            background: #0a66c2;
-            color: white;
-        }
-        
-        .badge-status {
-            background: #e9ecef;
-            color: #495057;
-        }
-        
-        .badge-draft {
-            background: #fff3cd;
-            color: #856404;
-        }
-        
-        .badge-scheduled {
-            background: #cce7ff;
-            color: #004085;
-        }
-        
-        .badge-published {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .marketing-form {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-        
-        .marketing-form-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1.25rem;
-            margin-bottom: 1.25rem;
-        }
-        
-        .marketing-form-group {
-            margin-bottom: 1.25rem;
-        }
-        
-        .marketing-form-label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: 600;
-            color: #333;
-        }
-        
-        .marketing-form-input, 
-        .marketing-form-select, 
-        .marketing-form-textarea {
-            width: 100%;
-            padding: 0.75rem 1rem;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-            background: white;
-        }
-        
-        .marketing-form-input:focus, 
-        .marketing-form-select:focus, 
-        .marketing-form-textarea:focus {
-            border-color: #4361ee;
-            box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
-            outline: none;
-        }
-        
-        .marketing-form-textarea {
-            min-height: 120px;
-            resize: vertical;
-        }
-        
-        .marketing-btn {
-            background: #4361ee;
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 1rem;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        
-        .marketing-btn:hover {
-            background: #3a0ca3;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(67, 97, 238, 0.3);
-        }
-        
-        .marketing-btn-secondary {
-            background: #6c757d;
-        }
-        
-        .marketing-btn-secondary:hover {
-            background: #5a6268;
-        }
-        
-        .marketing-btn-success {
-            background: #28a745;
-        }
-        
-        .marketing-btn-success:hover {
-            background: #218838;
-        }
-        
-        .marketing-btn-danger {
-            background: #dc3545;
-        }
-        
-        .marketing-btn-danger:hover {
-            background: #c82333;
-        }
-        
-        .marketing-btn-small {
-            padding: 0.5rem 1rem;
-            font-size: 0.9rem;
-        }
-        
-        .marketing-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-            gap: 1.5rem;
-        }
-        
-        .marketing-calendar {
-            background: white;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        }
-        
-        .marketing-calendar-header {
-            background: #4361ee;
-            color: white;
-            padding: 1.25rem 1.5rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .marketing-calendar-nav {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        
-        .marketing-calendar-nav button {
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: background 0.3s ease;
-        }
-        
-        .marketing-calendar-nav button:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-        
-        .marketing-calendar-grid {
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            gap: 1px;
-            background: #eaeaea;
-            padding: 1px;
-        }
-        
-        .marketing-calendar-day-header {
-            background: #f8f9fa;
-            padding: 0.75rem;
-            text-align: center;
-            font-weight: 600;
-            font-size: 0.9rem;
-            color: #666;
-        }
-        
-        .marketing-calendar-day {
-            background: white;
-            min-height: 120px;
-            padding: 0.5rem;
-            position: relative;
-        }
-        
-        .marketing-calendar-day.other-month {
-            background: #f8f9fa;
-            color: #999;
-        }
-        
-        .marketing-calendar-day-number {
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-            font-size: 0.9rem;
-        }
-        
-        .marketing-calendar-post {
-            background: #e3f2fd;
-            border: 1px solid #2196f3;
-            border-radius: 6px;
-            padding: 0.25rem 0.5rem;
-            margin-bottom: 0.25rem;
-            font-size: 0.75rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-        
-        .marketing-calendar-post:hover {
-            transform: scale(1.02);
-        }
-        
-        .marketing-calendar-post.instagram { 
-            border-color: #e91e63; 
-            background: #fce4ec; 
-        }
-        
-        .marketing-calendar-post.facebook { 
-            border-color: #3f51b5; 
-            background: #e8eaf6; 
-        }
-        
-        .marketing-calendar-post.twitter { 
-            border-color: #00bcd4; 
-            background: #e0f2f1; 
-        }
-        
-        .marketing-calendar-post.linkedin { 
-            border-color: #ff9800; 
-            background: #fff3e0; 
-        }
-        
-        .marketing-calendar-post.campaign-start { 
-            border-color: #4caf50; 
-            background: #e8f5e8; 
-        }
-        
-        .marketing-calendar-post.campaign-end { 
-            border-color: #f44336; 
-            background: #ffebee; 
-        }
-        
-        .marketing-update-form {
-            display: none;
-            margin-top: 1.5rem;
-            padding-top: 1.5rem;
-            border-top: 1px solid #eaeaea;
-        }
-        
-        .marketing-modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-        }
-        
-        .marketing-modal-content {
-            background-color: white;
-            margin: 5% auto;
-            padding: 2rem;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 600px;
-            max-height: 90vh;
-            overflow-y: auto;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
-        
-        .marketing-close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        
-        .marketing-close:hover {
-            color: #333;
-        }
-        
-        .marketing-hidden {
-            display: none;
-        }
-        
-        .marketing-quick-actions {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-        
-        .marketing-quick-action {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 1.5rem;
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            text-decoration: none;
-            color: #333;
-            transition: all 0.3s ease;
-        }
-        
-        .marketing-quick-action:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 16px rgba(0,0,0,0.12);
-            color: #4361ee;
-        }
-        
-        .marketing-quick-action-icon {
-            font-size: 2rem;
-            margin-bottom: 0.75rem;
-            color: #4361ee;
-        }
-        
-        .marketing-quick-action-text {
-            font-weight: 600;
-            text-align: center;
-        }
-        
-        @media (max-width: 768px) {
-            .marketing-tabs {
-                flex-direction: column;
-            }
-            
-            .marketing-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .marketing-stats {
-                grid-template-columns: repeat(2, 1fr);
-            }
-            
-            .marketing-quick-actions {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-        
-        @media (max-width: 480px) {
-            .marketing-stats {
-                grid-template-columns: 1fr;
-            }
-            
-            .marketing-quick-actions {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marketing Department — KConsulting Hub</title>
+<link rel="stylesheet" href="https://cdn.quilljs.com/1.3.7/quill.snow.css">
+<link rel="stylesheet" href="../css/main.css">
+<style>
+/* ── HERO ── */
+.mkt-hero{background:linear-gradient(135deg,#ec4899 0%,#8b5cf6 100%);border-radius:14px;padding:1.75rem 2rem;color:#fff;margin-bottom:1.5rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;}
+.mkt-hero h2{margin:0 0 .2rem;font-size:1.5rem;font-weight:800;}
+.mkt-hero p{margin:0;font-size:.875rem;opacity:.85;}
+.mkt-hero-actions{display:flex;gap:.6rem;flex-wrap:wrap;}
+.hero-btn{padding:.55rem 1.1rem;border-radius:8px;font-size:.85rem;font-weight:600;cursor:pointer;border:2px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;text-decoration:none;transition:all .2s;}
+.hero-btn:hover{background:rgba(255,255,255,.3);border-color:rgba(255,255,255,.7);}
+.hero-btn.primary{background:#fff;color:#ec4899;border-color:#fff;}
+.hero-btn.primary:hover{background:#fdf2f8;}
+
+/* ── STATS ── */
+.mkt-stats{display:grid;grid-template-columns:repeat(8,1fr);gap:.85rem;margin-bottom:1.5rem;}
+@media(max-width:1100px){.mkt-stats{grid-template-columns:repeat(4,1fr);}}
+@media(max-width:600px){.mkt-stats{grid-template-columns:repeat(2,1fr);}}
+.mkt-stat{background:#fff;border-radius:10px;padding:.9rem 1rem;box-shadow:0 1px 4px rgba(0,0,0,.07);text-align:center;}
+.mkt-stat .n{font-size:1.5rem;font-weight:800;color:#111827;line-height:1;}
+.mkt-stat .l{font-size:.72rem;color:#6b7280;margin-top:.2rem;}
+
+/* ── TABS ── */
+.mkt-tabs{display:flex;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.07);overflow:hidden;margin-bottom:1.5rem;flex-wrap:wrap;}
+.mkt-tab{flex:1;min-width:90px;padding:.85rem .6rem;text-decoration:none;color:#6b7280;text-align:center;font-size:.8rem;font-weight:600;border-right:1px solid #f3f4f6;transition:all .2s;white-space:nowrap;}
+.mkt-tab:last-child{border-right:none;}
+.mkt-tab.active{background:#ec4899;color:#fff;}
+.mkt-tab:hover:not(.active){background:#fdf2f8;color:#ec4899;}
+
+/* ── SECTION HEADER ROW ── */
+.section-header-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:.6rem;}
+.section-header-row h3{margin:0;font-size:1rem;font-weight:700;color:#111827;}
+.create-btn{display:inline-flex;align-items:center;gap:.35rem;padding:.55rem 1.1rem;background:linear-gradient(135deg,#ec4899,#8b5cf6);color:#fff;border:none;border-radius:8px;font-size:.85rem;font-weight:600;cursor:pointer;text-decoration:none;transition:opacity .2s;}
+.create-btn:hover{opacity:.88;}
+.create-btn.open{background:linear-gradient(135deg,#6b7280,#9ca3af);}
+
+/* ── CONTROLS ROW ── */
+.controls-row{display:flex;gap:.6rem;align-items:center;background:#fff;border-radius:10px;padding:.75rem 1rem;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:1.25rem;flex-wrap:wrap;}
+.controls-row input[type=text]{flex:1;min-width:180px;padding:.5rem .85rem;border:1px solid #e5e7eb;border-radius:8px;font-size:.875rem;}
+.controls-row input[type=text]:focus{outline:none;border-color:#ec4899;box-shadow:0 0 0 3px rgba(236,72,153,.1);}
+.controls-row select{padding:.5rem .75rem;border:1px solid #e5e7eb;border-radius:8px;font-size:.875rem;background:#fafafa;cursor:pointer;}
+.controls-row select:focus{outline:none;border-color:#ec4899;}
+.result-count{margin-left:auto;font-size:.8rem;color:#9ca3af;white-space:nowrap;}
+
+/* ── CARDS ── */
+.mkt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;}
+.mkt-card{background:#fff;border-radius:12px;border:1px solid #f3f4f6;box-shadow:0 2px 6px rgba(0,0,0,.06);overflow:hidden;transition:transform .2s,box-shadow .2s;}
+.mkt-card:hover{transform:translateY(-3px);box-shadow:0 6px 16px rgba(0,0,0,.1);}
+.mkt-card[style*="display:none"]{transform:none;box-shadow:none;}
+.mkt-card-top{padding:1rem 1.25rem .75rem;}
+.mkt-card-foot{padding:.6rem 1.25rem;border-top:1px solid #f9fafb;background:#fafafa;display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;}
+
+/* Platform badges */
+.badge{display:inline-flex;align-items:center;padding:.2rem .6rem;border-radius:20px;font-size:.72rem;font-weight:700;white-space:nowrap;}
+.p-instagram{background:linear-gradient(45deg,#f09433,#dc2743,#bc1888);color:#fff;}
+.p-facebook{background:#1877f2;color:#fff;}
+.p-twitter{background:#1da1f2;color:#fff;}
+.p-linkedin{background:#0a66c2;color:#fff;}
+.p-tiktok{background:#010101;color:#fff;}
+.p-other{background:#6b7280;color:#fff;}
+.b-draft{background:#fef9c3;color:#854d0e;}
+.b-scheduled{background:#dbeafe;color:#1e40af;}
+.b-published{background:#dcfce7;color:#166534;}
+.b-active{background:#dcfce7;color:#166534;}
+.b-sent{background:#ede9fe;color:#6d28d9;}
+.b-planning{background:#f3f4f6;color:#6b7280;}
+.b-completed{background:#dcfce7;color:#166534;}
+.b-paused{background:#fef3c7;color:#92400e;}
+.b-pending{background:#fef9c3;color:#854d0e;}
+
+.cat-chip{display:inline-flex;align-items:center;gap:.25rem;padding:.2rem .55rem;border-radius:20px;font-size:.7rem;font-weight:700;background:#fdf2f8;color:#ec4899;}
+.tag-chip{display:inline-flex;align-items:center;padding:.15rem .45rem;border-radius:20px;font-size:.68rem;font-weight:600;background:#f3f4f6;color:#6b7280;margin:.1rem;}
+
+/* ── FORM CARD ── */
+.form-card{background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.07);overflow:hidden;margin-bottom:1.5rem;}
+.form-card-head{background:linear-gradient(135deg,#ec4899,#8b5cf6);padding:1.25rem 1.75rem;color:#fff;}
+.form-card-head h3{margin:0 0 .1rem;font-size:1.1rem;font-weight:700;}
+.form-card-head p{margin:0;font-size:.8rem;opacity:.85;}
+.form-card-body{padding:1.75rem;}
+.form-section h4{font-size:.88rem;font-weight:700;color:#111827;margin:0 0 .9rem;padding-bottom:.45rem;border-bottom:2px solid #f3f4f6;}
+.fg{margin-bottom:.9rem;}
+.fg label{display:block;font-size:.82rem;font-weight:600;color:#374151;margin-bottom:.35rem;}
+.fg label .req{color:#ef4444;}
+.fg label .opt{color:#9ca3af;font-weight:400;}
+.fg input,.fg select,.fg textarea{width:100%;padding:.55rem .85rem;border:1px solid #e5e7eb;border-radius:8px;font-size:.875rem;color:#111827;box-sizing:border-box;transition:border .15s;}
+.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:#ec4899;box-shadow:0 0 0 3px rgba(236,72,153,.12);}
+.form-2col{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;}
+@media(max-width:600px){.form-2col{grid-template-columns:1fr;}}
+.form-actions{display:flex;gap:.75rem;align-items:center;margin-top:1.25rem;flex-wrap:wrap;}
+
+/* Inline edit */
+.inline-edit{display:none;padding:.85rem 1.25rem 1rem;border-top:2px dashed #f3f4f6;}
+.inline-edit h5{font-size:.78rem;font-weight:700;color:#6b7280;margin:0 0 .85rem;text-transform:uppercase;letter-spacing:.5px;}
+
+/* Campaign card */
+.campaign-card-meta{display:grid;grid-template-columns:1fr 1fr;gap:.35rem .75rem;font-size:.78rem;color:#374151;margin:.75rem 0;}
+.cm-label{color:#9ca3af;font-size:.7rem;display:block;}
+
+/* Blog image */
+.blog-img{width:100%;height:130px;object-fit:cover;display:block;}
+.blog-img-placeholder{width:100%;height:90px;background:linear-gradient(135deg,#fdf2f8,#ede9fe);display:flex;align-items:center;justify-content:center;font-size:2rem;}
+
+/* Quick actions */
+.quick-actions{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:1rem;margin-bottom:1.5rem;}
+.qa-card{background:#fff;border-radius:12px;border:1px solid #f3f4f6;box-shadow:0 2px 6px rgba(0,0,0,.06);padding:1.25rem 1rem;text-decoration:none;color:#111827;text-align:center;transition:all .2s;}
+.qa-card:hover{transform:translateY(-3px);box-shadow:0 6px 16px rgba(0,0,0,.1);border-color:#ec4899;}
+.qa-icon{font-size:1.75rem;margin-bottom:.5rem;}
+.qa-label{font-size:.85rem;font-weight:600;color:#374151;}
+
+/* Calendar */
+.mkt-cal{background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.07);overflow:hidden;}
+.mkt-cal-head{background:linear-gradient(135deg,#ec4899,#8b5cf6);color:#fff;padding:1.1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;}
+.mkt-cal-head h3{margin:0;font-size:1rem;font-weight:700;}
+.cal-nav{display:flex;align-items:center;gap:.75rem;}
+.cal-nav-btn{background:rgba(255,255,255,.2);border:none;color:#fff;padding:.4rem .85rem;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:600;transition:background .2s;}
+.cal-nav-btn:hover{background:rgba(255,255,255,.35);}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:#f3f4f6;}
+.cal-day-hdr{background:#f8f9fa;padding:.6rem;text-align:center;font-size:.72rem;font-weight:700;color:#6b7280;text-transform:uppercase;}
+.cal-day{background:#fff;min-height:100px;padding:.5rem;}
+.cal-day.other-month{background:#fafafa;}
+.cal-day-num{font-size:.8rem;font-weight:700;color:#374151;margin-bottom:.35rem;}
+.cal-day.today .cal-day-num{background:#ec4899;color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.72rem;}
+.cal-event{border-radius:4px;padding:.15rem .4rem;margin-bottom:.2rem;font-size:.67rem;font-weight:600;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.cal-event.instagram{background:#fce4ec;color:#c2185b;border-left:3px solid #e91e63;}
+.cal-event.facebook{background:#e8eaf6;color:#283593;border-left:3px solid #3f51b5;}
+.cal-event.twitter{background:#e0f7fa;color:#00838f;border-left:3px solid #00bcd4;}
+.cal-event.linkedin{background:#fff3e0;color:#e65100;border-left:3px solid #ff9800;}
+.cal-event.campaign-start{background:#e8f5e9;color:#2e7d32;border-left:3px solid #4caf50;}
+.cal-event.campaign-end{background:#ffebee;color:#c62828;border-left:3px solid #f44336;}
+
+/* Flash */
+.flash{padding:.75rem 1.1rem;border-radius:8px;margin-bottom:1.1rem;font-size:.875rem;font-weight:500;}
+.flash-success{background:#dcfce7;color:#166534;border:1px solid #bbf7d0;}
+
+/* Empty */
+.empty-box{text-align:center;padding:3rem 1.5rem;background:#fff;border-radius:12px;border:2px dashed #e5e7eb;}
+.empty-box .emoji{font-size:3rem;margin-bottom:.75rem;}
+.empty-box h3{color:#374151;margin-bottom:.4rem;}
+.empty-box p{color:#9ca3af;margin-bottom:1.25rem;font-size:.875rem;}
+
+/* Btn */
+.btn-xs{padding:.28rem .6rem;font-size:.73rem;border-radius:6px;border:1px solid #e5e7eb;background:#fafafa;color:#374151;cursor:pointer;transition:all .15s;white-space:nowrap;text-decoration:none;display:inline-flex;align-items:center;gap:.25rem;}
+.btn-xs:hover{background:#ec4899;color:#fff;border-color:#ec4899;}
+.btn-xs.danger:hover{background:#ef4444;border-color:#ef4444;}
+
+/* Modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;padding:1rem;}
+.modal-overlay.open{display:flex;}
+.modal-box{background:#fff;border-radius:14px;width:90%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);}
+.modal-head{background:linear-gradient(135deg,#ec4899,#8b5cf6);padding:1.25rem 1.5rem;color:#fff;border-radius:14px 14px 0 0;display:flex;align-items:center;justify-content:space-between;}
+.modal-head h3{margin:0;font-size:1rem;font-weight:700;}
+.modal-close{background:rgba(255,255,255,.2);border:none;color:#fff;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;}
+.modal-body{padding:1.5rem;}
+
+/* Recent */
+.recent-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;}
+@media(max-width:768px){.recent-grid{grid-template-columns:1fr;}}
+.recent-section h4{font-size:.9rem;font-weight:700;color:#111827;margin:0 0 .75rem;}
+.recent-item{background:#fff;border-radius:10px;border:1px solid #f3f4f6;padding:.85rem 1rem;margin-bottom:.6rem;}
+.recent-item-title{font-size:.85rem;font-weight:600;color:#111827;margin-bottom:.2rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.recent-item-sub{font-size:.73rem;color:#6b7280;}
+
+/* No results */
+.no-results{text-align:center;padding:2rem;background:#fff;border-radius:12px;border:2px dashed #f3f4f6;color:#9ca3af;font-size:.875rem;display:none;}
+
+/* ── EMAIL CAMPAIGN CARDS ── */
+.ec-campaign-list{display:flex;flex-direction:column;gap:1.25rem;}
+.ec-campaign-card{background:#fff;border-radius:14px;box-shadow:0 2px 10px rgba(0,0,0,.07);overflow:hidden;border:1px solid #f0f0f8;transition:transform .2s,box-shadow .2s;}
+.ec-campaign-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(139,92,246,.12);}
+.ec-card-hero{background:linear-gradient(135deg,#7c3aed 0%,#ec4899 100%);padding:1.1rem 1.5rem;display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem;}
+.ec-card-name{font-size:1rem;font-weight:700;color:#fff;margin-bottom:.25rem;line-height:1.3;}
+.ec-card-client{font-size:.78rem;color:rgba(255,255,255,.75);}
+.ec-subject-row{display:flex;align-items:flex-start;gap:.85rem;padding:.9rem 1.5rem;border-bottom:1px solid #f3f4f6;background:#fafbff;}
+.ec-subject-icon{font-size:1.25rem;flex-shrink:0;margin-top:.05rem;}
+.ec-subject-label{font-size:.67rem;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:.6px;margin-bottom:.15rem;}
+.ec-subject-text{font-size:.92rem;font-weight:600;color:#1e1b4b;}
+.ec-metrics-grid{display:grid;border-bottom:1px solid #f3f4f6;}
+.ec-metrics-grid.no-stats{grid-template-columns:repeat(2,1fr);}
+.ec-metrics-grid.has-stats{grid-template-columns:repeat(4,1fr);}
+.ec-metric-cell{padding:.9rem 1rem;text-align:center;border-right:1px solid #f3f4f6;}
+.ec-metric-cell:last-child{border-right:none;}
+.ec-metric-val{font-size:1.3rem;font-weight:800;color:#111827;line-height:1;margin-bottom:.25rem;}
+.ec-metric-small{font-size:.82rem !important;font-weight:700 !important;}
+.ec-metric-lbl{font-size:.68rem;color:#9ca3af;}
+.ec-progress-section{padding:.9rem 1.5rem;border-bottom:1px solid #f3f4f6;background:#f8f7ff;}
+.ec-prog-item{margin-bottom:.6rem;}
+.ec-prog-item:last-child{margin-bottom:0;}
+.ec-prog-label{display:flex;justify-content:space-between;font-size:.72rem;font-weight:600;color:#6b7280;margin-bottom:.3rem;}
+.ec-prog-track{height:8px;background:#ede9fe;border-radius:20px;overflow:hidden;}
+.ec-prog-fill{height:100%;border-radius:20px;transition:width .6s ease;}
+.ec-prog-open{background:linear-gradient(90deg,#22c55e,#16a34a);}
+.ec-prog-click{background:linear-gradient(90deg,#8b5cf6,#6d28d9);}
+.ec-recipients-preview{display:flex;align-items:center;gap:.65rem;padding:.75rem 1.5rem;border-bottom:1px solid #f3f4f6;}
+.ec-recipient-avatars{display:flex;}
+.ec-avatar{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:700;color:#fff;margin-right:-8px;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.15);}
+.ec-recipients-more{font-size:.75rem;color:#6b7280;margin-left:1rem;}
+.ec-card-foot{display:flex;align-items:center;justify-content:space-between;padding:.75rem 1.5rem;flex-wrap:wrap;gap:.5rem;background:#fafafa;}
+.ec-action-row{display:flex;gap:.4rem;flex-wrap:wrap;}
+
+/* Quill editor */
+.ql-toolbar.ql-snow{border:1px solid #e5e7eb !important;border-bottom:none !important;border-radius:8px 8px 0 0 !important;background:#f9fafb !important;}
+.ql-container.ql-snow{border:1px solid #e5e7eb !important;border-top:none !important;border-radius:0 0 8px 8px !important;font-family:inherit !important;}
+.ql-editor{min-height:200px;font-size:.9rem;line-height:1.65;}
+.ql-editor.ql-blank::before{color:#9ca3af;font-style:normal;}
+.ql-editor h1{font-size:1.4rem;}.ql-editor h2{font-size:1.2rem;}.ql-editor h3{font-size:1rem;}
+</style>
 </head>
 <body>
-    <?php include '../includes/header.php'; ?>
-    
-    <?php include '../includes/sidebar.php'; ?>
-    
-    <div class="main-content">
-        <div class="marketing-container">
-            <div class="marketing-header">
-                <h1 class="marketing-title"><i class="fas fa-chart-line"></i> Marketing Department</h1>
-                <div class="user-info">
-                    <span>Welcome, <?php echo htmlspecialchars($username); ?></span>
-                </div>
-            </div>
-            
-            <div class="marketing-tabs">
-                <a href="?view=overview" class="marketing-tab <?php echo $view === 'overview' ? 'active' : ''; ?>">
-                    <i class="fas fa-chart-pie"></i> Overview
-                </a>
-                <a href="?view=social-calendar" class="marketing-tab <?php echo $view === 'social-calendar' ? 'active' : ''; ?>">
-                    <i class="fas fa-calendar-alt"></i> Marketing Calendar
-                </a>
-                <a href="?view=social-posts" class="marketing-tab <?php echo $view === 'social-posts' ? 'active' : ''; ?>">
-                    <i class="fas fa-share-alt"></i> Social Posts
-                </a>
-                <a href="?view=email-campaigns" class="marketing-tab <?php echo $view === 'email-campaigns' ? 'active' : ''; ?>">
-                    <i class="fas fa-envelope"></i> Email Campaigns
-                </a>
-                <a href="?view=blog-posts" class="marketing-tab <?php echo $view === 'blog-posts' ? 'active' : ''; ?>">
-                    <i class="fas fa-blog"></i> Blog Posts
-                </a>
-                <a href="?view=campaigns" class="marketing-tab <?php echo $view === 'campaigns' ? 'active' : ''; ?>">
-                    <i class="fas fa-bullhorn"></i> Campaigns
-                </a>
-            </div>
-            
-            <div class="marketing-section">
-                <div class="marketing-section-content">
-                    <?php if ($view === 'overview'): ?>
-                        <?php
-                        $total_campaigns = count($campaigns);
-                        $active_campaigns = count(array_filter($campaigns, function($c) { return $c['status'] == 'active'; }));
-                        $total_budget = array_sum(array_column($campaigns, 'budget'));
-                        $total_clients = count($client_overview);
-                        $total_social_posts = count($social_posts);
-                        $scheduled_posts = count(array_filter($social_posts, function($p) { return $p['status'] == 'scheduled'; }));
-                        $total_email_campaigns = count($email_campaigns);
-                        $draft_emails = count(array_filter($email_campaigns, function($e) { return $e['status'] == 'draft'; }));
-                        ?>
-                        
-                        <div class="marketing-stats">
-                            <div class="marketing-stat-card">
-                                <div class="marketing-stat-number"><?php echo $total_campaigns; ?></div>
-                                <div class="marketing-stat-label">Total Campaigns</div>
-                            </div>
-                            <div class="marketing-stat-card">
-                                <div class="marketing-stat-number"><?php echo $active_campaigns; ?></div>
-                                <div class="marketing-stat-label">Active Campaigns</div>
-                            </div>
-                            <div class="marketing-stat-card">
-                                <div class="marketing-stat-number">R <?php echo number_format($total_budget, 0); ?></div>
-                                <div class="marketing-stat-label">Total Budget</div>
-                            </div>
-                            <div class="marketing-stat-card">
-                                <div class="marketing-stat-number"><?php echo $total_clients; ?></div>
-                                <div class="marketing-stat-label">Active Clients</div>
-                            </div>
-                            <div class="marketing-stat-card">
-                                <div class="marketing-stat-number"><?php echo $total_social_posts; ?></div>
-                                <div class="marketing-stat-label">Social Posts</div>
-                            </div>
-                            <div class="marketing-stat-card">
-                                <div class="marketing-stat-number"><?php echo $scheduled_posts; ?></div>
-                                <div class="marketing-stat-label">Scheduled Posts</div>
-                            </div>
-                            <div class="marketing-stat-card">
-                                <div class="marketing-stat-number"><?php echo $total_email_campaigns; ?></div>
-                                <div class="marketing-stat-label">Email Campaigns</div>
-                            </div>
-                            <div class="marketing-stat-card">
-                                <div class="marketing-stat-number"><?php echo $draft_emails; ?></div>
-                                <div class="marketing-stat-label">Draft Emails</div>
-                            </div>
-                        </div>
-                        
-                        <div class="marketing-quick-actions">
-                            <a href="?view=social-posts#create" class="marketing-quick-action">
-                                <div class="marketing-quick-action-icon"><i class="fas fa-share-alt"></i></div>
-                                <div class="marketing-quick-action-text">Create Social Post</div>
-                            </a>
-                            <a href="?view=email-campaigns#create" class="marketing-quick-action">
-                                <div class="marketing-quick-action-icon"><i class="fas fa-envelope"></i></div>
-                                <div class="marketing-quick-action-text">Create Email Campaign</div>
-                            </a>
-                            <a href="?view=campaigns#create" class="marketing-quick-action">
-                                <div class="marketing-quick-action-icon"><i class="fas fa-bullhorn"></i></div>
-                                <div class="marketing-quick-action-text">Create Campaign</div>
-                            </a>
-                            <a href="?view=social-calendar" class="marketing-quick-action">
-                                <div class="marketing-quick-action-icon"><i class="fas fa-calendar-alt"></i></div>
-                                <div class="marketing-quick-action-text">View Marketing Calendar</div>
-                            </a>
-                        </div>
-                        
-                        <div class="marketing-section">
-                            <div class="marketing-section-header">
-                                <i class="fas fa-history"></i> Recent Activity
-                            </div>
-                            <div class="marketing-section-content">
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
-                                    <div>
-                                        <h3 style="margin-bottom: 1rem; color: #333;">Latest Social Posts</h3>
-                                        <?php foreach (array_slice($social_posts, 0, 3) as $post): ?>
-                                        <div class="marketing-card">
-                                            <div class="marketing-card-header">
-                                                <div>
-                                                    <div class="marketing-card-title"><?php echo htmlspecialchars($post['client_name'] ?? 'Unknown Client'); ?></div>
-                                                    <div class="marketing-card-subtitle">
-                                                        <span class="marketing-badge badge-<?php echo strtolower($post['platform']); ?>"><?php echo $post['platform']; ?></span>
-                                                        <span class="marketing-badge badge-<?php echo $post['status']; ?>"><?php echo ucfirst($post['status']); ?></span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="marketing-card-content">
-                                                <?php echo nl2br(htmlspecialchars(substr($post['content'], 0, 100) . (strlen($post['content']) > 100 ? '...' : ''))); ?>
-                                            </div>
-                                            <div style="font-size: 0.8rem; color: #999;">
-                                                <?php echo date('M j, Y g:i A', strtotime($post['scheduled_for'])); ?>
-                                            </div>
-                                        </div>
-                                        <?php endforeach; ?>
-                                    </div>
-                                    <div>
-                                        <h3 style="margin-bottom: 1rem; color: #333;">Email Campaigns</h3>
-                                        <?php foreach (array_slice($email_campaigns, 0, 3) as $campaign): ?>
-                                        <div class="marketing-card">
-                                            <div class="marketing-card-header">
-                                                <div>
-                                                    <div class="marketing-card-title"><?php echo htmlspecialchars($campaign['campaign_name']); ?></div>
-                                                    <div class="marketing-card-subtitle">
-                                                        <span class="marketing-badge badge-<?php echo $campaign['status']; ?>"><?php echo ucfirst($campaign['status']); ?></span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="marketing-card-content">
-                                                <strong>Subject:</strong> <?php echo htmlspecialchars($campaign['subject']); ?><br>
-                                                <strong>Recipients:</strong> <?php echo $campaign['recipients_count'] ?? 0; ?>
-                                            </div>
-                                            <div style="font-size: 0.8rem; color: #999;">
-                                                Client: <?php echo htmlspecialchars($campaign['client_name'] ?? 'Unknown Client'); ?>
-                                            </div>
-                                        </div>
-                                        <?php endforeach; ?>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                    <?php elseif ($view === 'social-calendar'): ?>
-                        <div class="marketing-calendar">
-                            <div class="marketing-calendar-header">
-                                <h2><i class="fas fa-calendar-alt"></i> Marketing Calendar</h2>
-                                <div class="marketing-calendar-nav">
-                                    <button onclick="changeMonth(-1)"><i class="fas fa-chevron-left"></i> Previous</button>
-                                    <span id="current-month"><?php echo date('F Y', mktime(0, 0, 0, $calendar_month, 1, $calendar_year)); ?></span>
-                                    <button onclick="changeMonth(1)">Next <i class="fas fa-chevron-right"></i></button>
-                                </div>
-                            </div>
-                            
-                            <div class="marketing-calendar-grid">
-                                <div class="marketing-calendar-day-header">Sun</div>
-                                <div class="marketing-calendar-day-header">Mon</div>
-                                <div class="marketing-calendar-day-header">Tue</div>
-                                <div class="marketing-calendar-day-header">Wed</div>
-                                <div class="marketing-calendar-day-header">Thu</div>
-                                <div class="marketing-calendar-day-header">Fri</div>
-                                <div class="marketing-calendar-day-header">Sat</div>
-                                
-                                <?php
-                                $first_day = mktime(0, 0, 0, $calendar_month, 1, $calendar_year);
-                                $last_day = mktime(0, 0, 0, $calendar_month + 1, 0, $calendar_year);
-                                $days_in_month = date('t', $first_day);
-                                $start_day = date('w', $first_day);
-                                
-                                // Previous month days
-                                $prev_month_days = date('t', mktime(0, 0, 0, $calendar_month - 1, 1, $calendar_year));
-                                for ($i = $start_day - 1; $i >= 0; $i--) {
-                                    $day = $prev_month_days - $i;
-                                    echo "<div class='marketing-calendar-day other-month'><div class='marketing-calendar-day-number'>$day</div></div>";
-                                }
-                                
-                                // Current month days
-                                for ($day = 1; $day <= $days_in_month; $day++) {
-                                    echo "<div class='marketing-calendar-day'>";
-                                    echo "<div class='marketing-calendar-day-number'>$day</div>";
-                                    
-                                    if (isset($calendar_posts[$day])) {
-                                        foreach ($calendar_posts[$day] as $item) {
-                                            if ($item['type'] === 'social_post') {
-                                                $platform_class = strtolower($item['platform']);
-                                                echo "<div class='marketing-calendar-post " . Security::escapeHTML($platform_class) . "' onclick='viewPost(" . (int)$item['id'] . ")'>";
-                                                echo "<strong>" . Security::escapeHTML(ucfirst($item['platform'])) . "</strong><br>";
-                                                echo Security::escapeHTML(substr($item['content'], 0, 30)) . '...';
-                                                echo "</div>";
-                                            } elseif ($item['type'] === 'campaign_start') {
-                                                echo "<div class='marketing-calendar-post campaign-start' onclick='viewCampaign(" . (int)$item['id'] . ")'>";
-                                                echo "<strong>🚀 Campaign Start</strong><br>";
-                                                echo Security::escapeHTML(substr($item['campaign_name'], 0, 30)) . '...';
-                                                echo "</div>";
-                                            } elseif ($item['type'] === 'campaign_end') {
-                                                echo "<div class='marketing-calendar-post campaign-end' onclick='viewCampaign(" . (int)$item['id'] . ")'>";
-                                                echo "<strong>🏁 Campaign End</strong><br>";
-                                                echo Security::escapeHTML(substr($item['campaign_name'], 0, 30)) . '...';
-                                                echo "</div>";
-                                            }
-                                        }
-                                    }
-                                    
-                                    echo "</div>";
-                                }
-                                
-                                // Next month days to fill grid
-                                $remaining_cells = 42 - ($start_day + $days_in_month);
-                                for ($day = 1; $day <= $remaining_cells; $day++) {
-                                    echo "<div class='marketing-calendar-day other-month'><div class='marketing-calendar-day-number'>$day</div></div>";
-                                }
-                                ?>
-                            </div>
-                        </div>
-                        
-                    <?php elseif ($view === 'social-posts'): ?>
-                        <div class="marketing-section" id="create">
-                            <div class="marketing-section-header">
-                                <i class="fas fa-plus-circle"></i> Create New Social Media Post
-                            </div>
-                            <div class="marketing-section-content">
-                                <form method="post" class="marketing-form">
-                                    <?php echo Security::getCSRFTokenField(); ?>
-                                    <div class="marketing-form-grid">
-                                        <div class="marketing-form-group">
-                                            <label for="client_id" class="marketing-form-label">Client:</label>
-                                            <select id="client_id" name="client_id" class="marketing-form-select" required>
-                                                <option value="">Select Client</option>
-                                                <?php foreach ($clients as $client): ?>
-                                                    <option value="<?php echo $client['id']; ?>"><?php echo htmlspecialchars($client['name']); ?> - <?php echo htmlspecialchars($client['company']); ?></option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
-                                        <div class="marketing-form-group">
-                                            <label for="campaign_id" class="marketing-form-label">Campaign (Optional):</label>
-                                            <select id="campaign_id" name="campaign_id" class="marketing-form-select">
-                                                <option value="">Select Campaign</option>
-                                                <?php foreach ($campaigns as $campaign): ?>
-                                                    <option value="<?php echo $campaign['id']; ?>"><?php echo htmlspecialchars($campaign['campaign_name']); ?></option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
-                                        <div class="marketing-form-group">
-                                            <label for="platform" class="marketing-form-label">Platform:</label>
-                                            <select id="platform" name="platform" class="marketing-form-select" required>
-                                                <option value="Instagram">Instagram</option>
-                                                <option value="Facebook">Facebook</option>
-                                                <option value="Twitter">Twitter</option>
-                                                <option value="LinkedIn">LinkedIn</option>
-                                            </select>
-                                        </div>
-                                        <div class="marketing-form-group">
-                                            <label for="scheduled_date" class="marketing-form-label">Scheduled Date & Time:</label>
-                                            <input type="datetime-local" id="scheduled_date" name="scheduled_date" class="marketing-form-input" required>
-                                        </div>
-                                    </div>
-                                    <div class="marketing-form-group">
-                                        <label for="content" class="marketing-form-label">Content:</label>
-                                        <textarea id="content" name="content" class="marketing-form-textarea" required placeholder="Enter your post content here..."></textarea>
-                                    </div>
-                                    <button type="submit" name="create_social_post" class="marketing-btn">
-                                        <i class="fas fa-plus"></i> Create Social Post
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                        
-                        <div class="marketing-section">
-                            <div class="marketing-section-header">
-                                <i class="fas fa-share-alt"></i> Social Media Posts
-                            </div>
-                            <div class="marketing-section-content">
-                                <div class="marketing-grid">
-                                    <?php foreach ($social_posts as $post): ?>
-                                    <div class="marketing-card">
-                                        <div class="marketing-card-header">
-                                            <div>
-                                                <div class="marketing-card-title"><?php echo htmlspecialchars($post['client_name'] ?? 'Unknown Client'); ?></div>
-                                                <div class="marketing-card-subtitle">
-                                                    <?php if ($post['campaign_name']): ?>
-                                                        Campaign: <?php echo htmlspecialchars($post['campaign_name']); ?>
-                                                    <?php endif; ?>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <span class="marketing-badge badge-<?php echo strtolower($post['platform']); ?>"><?php echo $post['platform']; ?></span>
-                                                <span class="marketing-badge badge-<?php echo $post['status']; ?>"><?php echo ucfirst($post['status']); ?></span>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="marketing-card-content">
-                                            <?php echo nl2br(htmlspecialchars($post['content'])); ?>
-                                        </div>
-                                        
-                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; font-size: 0.9rem; margin-bottom: 1rem;">
-                                            <div><strong>Scheduled:</strong> <?php echo date('M j, Y g:i A', strtotime($post['scheduled_for'])); ?></div>
-                                            <div><strong>Created:</strong> <?php echo date('M j, Y', strtotime($post['created_at'])); ?></div>
-                                        </div>
-                                        
-                                        <?php if (isset($post['engagement_metrics']) && $post['engagement_metrics']): ?>
-                                        <div style="background: #e8f5e8; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem;">
-                                            <strong><i class="fas fa-chart-bar"></i> Engagement:</strong><br>
-                                            <?php 
-                                            $metrics = json_decode($post['engagement_metrics'], true);
-                                            if ($metrics) {
-                                                foreach ($metrics as $key => $value) {
-                                                    echo "<span style='font-size: 0.9rem;'>• " . ucfirst(str_replace('_', ' ', $key)) . ": " . $value . "</span><br>";
-                                                }
-                                            }
-                                            ?>
-                                        </div>
-                                        <?php endif; ?>
-                                        
-                                        <div class="marketing-card-actions">
-                                            <button onclick="editPost(<?php echo $post['id']; ?>)" class="marketing-btn marketing-btn-small">
-                                                <i class="fas fa-edit"></i> Edit
-                                            </button>
-                                            <form method="post" style="display: inline;">
-                                                <?php echo Security::getCSRFTokenField(); ?>
-                                                <input type="hidden" name="post_id" value="<?php echo $post['id']; ?>">
-                                                <button type="submit" name="delete_social_post" class="marketing-btn marketing-btn-small marketing-btn-danger" onclick="return confirm('Delete this post?')">
-                                                    <i class="fas fa-trash"></i> Delete
-                                                </button>
-                                            </form>
-                                        </div>
-                                        
-                                        <div id="edit-<?php echo $post['id']; ?>" class="marketing-update-form">
-                                            <form method="post">
-                                                <?php echo Security::getCSRFTokenField(); ?>
-                                                <input type="hidden" name="post_id" value="<?php echo $post['id']; ?>">
-                                                <div class="marketing-form-grid">
-                                                    <div class="marketing-form-group">
-                                                        <label class="marketing-form-label">Platform:</label>
-                                                        <select name="platform" class="marketing-form-select" required>
-                                                            <option value="Instagram" <?php echo $post['platform'] == 'Instagram' ? 'selected' : ''; ?>>Instagram</option>
-                                                            <option value="Facebook" <?php echo $post['platform'] == 'Facebook' ? 'selected' : ''; ?>>Facebook</option>
-                                                            <option value="Twitter" <?php echo $post['platform'] == 'Twitter' ? 'selected' : ''; ?>>Twitter</option>
-                                                            <option value="LinkedIn" <?php echo $post['platform'] == 'LinkedIn' ? 'selected' : ''; ?>>LinkedIn</option>
-                                                        </select>
-                                                    </div>
-                                                    <div class="marketing-form-group">
-                                                        <label class="marketing-form-label">Status:</label>
-                                                        <select name="status" class="marketing-form-select" required>
-                                                            <option value="draft" <?php echo $post['status'] == 'draft' ? 'selected' : ''; ?>>Draft</option>
-                                                            <option value="scheduled" <?php echo $post['status'] == 'scheduled' ? 'selected' : ''; ?>>Scheduled</option>
-                                                            <option value="published" <?php echo $post['status'] == 'published' ? 'selected' : ''; ?>>Published</option>
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                                <div class="marketing-form-group">
-                                                    <label class="marketing-form-label">Scheduled Date:</label>
-                                                    <input type="datetime-local" name="scheduled_date" class="marketing-form-input" value="<?php echo date('Y-m-d\TH:i', strtotime($post['scheduled_for'])); ?>" required>
-                                                </div>
-                                                <div class="marketing-form-group">
-                                                    <label class="marketing-form-label">Content:</label>
-                                                    <textarea name="content" class="marketing-form-textarea" required><?php echo htmlspecialchars($post['content']); ?></textarea>
-                                                </div>
-                                                <div class="marketing-form-group">
-                                                    <label class="marketing-form-label">Engagement Metrics (JSON):</label>
-                                                    <textarea name="engagement_metrics" class="marketing-form-textarea" placeholder='{"likes": 100, "comments": 10}'><?php echo htmlspecialchars($post['engagement_metrics']); ?></textarea>
-                                                </div>
-                                                <button type="submit" name="update_social_post" class="marketing-btn marketing-btn-small">
-                                                    <i class="fas fa-save"></i> Update Post
-                                                </button>
-                                            </form>
-                                        </div>
-                                    </div>
-                                    <?php endforeach; ?>
-                                </div>
-                            </div>
-                        </div>
-                        
-                    <?php elseif ($view === 'email-campaigns'): ?>
-                        <div class="marketing-section" id="create">
-                            <div class="marketing-section-header">
-                                <i class="fas fa-plus-circle"></i> Create New Email Campaign
-                            </div>
-                            <div class="marketing-section-content">
-                                <form method="post" class="marketing-form">
-                                    <?php echo Security::getCSRFTokenField(); ?>
-                                    <div class="marketing-form-grid">
-                                        <div class="marketing-form-group">
-                                            <label for="client_id" class="marketing-form-label">Client:</label>
-                                            <select id="client_id" name="client_id" class="marketing-form-select" required>
-                                                <option value="">Select Client</option>
-                                                <?php foreach ($clients as $client): ?>
-                                                    <option value="<?php echo $client['id']; ?>"><?php echo htmlspecialchars($client['name']); ?> - <?php echo htmlspecialchars($client['company']); ?></option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
-                                        <div class="marketing-form-group">
-                                            <label for="campaign_name" class="marketing-form-label">Campaign Name:</label>
-                                            <input type="text" id="campaign_name" name="campaign_name" class="marketing-form-input" required>
-                                        </div>
-                                        <div class="marketing-form-group">
-                                            <label for="send_date" class="marketing-form-label">Send Date & Time:</label>
-                                            <input type="datetime-local" id="send_date" name="send_date" class="marketing-form-input" required>
-                                        </div>
-                                    </div>
-                                    <div class="marketing-form-group">
-                                        <label for="subject" class="marketing-form-label">Subject Line:</label>
-                                        <input type="text" id="subject" name="subject" class="marketing-form-input" required placeholder="Enter email subject...">
-                                    </div>
-                                    <div class="marketing-form-group">
-                                        <label for="content" class="marketing-form-label">Email Content:</label>
-                                        <textarea id="content" name="content" class="marketing-form-textarea" required placeholder="Enter your email content here..."></textarea>
-                                    </div>
-                                    <button type="submit" name="create_email_campaign" class="marketing-btn">
-                                        <i class="fas fa-plus"></i> Create Email Campaign
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                        
-                        <div class="marketing-section">
-                            <div class="marketing-section-header">
-                                <i class="fas fa-envelope"></i> Email Campaigns
-                            </div>
-                            <div class="marketing-section-content">
-                                <?php foreach ($email_campaigns as $campaign): ?>
-                                <div class="marketing-card">
-                                    <div class="marketing-card-header">
-                                        <div>
-                                            <div class="marketing-card-title"><?php echo htmlspecialchars($campaign['campaign_name']); ?></div>
-                                            <div class="marketing-card-subtitle">
-                                                Client: <?php echo htmlspecialchars($campaign['client_name'] ?? 'Unknown Client'); ?> - <?php echo htmlspecialchars($campaign['client_company'] ?? ''); ?>
-                                            </div>
-                                        </div>
-                                        <span class="marketing-badge badge-<?php echo $campaign['status']; ?>"><?php echo ucfirst($campaign['status']); ?></span>
-                                    </div>
-                                    
-                                    <div class="marketing-card-content">
-                                        <div style="background: #f8f9fa; padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">
-                                            <strong>Subject:</strong> <?php echo htmlspecialchars($campaign['subject']); ?><br>
-                                            <strong>Content Preview:</strong> <?php echo substr(htmlspecialchars($campaign['content'] ?? 'No content available'), 0, 200) . '...'; ?>
-                                        </div>
-                                        
-                                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-                                            <div><strong>Send Date:</strong> <?php echo date('M j, Y g:i A', strtotime($campaign['send_date'])); ?></div>
-                                            <div><strong>Recipients:</strong> <?php echo $campaign['recipients_count'] ?? 0; ?></div>
-                                            <div><strong>Sent:</strong> <?php echo $campaign['sent_count']; ?></div>
-                                        </div>
-                                        
-                                        <?php if ($campaign['status'] === 'sent' && ($campaign['open_rate'] > 0 || $campaign['click_rate'] > 0)): ?>
-                                        <div style="background: #e8f5e8; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem;">
-                                            <strong><i class="fas fa-chart-bar"></i> Campaign Performance:</strong><br>
-                                            Open Rate: <?php echo number_format($campaign['open_rate'], 1); ?>% | 
-                                            Click Rate: <?php echo number_format($campaign['click_rate'], 1); ?>%
-                                        </div>
-                                        <?php endif; ?>
-                                        
-                                        <div style="background: #f8f9fa; padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">
-                                            <strong>Recipients:</strong>
-                                            <?php if (isset($email_recipients[$campaign['id']]) && count($email_recipients[$campaign['id']]) > 0): ?>
-                                                <?php foreach ($email_recipients[$campaign['id']] as $recipient): ?>
-                                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.25rem 0; border-bottom: 1px solid #e0e0e0;">
-                                                    <span><?php echo htmlspecialchars($recipient['name']); ?> (<?php echo htmlspecialchars($recipient['email']); ?>)</span>
-                                                    <span class="marketing-badge badge-<?php echo $recipient['status']; ?>"><?php echo ucfirst($recipient['status']); ?></span>
-                                                </div>
-                                                <?php endforeach; ?>
-                                            <?php else: ?>
-                                                <div style="color: #666; font-style: italic;">No recipients added yet</div>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="marketing-card-actions">
-                                        <button onclick="editEmailCampaign(<?php echo $campaign['id']; ?>)" class="marketing-btn marketing-btn-small">
-                                            <i class="fas fa-edit"></i> Edit
-                                        </button>
-                                        <button onclick="showAddRecipient(<?php echo $campaign['id']; ?>)" class="marketing-btn marketing-btn-small marketing-btn-secondary">
-                                            <i class="fas fa-user-plus"></i> Add Recipients
-                                        </button>
-                                        <?php if ($campaign['status'] === 'draft' && ($campaign['recipients_count'] ?? 0) > 0): ?>
-                                        <form method="post" style="display: inline;">
-                                            <?php echo Security::getCSRFTokenField(); ?>
-                                            <input type="hidden" name="campaign_id" value="<?php echo $campaign['id']; ?>">
-                                            <button type="submit" name="send_email_campaign" class="marketing-btn marketing-btn-small marketing-btn-success" onclick="return confirm('Send this campaign to all recipients?')">
-                                                <i class="fas fa-paper-plane"></i> Send Campaign
-                                            </button>
-                                        </form>
-                                        <?php endif; ?>
-                                    </div>
-                                    
-                                    <div id="edit-email-<?php echo $campaign['id']; ?>" class="marketing-update-form">
-                                        <form method="post">
-                                            <?php echo Security::getCSRFTokenField(); ?>
-                                            <input type="hidden" name="campaign_id" value="<?php echo $campaign['id']; ?>">
-                                            <div class="marketing-form-grid">
-                                                <div class="marketing-form-group">
-                                                    <label class="marketing-form-label">Send Date:</label>
-                                                    <input type="datetime-local" name="send_date" class="marketing-form-input" value="<?php echo date('Y-m-d\TH:i', strtotime($campaign['send_date'])); ?>" required>
-                                                </div>
-                                                <div class="marketing-form-group">
-                                                    <label class="marketing-form-label">Status:</label>
-                                                    <select name="status" class="marketing-form-select" required>
-                                                        <option value="draft" <?php echo $campaign['status'] == 'draft' ? 'selected' : ''; ?>>Draft</option>
-                                                        <option value="scheduled" <?php echo $campaign['status'] == 'scheduled' ? 'selected' : ''; ?>>Scheduled</option>
-                                                        <option value="sent" <?php echo $campaign['status'] == 'sent' ? 'selected' : ''; ?>>Sent</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            <div class="marketing-form-group">
-                                                <label class="marketing-form-label">Subject:</label>
-                                                <input type="text" name="subject" class="marketing-form-input" value="<?php echo htmlspecialchars($campaign['subject']); ?>" required>
-                                            </div>
-                                            <div class="marketing-form-group">
-                                                <label class="marketing-form-label">Content:</label>
-                                                <textarea name="content" class="marketing-form-textarea" required><?php echo htmlspecialchars($campaign['content']); ?></textarea>
-                                            </div>
-                                            <button type="submit" name="update_email_campaign" class="marketing-btn marketing-btn-small">
-                                                <i class="fas fa-save"></i> Update Campaign
-                                            </button>
-                                        </form>
-                                    </div>
-                                </div>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
-                        
-                    <?php elseif ($view === 'campaigns'): ?>
-                        <div class="marketing-section" id="create">
-                            <div class="marketing-section-header">
-                                <i class="fas fa-plus-circle"></i> Create New Campaign
-                            </div>
-                            <div class="marketing-section-content">
-                                <form method="post" class="marketing-form">
-                                    <?php echo Security::getCSRFTokenField(); ?>
-                                    <div class="marketing-form-grid">
-                                        <div class="marketing-form-group">
-                                            <label for="campaign_name" class="marketing-form-label">Campaign Name:</label>
-                                            <input type="text" id="campaign_name" name="campaign_name" class="marketing-form-input" required>
-                                        </div>
-                                        <div class="marketing-form-group">
-                                            <label for="client_id" class="marketing-form-label">Client:</label>
-                                            <select id="client_id" name="client_id" class="marketing-form-select" required>
-                                                <option value="">Select Client</option>
-                                                <?php foreach ($clients as $client): ?>
-                                                    <option value="<?php echo $client['id']; ?>"><?php echo htmlspecialchars($client['name']); ?> - <?php echo htmlspecialchars($client['company']); ?></option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
-                                        <div class="marketing-form-group">
-                                            <label for="campaign_type" class="marketing-form-label">Campaign Type:</label>
-                                            <select id="campaign_type" name="campaign_type" class="marketing-form-select" required>
-                                                <option value="social_media">Social Media</option>
-                                                <option value="email">Email Marketing</option>
-                                                <option value="brand_work">Brand Work</option>
-                                                <option value="seo">SEO</option>
-                                            </select>
-                                        </div>
-                                        <div class="marketing-form-group">
-                                            <label for="budget" class="marketing-form-label">Budget (R):</label>
-                                            <input type="number" id="budget" name="budget" class="marketing-form-input" step="0.01" required>
-                                        </div>
-                                        <div class="marketing-form-group">
-                                            <label for="start_date" class="marketing-form-label">Start Date:</label>
-                                            <input type="date" id="start_date" name="start_date" class="marketing-form-input" required>
-                                        </div>
-                                        <div class="marketing-form-group">
-                                            <label for="end_date" class="marketing-form-label">End Date:</label>
-                                            <input type="date" id="end_date" name="end_date" class="marketing-form-input" required>
-                                        </div>
-                                    </div>
-                                    <button type="submit" name="create_campaign" class="marketing-btn">
-                                        <i class="fas fa-plus"></i> Create Campaign
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                        
-                        <div class="marketing-section">
-                            <div class="marketing-section-header">
-                                <i class="fas fa-bullhorn"></i> Marketing Campaigns & Statistics
-                            </div>
-                            <div class="marketing-section-content">
-                                <div class="marketing-grid">
-                                    <?php foreach ($campaigns as $campaign): ?>
-                                    <div class="marketing-card">
-                                        <div class="marketing-card-header">
-                                            <div>
-                                                <div class="marketing-card-title"><?php echo htmlspecialchars($campaign['campaign_name']); ?></div>
-                                                <div class="marketing-card-subtitle">
-                                                    Client: <?php echo htmlspecialchars($campaign['client_name'] ?? 'Unknown'); ?> - <?php echo htmlspecialchars($campaign['client_company'] ?? ''); ?>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <span class="marketing-badge badge-platform"><?php echo str_replace('_', ' ', ucfirst($campaign['campaign_type'])); ?></span>
-                                                <span class="marketing-badge badge-<?php echo $campaign['status']; ?>"><?php echo ucfirst($campaign['status']); ?></span>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="marketing-card-content">
-                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem; font-size: 0.9rem;">
-                                                <div><strong>Budget:</strong> R <?php echo number_format($campaign['budget'], 2); ?></div>
-                                                <div><strong>Duration:</strong> <?php echo $campaign['start_date']; ?> to <?php echo $campaign['end_date']; ?></div>
-                                            </div>
-                                            
-                                            <?php if (isset($campaign['metrics']) && $campaign['metrics']): ?>
-                                            <div style="background: #f8f9fa; padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">
-                                                <strong><i class="fas fa-chart-bar"></i> Campaign Metrics:</strong><br>
-                                                <?php 
-                                                $metrics = json_decode($campaign['metrics'], true);
-                                                if ($metrics) {
-                                                    foreach ($metrics as $key => $value) {
-                                                        echo "<span style='font-size: 0.9rem;'>• " . ucfirst(str_replace('_', ' ', $key)) . ": " . $value . "</span><br>";
-                                                    }
-                                                }
-                                                ?>
-                                            </div>
-                                            <?php endif; ?>
-                                        </div>
-                                        
-                                        <div class="marketing-card-actions">
-                                            <button onclick="toggleUpdate(<?php echo $campaign['id']; ?>)" class="marketing-btn marketing-btn-small">
-                                                <i class="fas fa-edit"></i> Update Campaign
-                                            </button>
-                                        </div>
-                                        
-                                        <div id="update-<?php echo $campaign['id']; ?>" class="marketing-update-form">
-                                            <form method="post">
-                                                <?php echo Security::getCSRFTokenField(); ?>
-                                                <input type="hidden" name="campaign_id" value="<?php echo $campaign['id']; ?>">
-                                                <div class="marketing-form-grid">
-                                                    <div class="marketing-form-group">
-                                                        <label class="marketing-form-label">Status:</label>
-                                                        <select name="status" class="marketing-form-select" required>
-                                                            <option value="planning" <?php echo $campaign['status'] == 'planning' ? 'selected' : ''; ?>>Planning</option>
-                                                            <option value="active" <?php echo $campaign['status'] == 'active' ? 'selected' : ''; ?>>Active</option>
-                                                            <option value="completed" <?php echo $campaign['status'] == 'completed' ? 'selected' : ''; ?>>Completed</option>
-                                                            <option value="paused" <?php echo $campaign['status'] == 'paused' ? 'selected' : ''; ?>>Paused</option>
-                                                        </select>
-                                                    </div>
-                                                    <div class="marketing-form-group">
-                                                        <label class="marketing-form-label">Metrics (JSON):</label>
-                                                        <textarea name="metrics" class="marketing-form-textarea" placeholder='{"reach": 1000, "engagement": 50}'><?php echo htmlspecialchars($campaign['metrics']); ?></textarea>
-                                                    </div>
-                                                </div>
-                                                <button type="submit" name="update_campaign" class="marketing-btn marketing-btn-small">
-                                                    <i class="fas fa-save"></i> Update
-                                                </button>
-                                            </form>
-                                        </div>
-                                    </div>
-                                    <?php endforeach; ?>
-                                </div>
-                            </div>
-                        </div>
-                    <?php elseif ($view === 'blog-posts'): ?>
-                        <div class="marketing-section" id="create">
-                            <div class="marketing-section-header">
-                                <i class="fas fa-plus-circle"></i> Create New Blog Post
-                            </div>
-                            <div class="marketing-section-content">
-                                <form method="post" class="marketing-form">
-                                    <?php echo Security::getCSRFTokenField(); ?>
-                                    <div class="marketing-form-grid">
-                                        <div class="marketing-form-group">
-                                            <label class="marketing-form-label">Title:</label>
-                                            <input type="text" name="title" class="marketing-form-input" required>
-                                        </div>
-                                        <div class="marketing-form-group">
-                                            <label class="marketing-form-label">Author:</label>
-                                            <input type="text" name="author" class="marketing-form-input" value="<?php echo Security::escapeHTML($_SESSION['username'] ?? ''); ?>" required>
-                                        </div>
-                                        <div class="marketing-form-group">
-                                            <label class="marketing-form-label">Category:</label>
-                                            <select name="category" class="marketing-form-select" required>
-                                                <option value="">Select Category</option>
-                                                <option value="technology">Technology</option>
-                                                <option value="business">Business</option>
-                                                <option value="marketing">Marketing</option>
-                                                <option value="industry-insights">Industry Insights</option>
-                                                <option value="case-study">Case Study</option>
-                                                <option value="tutorial">Tutorial</option>
-                                                <option value="news">News</option>
-                                                <option value="company-update">Company Update</option>
-                                            </select>
-                                        </div>
-                                        <div class="marketing-form-group">
-                                            <label class="marketing-form-label">Status:</label>
-                                            <select name="status" class="marketing-form-select" required>
-                                                <option value="draft">Draft</option>
-                                                <option value="scheduled">Scheduled</option>
-                                                <option value="published">Published</option>
-                                            </select>
-                                        </div>
-                                        <div class="marketing-form-group">
-                                            <label class="marketing-form-label">Client (Optional):</label>
-                                            <select name="client_id" class="marketing-form-select">
-                                                <option value="">No Client</option>
-                                                <?php foreach ($clients as $client): ?>
-                                                    <option value="<?php echo $client['id']; ?>"><?php echo Security::escapeHTML($client['name']); ?></option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
-                                        <div class="marketing-form-group">
-                                            <label class="marketing-form-label">Campaign (Optional):</label>
-                                            <select name="campaign_id" class="marketing-form-select">
-                                                <option value="">No Campaign</option>
-                                                <?php foreach ($campaigns as $campaign): ?>
-                                                    <option value="<?php echo $campaign['id']; ?>"><?php echo Security::escapeHTML($campaign['campaign_name']); ?></option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
-                                        <div class="marketing-form-group">
-                                            <label class="marketing-form-label">Tags (comma-separated):</label>
-                                            <input type="text" name="tags" class="marketing-form-input" placeholder="seo, content marketing, business growth">
-                                        </div>
-                                        <div class="marketing-form-group">
-                                            <label class="marketing-form-label">Publish Date:</label>
-                                            <input type="datetime-local" name="publish_date" class="marketing-form-input" value="<?php echo date('Y-m-d\TH:i'); ?>" required>
-                                        </div>
-                                        <div class="marketing-form-group">
-                                            <label class="marketing-form-label">Featured Image URL (Optional):</label>
-                                            <input type="url" name="featured_image" class="marketing-form-input" placeholder="https://example.com/image.jpg">
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="marketing-form-group">
-                                        <label class="marketing-form-label">Excerpt (Brief Description):</label>
-                                        <textarea name="excerpt" class="marketing-form-textarea" rows="3" placeholder="Brief description of the blog post for previews and SEO..."></textarea>
-                                    </div>
-                                    
-                                    <div class="marketing-form-group">
-                                        <label class="marketing-form-label">Content:</label>
-                                        <textarea name="content" class="marketing-form-textarea" rows="12" required placeholder="Write your blog post content here. You can use HTML for formatting..."></textarea>
-                                    </div>
-                                    
-                                    <button type="submit" name="create_blog_post" class="marketing-btn">
-                                        <i class="fas fa-plus"></i> Create Blog Post
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                        
-                        <div class="marketing-section">
-                            <div class="marketing-section-header">
-                                <i class="fas fa-blog"></i> All Blog Posts (<?php echo count($blog_posts); ?>)
-                            </div>
-                            <div class="marketing-section-content">
-                                <?php if (empty($blog_posts)): ?>
-                                    <div style="text-align: center; padding: 2rem; color: #666;">
-                                        <i class="fas fa-file-alt" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
-                                        <p>No blog posts created yet.</p>
-                                        <p>Create your first blog post using the form above to start building your content library.</p>
-                                    </div>
-                                <?php else: ?>
-                                    <div class="marketing-grid">
-                                        <?php foreach ($blog_posts as $post): ?>
-                                            <div class="marketing-card">
-                                                <div class="marketing-card-header">
-                                                    <div>
-                                                        <div class="marketing-card-title"><?php echo Security::escapeHTML($post['title']); ?></div>
-                                                        <div class="marketing-card-subtitle">
-                                                            <span>✍️ <?php echo Security::escapeHTML($post['author']); ?></span> • 
-                                                            <span>📅 <?php echo date('M j, Y', strtotime($post['publish_date'])); ?></span>
-                                                        </div>
-                                                    </div>
-                                                    <span class="marketing-badge badge-<?php echo $post['status']; ?>"><?php echo ucfirst($post['status']); ?></span>
-                                                </div>
-                                                
-                                                <?php if ($post['featured_image']): ?>
-                                                    <div style="margin-bottom: 1rem;">
-                                                        <img src="<?php echo Security::escapeHTML($post['featured_image']); ?>" alt="Featured image" style="width: 100%; height: 120px; object-fit: cover; border-radius: 4px;">
-                                                    </div>
-                                                <?php endif; ?>
-                                                
-                                                <div class="marketing-card-content">
-                                                    <div style="margin-bottom: 1rem;">
-                                                        <span class="marketing-badge badge-platform"><?php echo Security::escapeHTML($post['category']); ?></span>
-                                                    </div>
-                                                    
-                                                    <?php if ($post['excerpt']): ?>
-                                                        <p style="margin-bottom: 1rem;"><?php echo Security::escapeHTML(substr($post['excerpt'], 0, 120) . (strlen($post['excerpt']) > 120 ? '...' : '')); ?></p>
-                                                    <?php else: ?>
-                                                        <p style="margin-bottom: 1rem;"><?php echo Security::escapeHTML(substr(strip_tags($post['content']), 0, 120) . '...'); ?></p>
-                                                    <?php endif; ?>
-                                                    
-                                                    <?php if ($post['tags']): ?>
-                                                        <div style="margin-bottom: 1rem;">
-                                                            <?php
-                                                            $tags = explode(',', $post['tags']);
-                                                            foreach ($tags as $tag):
-                                                                $tag = trim($tag);
-                                                                if ($tag):
-                                                            ?>
-                                                                <span class="marketing-badge badge-platform" style="margin-right: 0.5rem; margin-bottom: 0.5rem;">#<?php echo Security::escapeHTML($tag); ?></span>
-                                                            <?php
-                                                                endif;
-                                                            endforeach;
-                                                            ?>
-                                                        </div>
-                                                    <?php endif; ?>
-                                                    
-                                                    <?php if ($post['client_name'] || $post['campaign_name']): ?>
-                                                        <div style="margin-bottom: 1rem;">
-                                                            <?php if ($post['client_name']): ?>
-                                                                <span class="marketing-badge badge-platform" style="margin-right: 0.5rem;">🏢 <?php echo Security::escapeHTML($post['client_name']); ?></span>
-                                                            <?php endif; ?>
-                                                            <?php if ($post['campaign_name']): ?>
-                                                                <span class="marketing-badge badge-platform">🎯 <?php echo Security::escapeHTML($post['campaign_name']); ?></span>
-                                                            <?php endif; ?>
-                                                        </div>
-                                                    <?php endif; ?>
-                                                </div>
-                                                
-                                                <div class="marketing-card-actions">
-                                                    <button onclick="togglePostUpdate(<?php echo $post['id']; ?>)" class="marketing-btn marketing-btn-small">
-                                                        <i class="fas fa-edit"></i> Edit
-                                                    </button>
-                                                    <?php if ($post['status'] === 'published'): ?>
-                                                        <span class="marketing-badge badge-published">Published</span>
-                                                    <?php elseif ($post['status'] === 'scheduled'): ?>
-                                                        <span class="marketing-badge badge-scheduled">Scheduled</span>
-                                                    <?php endif; ?>
-                                                    <form method="post" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this blog post?')">
-                                                        <?php echo Security::getCSRFTokenField(); ?>
-                                                        <input type="hidden" name="post_id" value="<?php echo $post['id']; ?>">
-                                                        <button type="submit" name="delete_blog_post" class="marketing-btn marketing-btn-small marketing-btn-danger">
-                                                            <i class="fas fa-trash"></i> Delete
-                                                        </button>
-                                                    </form>
-                                                </div>
-                                                
-                                                <!-- Edit Form -->
-                                                <div id="post-update-<?php echo $post['id']; ?>" class="marketing-update-form">
-                                                    <form method="post">
-                                                        <?php echo Security::getCSRFTokenField(); ?>
-                                                        <input type="hidden" name="post_id" value="<?php echo $post['id']; ?>">
-                                                        <div class="marketing-form-grid">
-                                                            <div class="marketing-form-group">
-                                                                <label class="marketing-form-label">Title:</label>
-                                                                <input type="text" name="title" class="marketing-form-input" value="<?php echo Security::escapeHTML($post['title']); ?>" required>
-                                                            </div>
-                                                            <div class="marketing-form-group">
-                                                                <label class="marketing-form-label">Category:</label>
-                                                                <select name="category" class="marketing-form-select" required>
-                                                                    <option value="technology" <?php echo $post['category'] == 'technology' ? 'selected' : ''; ?>>Technology</option>
-                                                                    <option value="business" <?php echo $post['category'] == 'business' ? 'selected' : ''; ?>>Business</option>
-                                                                    <option value="marketing" <?php echo $post['category'] == 'marketing' ? 'selected' : ''; ?>>Marketing</option>
-                                                                    <option value="industry-insights" <?php echo $post['category'] == 'industry-insights' ? 'selected' : ''; ?>>Industry Insights</option>
-                                                                    <option value="case-study" <?php echo $post['category'] == 'case-study' ? 'selected' : ''; ?>>Case Study</option>
-                                                                    <option value="tutorial" <?php echo $post['category'] == 'tutorial' ? 'selected' : ''; ?>>Tutorial</option>
-                                                                    <option value="news" <?php echo $post['category'] == 'news' ? 'selected' : ''; ?>>News</option>
-                                                                    <option value="company-update" <?php echo $post['category'] == 'company-update' ? 'selected' : ''; ?>>Company Update</option>
-                                                                </select>
-                                                            </div>
-                                                            <div class="marketing-form-group">
-                                                                <label class="marketing-form-label">Status:</label>
-                                                                <select name="status" class="marketing-form-select" required>
-                                                                    <option value="draft" <?php echo $post['status'] == 'draft' ? 'selected' : ''; ?>>Draft</option>
-                                                                    <option value="scheduled" <?php echo $post['status'] == 'scheduled' ? 'selected' : ''; ?>>Scheduled</option>
-                                                                    <option value="published" <?php echo $post['status'] == 'published' ? 'selected' : ''; ?>>Published</option>
-                                                                </select>
-                                                            </div>
-                                                            <div class="marketing-form-group">
-                                                                <label class="marketing-form-label">Publish Date:</label>
-                                                                <input type="datetime-local" name="publish_date" class="marketing-form-input" value="<?php echo date('Y-m-d\TH:i', strtotime($post['publish_date'])); ?>" required>
-                                                            </div>
-                                                            <div class="marketing-form-group">
-                                                                <label class="marketing-form-label">Tags:</label>
-                                                                <input type="text" name="tags" class="marketing-form-input" value="<?php echo Security::escapeHTML($post['tags']); ?>">
-                                                            </div>
-                                                            <div class="marketing-form-group">
-                                                                <label class="marketing-form-label">Featured Image URL:</label>
-                                                                <input type="url" name="featured_image" class="marketing-form-input" value="<?php echo Security::escapeHTML($post['featured_image']); ?>">
-                                                            </div>
-                                                        </div>
-                                                        <div class="marketing-form-group">
-                                                            <label class="marketing-form-label">Excerpt:</label>
-                                                            <textarea name="excerpt" class="marketing-form-textarea" rows="3"><?php echo Security::escapeHTML($post['excerpt']); ?></textarea>
-                                                        </div>
-                                                        <div class="marketing-form-group">
-                                                            <label class="marketing-form-label">Content:</label>
-                                                            <textarea name="content" class="marketing-form-textarea" rows="8"><?php echo Security::escapeHTML($post['content']); ?></textarea>
-                                                        </div>
-                                                        <button type="submit" name="update_blog_post" class="marketing-btn marketing-btn-small">
-                                                            <i class="fas fa-save"></i> Update Post
-                                                        </button>
-                                                    </form>
-                                                </div>
-                                            </div>
-                                        <?php endforeach; ?>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    <?php endif; ?>
-                </div>
+<?php
+$asset_base = '../';
+$nav_base   = '';
+include '../includes/header.php';
+include '../includes/sidebar.php';
+?>
+
+<div class="main-content">
+
+<?php $flash_map=['campaign_added'=>'✅ Campaign created.','campaign_updated'=>'✅ Campaign updated.','post_added'=>'✅ Social post created.','post_updated'=>'✅ Post updated.','post_deleted'=>'✅ Post deleted.','email_added'=>'✅ Email campaign created.','email_updated'=>'✅ Email campaign updated.','email_sent'=>'✅ Campaign sent.','recipient_added'=>'✅ Recipient added.','post_created'=>'✅ Blog post created.','post_updated'=>'✅ Blog post updated.'];
+if ($msg && isset($flash_map[$msg])): ?>
+<div class="flash flash-success" id="flashMsg"><?= $flash_map[$msg] ?></div>
+<?php endif; ?>
+
+<!-- Hero -->
+<div class="mkt-hero">
+    <div>
+        <h2>📣 Marketing Department</h2>
+        <p>Campaign management, social media, email &amp; content</p>
+    </div>
+    <?php if (in_array($role,['admin','manager'])): ?>
+    <div class="mkt-hero-actions">
+        <a href="?view=social-posts"    class="hero-btn">📱 Social Post</a>
+        <a href="?view=email-campaigns" class="hero-btn">✉️ Email</a>
+        <a href="?view=campaigns"       class="hero-btn primary">📣 Campaign</a>
+    </div>
+    <?php endif; ?>
+</div>
+
+<!-- Stats -->
+<div class="mkt-stats">
+    <div class="mkt-stat"><div class="n"><?= $total_campaigns ?></div><div class="l">Campaigns</div></div>
+    <div class="mkt-stat"><div class="n" style="color:#22c55e"><?= $active_campaigns ?></div><div class="l">Active</div></div>
+    <div class="mkt-stat"><div class="n" style="color:#ec4899;font-size:1rem;">R <?= number_format($total_budget,0) ?></div><div class="l">Total Budget</div></div>
+    <div class="mkt-stat"><div class="n" style="color:#0ea5e9"><?= count($client_overview) ?></div><div class="l">Clients</div></div>
+    <div class="mkt-stat"><div class="n" style="color:#8b5cf6"><?= $total_social_posts ?></div><div class="l">Social Posts</div></div>
+    <div class="mkt-stat"><div class="n" style="color:<?= $scheduled_posts>0?'#3b82f6':'#22c55e' ?>"><?= $scheduled_posts ?></div><div class="l">Scheduled</div></div>
+    <div class="mkt-stat"><div class="n" style="color:#f59e0b"><?= $total_emails ?></div><div class="l">Emails</div></div>
+    <div class="mkt-stat"><div class="n" style="color:#22c55e"><?= $total_blog_posts ?></div><div class="l">Blog Posts</div></div>
+</div>
+
+<!-- Tabs -->
+<div class="mkt-tabs">
+    <a href="?view=overview"        class="mkt-tab <?= $view==='overview'?'active':'' ?>">📊 Overview</a>
+    <a href="?view=social-calendar" class="mkt-tab <?= $view==='social-calendar'?'active':'' ?>">📅 Calendar</a>
+    <a href="?view=social-posts"    class="mkt-tab <?= $view==='social-posts'?'active':'' ?>">📱 Social (<?= $total_social_posts ?>)</a>
+    <a href="?view=email-campaigns" class="mkt-tab <?= $view==='email-campaigns'?'active':'' ?>">✉️ Email (<?= $total_emails ?>)</a>
+    <a href="?view=blog-posts"      class="mkt-tab <?= $view==='blog-posts'?'active':'' ?>">📝 Blog (<?= $total_blog_posts ?>)</a>
+    <a href="?view=campaigns"       class="mkt-tab <?= $view==='campaigns'?'active':'' ?>">📣 Campaigns (<?= $total_campaigns ?>)</a>
+</div>
+
+<!-- ══ OVERVIEW ══ -->
+<?php if ($view==='overview'): ?>
+<div class="quick-actions">
+    <a href="?view=social-posts"    class="qa-card"><div class="qa-icon">📱</div><div class="qa-label">Social Post</div></a>
+    <a href="?view=email-campaigns" class="qa-card"><div class="qa-icon">✉️</div><div class="qa-label">Email Campaign</div></a>
+    <a href="?view=campaigns"       class="qa-card"><div class="qa-icon">📣</div><div class="qa-label">New Campaign</div></a>
+    <a href="?view=blog-posts"      class="qa-card"><div class="qa-icon">📝</div><div class="qa-label">Blog Post</div></a>
+    <a href="?view=social-calendar" class="qa-card"><div class="qa-icon">📅</div><div class="qa-label">View Calendar</div></a>
+</div>
+<div class="recent-grid">
+    <div class="recent-section">
+        <h4>📱 Latest Social Posts</h4>
+        <?php if (empty($social_posts)): ?>
+        <div class="empty-box" style="padding:1.5rem;"><p style="margin:0;font-size:.8rem;">No social posts yet.</p></div>
+        <?php else: ?>
+        <?php foreach (array_slice($social_posts,0,4) as $sp):
+            $emoji=$platform_emojis[$sp['platform']]??'📌';
+        ?>
+        <div class="recent-item">
+            <div class="recent-item-title"><?= $emoji ?> <?= Security::escapeHTML($sp['client_name']??'Unknown') ?></div>
+            <div style="margin:.25rem 0;font-size:.78rem;color:#374151;"><?= Security::escapeHTML(mb_strimwidth($sp['content'],0,80,'…')) ?></div>
+            <div class="recent-item-sub">
+                <span class="badge p-<?= strtolower($sp['platform']) ?>"><?= Security::escapeHTML($sp['platform']) ?></span>&nbsp;
+                <span class="badge b-<?= $sp['status'] ?>"><?= ucfirst($sp['status']) ?></span>&nbsp;
+                <?= date('M j, Y',strtotime($sp['scheduled_for'])) ?>
             </div>
         </div>
+        <?php endforeach; ?>
+        <?php endif; ?>
     </div>
-    
-    <!-- Add Recipient Modal -->
-    <div id="recipientModal" class="marketing-modal">
-        <div class="marketing-modal-content">
-            <span class="marketing-close" onclick="closeRecipientModal()">&times;</span>
-            <h2><i class="fas fa-user-plus"></i> Add Email Recipients</h2>
+    <div class="recent-section">
+        <h4>✉️ Recent Email Campaigns</h4>
+        <?php if (empty($email_campaigns)): ?>
+        <div class="empty-box" style="padding:1.5rem;"><p style="margin:0;font-size:.8rem;">No email campaigns yet.</p></div>
+        <?php else: ?>
+        <?php foreach (array_slice($email_campaigns,0,4) as $ec): ?>
+        <div class="recent-item">
+            <div class="recent-item-title"><?= Security::escapeHTML($ec['campaign_name']) ?></div>
+            <div style="margin:.25rem 0;font-size:.78rem;color:#374151;"><strong>Subject:</strong> <?= Security::escapeHTML(mb_strimwidth($ec['subject'],0,60,'…')) ?></div>
+            <div class="recent-item-sub"><span class="badge b-<?= $ec['status'] ?>"><?= ucfirst($ec['status']) ?></span>&nbsp;<?= Security::escapeHTML($ec['client_name']??'No client') ?></div>
+        </div>
+        <?php endforeach; ?>
+        <?php endif; ?>
+    </div>
+</div>
+
+<!-- ══ CALENDAR ══ -->
+<?php elseif ($view==='social-calendar'): ?>
+<div class="mkt-cal">
+    <div class="mkt-cal-head">
+        <h3>📅 Marketing Calendar</h3>
+        <div class="cal-nav">
+            <button class="cal-nav-btn" onclick="changeMonth(-1)">← Prev</button>
+            <span style="font-weight:700;"><?= date('F Y',mktime(0,0,0,$calendar_month,1,$calendar_year)) ?></span>
+            <button class="cal-nav-btn" onclick="changeMonth(1)">Next →</button>
+        </div>
+    </div>
+    <div class="cal-grid">
+        <?php foreach (['Sun','Mon','Tue','Wed','Thu','Fri','Sat'] as $d): ?>
+        <div class="cal-day-hdr"><?= $d ?></div>
+        <?php endforeach; ?>
+        <?php
+        $today_str     = date('Y-m-d');
+        $first_day     = mktime(0,0,0,$calendar_month,1,$calendar_year);
+        $days_in_month = date('t',$first_day);
+        $start_day     = date('w',$first_day);
+        $prev_days     = date('t',mktime(0,0,0,$calendar_month-1,1,$calendar_year));
+        for ($i=$start_day-1;$i>=0;$i--) {
+            $d=$prev_days-$i;
+            echo "<div class='cal-day other-month'><div class='cal-day-num' style='color:#d1d5db;'>$d</div></div>";
+        }
+        for ($day=1;$day<=$days_in_month;$day++) {
+            $day_str=sprintf('%04d-%02d-%02d',$calendar_year,$calendar_month,$day);
+            $is_today=($day_str===$today_str);
+            echo "<div class='cal-day".($is_today?' today':'')."'><div class='cal-day-num'>$day</div>";
+            if (isset($calendar_posts[$day])) {
+                foreach ($calendar_posts[$day] as $item) {
+                    if ($item['type']==='social_post') {
+                        $pc=strtolower($item['platform']);
+                        echo "<div class='cal-event $pc'>".Security::escapeHTML(ucfirst($item['platform'])).": ".Security::escapeHTML(mb_strimwidth($item['content'],0,20,'…'))."</div>";
+                    } elseif ($item['type']==='campaign_start') {
+                        echo "<div class='cal-event campaign-start'>🚀 ".Security::escapeHTML(mb_strimwidth($item['campaign_name'],0,20,'…'))."</div>";
+                    } elseif ($item['type']==='campaign_end') {
+                        echo "<div class='cal-event campaign-end'>🏁 ".Security::escapeHTML(mb_strimwidth($item['campaign_name'],0,20,'…'))."</div>";
+                    }
+                }
+            }
+            echo "</div>";
+        }
+        $remaining=42-($start_day+$days_in_month);
+        for ($d=1;$d<=$remaining;$d++) echo "<div class='cal-day other-month'><div class='cal-day-num' style='color:#d1d5db;'>$d</div></div>";
+        ?>
+    </div>
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap;padding:.85rem 1.25rem;border-top:1px solid #f3f4f6;background:#fafafa;">
+        <span style="font-size:.72rem;font-weight:600;color:#6b7280;">Legend:</span>
+        <span class="cal-event instagram" style="position:static;display:inline-block;">📸 Instagram</span>
+        <span class="cal-event facebook"  style="position:static;display:inline-block;">👍 Facebook</span>
+        <span class="cal-event twitter"   style="position:static;display:inline-block;">🐦 Twitter</span>
+        <span class="cal-event linkedin"  style="position:static;display:inline-block;">💼 LinkedIn</span>
+        <span class="cal-event campaign-start" style="position:static;display:inline-block;">🚀 Start</span>
+        <span class="cal-event campaign-end"   style="position:static;display:inline-block;">🏁 End</span>
+    </div>
+</div>
+
+<!-- ══ SOCIAL POSTS ══ -->
+<?php elseif ($view==='social-posts'): ?>
+
+<?php if (in_array($role,['admin','manager'])): ?>
+<div class="section-header-row">
+    <h3>📱 Social Media Posts</h3>
+    <button class="create-btn" id="sp-toggle" onclick="toggleForm('sp-form-wrap','sp-toggle','➕ New Post','✕ Cancel')">➕ New Post</button>
+</div>
+<div id="sp-form-wrap" style="display:none;">
+    <div class="form-card">
+        <div class="form-card-head"><h3>📱 Create Social Media Post</h3><p>Schedule a post across any platform</p></div>
+        <div class="form-card-body">
             <form method="post">
-                <?php echo Security::getCSRFTokenField(); ?>
-                <input type="hidden" id="modal-campaign-id" name="campaign_id" value="">
-                <div class="marketing-form-group">
-                    <label for="recipient-email" class="marketing-form-label">Email:</label>
-                    <input type="email" id="recipient-email" name="email" class="marketing-form-input" required>
+                <?= Security::getCSRFTokenField() ?>
+                <div class="form-section"><h4>📋 Post Details</h4>
+                    <div class="form-2col">
+                        <div class="fg"><label>Client <span class="req">*</span></label>
+                            <select name="client_id" required><option value="">— Select Client —</option>
+                                <?php foreach ($clients as $c): ?><option value="<?= $c['id'] ?>"><?= Security::escapeHTML($c['name']) ?> — <?= Security::escapeHTML($c['company']) ?></option><?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="fg"><label>Campaign <span class="opt">(optional)</span></label>
+                            <select name="campaign_id"><option value="">— None —</option>
+                                <?php foreach ($campaigns as $c): ?><option value="<?= $c['id'] ?>"><?= Security::escapeHTML($c['campaign_name']) ?></option><?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="fg"><label>Platform <span class="req">*</span></label>
+                            <select name="platform" required>
+                                <?php foreach (['Instagram','Facebook','Twitter','LinkedIn','TikTok'] as $pl): ?>
+                                <option value="<?= $pl ?>"><?= $platform_emojis[$pl]??'' ?> <?= $pl ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="fg"><label>Scheduled Date &amp; Time <span class="req">*</span></label><input type="datetime-local" name="scheduled_date" required></div>
+                    </div>
                 </div>
-                <div class="marketing-form-group">
-                    <label for="recipient-name" class="marketing-form-label">Name:</label>
-                    <input type="text" id="recipient-name" name="name" class="marketing-form-input" required>
+                <div class="form-section" style="margin-top:1.25rem;"><h4>✍️ Content</h4>
+                    <div class="fg"><textarea name="content" rows="4" required placeholder="Write your post content here…"></textarea></div>
                 </div>
-                <button type="submit" name="add_email_recipient" class="marketing-btn">
-                    <i class="fas fa-plus"></i> Add Recipient
-                </button>
+                <div class="form-actions">
+                    <button type="submit" name="create_social_post" class="btn" style="background:#ec4899;color:#fff;border-color:#ec4899;padding:.65rem 1.5rem;">📱 Create Post</button>
+                    <button type="button" class="btn btn-secondary" onclick="toggleForm('sp-form-wrap','sp-toggle','➕ New Post','✕ Cancel')">Cancel</button>
+                </div>
             </form>
         </div>
     </div>
-    
-    <script src="../js/notification.js"></script>  
-    <script>
-        function toggleUpdate(campaignId) {
-            const form = document.getElementById('update-' + campaignId);
-            form.style.display = form.style.display === 'none' || form.style.display === '' ? 'block' : 'none';
-        }
+</div>
+<?php else: ?>
+<div class="section-header-row"><h3>📱 Social Media Posts</h3></div>
+<?php endif; ?>
 
-        function togglePostUpdate(postId) {
-            const form = document.getElementById('post-update-' + postId);
-            form.style.display = form.style.display === 'none' || form.style.display === '' ? 'block' : 'none';
+<!-- Filters -->
+<div class="controls-row">
+    <input type="text" id="sp-search" placeholder="🔍  Search content, client…" oninput="filterMkt('sp-grid','sp-search',{platform:'sp-filter-platform',status:'sp-filter-status'},'sp-count')">
+    <select id="sp-filter-platform" onchange="filterMkt('sp-grid','sp-search',{platform:'sp-filter-platform',status:'sp-filter-status'},'sp-count')">
+        <option value="">All Platforms</option>
+        <?php foreach (['Instagram','Facebook','Twitter','LinkedIn','TikTok'] as $pl): ?>
+        <option value="<?= $pl ?>"><?= $platform_emojis[$pl]??'' ?> <?= $pl ?></option>
+        <?php endforeach; ?>
+    </select>
+    <select id="sp-filter-status" onchange="filterMkt('sp-grid','sp-search',{platform:'sp-filter-platform',status:'sp-filter-status'},'sp-count')">
+        <option value="">All Statuses</option>
+        <option value="draft">Draft</option>
+        <option value="scheduled">Scheduled</option>
+        <option value="published">Published</option>
+    </select>
+    <span class="result-count" id="sp-count"><?= count($social_posts) ?> post<?= count($social_posts)!=1?'s':'' ?></span>
+</div>
+
+<?php if (empty($social_posts)): ?>
+<div class="empty-box"><div class="emoji">📱</div><h3>No social posts yet</h3><p>Create your first scheduled post above.</p></div>
+<?php else: ?>
+<div class="no-results" id="sp-no-results">No posts match your filters.</div>
+<div class="mkt-grid" id="sp-grid">
+    <?php foreach ($social_posts as $sp):
+        $plat=strtolower($sp['platform']);
+        $emoji=$platform_emojis[$sp['platform']]??'📌';
+        $schTs=strtotime($sp['scheduled_for']);
+        $isPast=$schTs<time();
+        $searchText=strtolower(($sp['client_name']??'').' '.$sp['content'].' '.$sp['platform']);
+    ?>
+    <div class="mkt-card"
+         data-search="<?= htmlspecialchars($searchText,ENT_QUOTES) ?>"
+         data-platform="<?= Security::escapeHTML($sp['platform']) ?>"
+         data-status="<?= $sp['status'] ?>">
+        <div class="mkt-card-top">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.6rem;">
+                <div>
+                    <span class="badge p-<?= $plat ?>"><?= $emoji ?> <?= Security::escapeHTML($sp['platform']) ?></span>
+                    &nbsp;<span class="badge b-<?= $sp['status'] ?>"><?= ucfirst($sp['status']) ?></span>
+                </div>
+                <span style="font-size:.72rem;color:<?= $isPast?'#ef4444':'#6b7280' ?>;"><?= date('M j, g:ia',$schTs) ?></span>
+            </div>
+            <div style="font-size:.88rem;font-weight:700;color:#111827;margin-bottom:.3rem;"><?= Security::escapeHTML($sp['client_name']??'Unknown') ?></div>
+            <?php if ($sp['campaign_name']): ?><div style="font-size:.73rem;color:#9ca3af;">📣 <?= Security::escapeHTML($sp['campaign_name']) ?></div><?php endif; ?>
+            <div style="font-size:.82rem;color:#374151;margin-top:.6rem;line-height:1.5;"><?= Security::escapeHTML(mb_strimwidth($sp['content'],0,120,'…')) ?></div>
+        </div>
+        <div class="mkt-card-foot">
+            <span style="font-size:.72rem;color:#9ca3af;"><?= date('M j, Y',strtotime($sp['created_at'])) ?></span>
+            <?php if (in_array($role,['admin','manager'])): ?>
+            <div style="display:flex;gap:.4rem;">
+                <button class="btn-xs" onclick="toggleInlineEdit('sp-<?= $sp['id'] ?>')">✏️ Edit</button>
+                <form method="post" style="display:inline;" onsubmit="return confirm('Delete this post?')">
+                    <?= Security::getCSRFTokenField() ?><input type="hidden" name="post_id" value="<?= $sp['id'] ?>">
+                    <button type="submit" name="delete_social_post" class="btn-xs danger">🗑 Delete</button>
+                </form>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php if (in_array($role,['admin','manager'])): ?>
+        <div id="sp-<?= $sp['id'] ?>" class="inline-edit">
+            <h5>✏️ Edit Post</h5>
+            <form method="post">
+                <?= Security::getCSRFTokenField() ?><input type="hidden" name="post_id" value="<?= $sp['id'] ?>">
+                <div class="form-2col">
+                    <div class="fg"><label>Platform</label>
+                        <select name="platform">
+                            <?php foreach (['Instagram','Facebook','Twitter','LinkedIn','TikTok'] as $pl): ?>
+                            <option value="<?= $pl ?>" <?= $sp['platform']===$pl?'selected':'' ?>><?= $platform_emojis[$pl]??'' ?> <?= $pl ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="fg"><label>Status</label>
+                        <select name="status">
+                            <?php foreach (['draft'=>'Draft','scheduled'=>'Scheduled','published'=>'Published'] as $v=>$l): ?>
+                            <option value="<?= $v ?>" <?= $sp['status']===$v?'selected':'' ?>><?= $l ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="fg" style="grid-column:1/-1;"><label>Scheduled Date</label><input type="datetime-local" name="scheduled_date" value="<?= date('Y-m-d\TH:i',strtotime($sp['scheduled_for'])) ?>" required></div>
+                </div>
+                <div class="fg"><label>Content</label><textarea name="content" rows="3" required><?= Security::escapeHTML($sp['content']) ?></textarea></div>
+                <div class="fg"><label>Engagement Metrics <span class="opt">(JSON)</span></label><input type="text" name="engagement_metrics" value="<?= Security::escapeHTML($sp['engagement_stats']??'') ?>" placeholder='{"likes":100}'></div>
+                <div class="form-actions">
+                    <button type="submit" name="update_social_post" class="btn" style="background:#ec4899;color:#fff;border-color:#ec4899;">💾 Save</button>
+                    <button type="button" class="btn btn-secondary" onclick="toggleInlineEdit('sp-<?= $sp['id'] ?>')">Cancel</button>
+                </div>
+            </form>
+        </div>
+        <?php endif; ?>
+    </div>
+    <?php endforeach; ?>
+</div>
+<?php endif; ?>
+
+<!-- ══ EMAIL CAMPAIGNS ══ -->
+<?php elseif ($view==='email-campaigns'): ?>
+
+<?php if (in_array($role,['admin','manager'])): ?>
+<div class="section-header-row">
+    <h3>✉️ Email Campaigns</h3>
+    <button class="create-btn" id="ec-toggle" onclick="toggleForm('ec-form-wrap','ec-toggle','➕ New Campaign','✕ Cancel')">➕ New Campaign</button>
+</div>
+<div id="ec-form-wrap" style="display:none;">
+    <div class="form-card">
+        <div class="form-card-head"><h3>✉️ Create Email Campaign</h3><p>Draft and schedule a new email campaign</p></div>
+        <div class="form-card-body">
+            <form method="post" id="ec-create-form">
+                <?= Security::getCSRFTokenField() ?>
+                <div class="form-section"><h4>📋 Campaign Details</h4>
+                    <div class="form-2col">
+                        <div class="fg"><label>Campaign Name <span class="req">*</span></label><input type="text" name="campaign_name" required placeholder="e.g. June Newsletter"></div>
+                        <div class="fg"><label>Client <span class="req">*</span></label>
+                            <select name="client_id" required><option value="">— Select Client —</option>
+                                <?php foreach ($clients as $c): ?><option value="<?= $c['id'] ?>"><?= Security::escapeHTML($c['name']) ?> — <?= Security::escapeHTML($c['company']) ?></option><?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="fg"><label>Send Date &amp; Time <span class="req">*</span></label><input type="datetime-local" name="send_date" required></div>
+                        <div class="fg"><label>Subject Line <span class="req">*</span></label><input type="text" name="subject" required placeholder="Compelling subject line…"></div>
+                    </div>
+                </div>
+                <div class="form-section" style="margin-top:1.25rem;"><h4>✍️ Email Content</h4>
+                    <div class="fg" style="margin-bottom:0;">
+                        <div id="ec-quill-editor" style="min-height:280px;"></div>
+                        <input type="hidden" name="content" id="ec-content-hidden">
+                    </div>
+                </div>
+                <div class="form-actions" style="margin-top:1.25rem;">
+                    <button type="submit" name="create_email_campaign" class="btn" style="background:#8b5cf6;color:#fff;border-color:#8b5cf6;padding:.65rem 1.5rem;">✉️ Create Campaign</button>
+                    <button type="button" class="btn btn-secondary" onclick="toggleForm('ec-form-wrap','ec-toggle','➕ New Campaign','✕ Cancel')">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<?php else: ?>
+<div class="section-header-row"><h3>✉️ Email Campaigns</h3></div>
+<?php endif; ?>
+
+<!-- Filters -->
+<div class="controls-row">
+    <input type="text" id="ec-search" placeholder="🔍  Search campaign name, subject…" oninput="filterMkt('ec-list','ec-search',{status:'ec-filter-status'},'ec-count')">
+    <select id="ec-filter-status" onchange="filterMkt('ec-list','ec-search',{status:'ec-filter-status'},'ec-count')">
+        <option value="">All Statuses</option>
+        <option value="draft">Draft</option>
+        <option value="scheduled">Scheduled</option>
+        <option value="sent">Sent</option>
+    </select>
+    <span class="result-count" id="ec-count"><?= count($email_campaigns) ?> campaign<?= count($email_campaigns)!=1?'s':'' ?></span>
+</div>
+
+<?php if (empty($email_campaigns)): ?>
+<div class="empty-box"><div class="emoji">✉️</div><h3>No email campaigns yet</h3><p>Create your first email campaign above.</p></div>
+<?php else: ?>
+<div class="no-results" id="ec-no-results">No campaigns match your filters.</div>
+<div class="ec-campaign-list" id="ec-list">
+    <?php foreach ($email_campaigns as $ec):
+        $rcpCount    = count($email_recipients[$ec['id']] ?? []);
+        $hasSentStats= ($ec['open_rate'] > 0 || $ec['click_rate'] > 0);
+        $searchText  = strtolower($ec['campaign_name'].' '.$ec['subject'].' '.($ec['client_name']??''));
+    ?>
+    <div class="ec-campaign-card"
+         data-search="<?= htmlspecialchars($searchText, ENT_QUOTES) ?>"
+         data-status="<?= $ec['status'] ?>">
+
+        <!-- Hero gradient header -->
+        <div class="ec-card-hero">
+            <div class="ec-card-hero-info">
+                <div class="ec-card-name"><?= Security::escapeHTML($ec['campaign_name']) ?></div>
+                <div class="ec-card-client">
+                    🏢 <?= Security::escapeHTML($ec['client_name'] ?? 'No client') ?>
+                    <?= $ec['client_company'] ? ' · '.Security::escapeHTML($ec['client_company']) : '' ?>
+                    <?= $ec['campaign_name'] ? ' · 📣 '.Security::escapeHTML($ec['campaign_name']) : '' ?>
+                </div>
+            </div>
+            <span class="badge b-<?= $ec['status'] ?>" style="flex-shrink:0;font-size:.78rem;padding:.3rem .75rem;"><?= ucfirst($ec['status']) ?></span>
+        </div>
+
+        <!-- Subject line -->
+        <div class="ec-subject-row">
+            <div class="ec-subject-icon">✉️</div>
+            <div>
+                <div class="ec-subject-label">Subject Line</div>
+                <div class="ec-subject-text"><?= Security::escapeHTML($ec['subject']) ?></div>
+            </div>
+        </div>
+
+        <!-- Metrics grid -->
+        <div class="ec-metrics-grid <?= $hasSentStats ? 'has-stats' : 'no-stats' ?>">
+            <div class="ec-metric-cell">
+                <div class="ec-metric-val"><?= $rcpCount ?></div>
+                <div class="ec-metric-lbl">👥 Recipients</div>
+            </div>
+            <div class="ec-metric-cell">
+                <div class="ec-metric-val ec-metric-small"><?= $ec['send_date'] ? date('M j, Y', strtotime($ec['send_date'])) : '—' ?></div>
+                <div class="ec-metric-lbl">📅 Send Date</div>
+            </div>
+            <?php if ($hasSentStats): ?>
+            <div class="ec-metric-cell">
+                <div class="ec-metric-val" style="color:#22c55e;"><?= number_format($ec['open_rate'], 1) ?>%</div>
+                <div class="ec-metric-lbl">📬 Open Rate</div>
+            </div>
+            <div class="ec-metric-cell">
+                <div class="ec-metric-val" style="color:#8b5cf6;"><?= number_format($ec['click_rate'], 1) ?>%</div>
+                <div class="ec-metric-lbl">🖱️ Click Rate</div>
+            </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- Progress bars (sent campaigns with stats) -->
+        <?php if ($hasSentStats): ?>
+        <div class="ec-progress-section">
+            <div class="ec-prog-item">
+                <div class="ec-prog-label"><span>Open Rate</span><span><?= number_format($ec['open_rate'], 1) ?>%</span></div>
+                <div class="ec-prog-track"><div class="ec-prog-fill ec-prog-open" style="width:<?= min((float)$ec['open_rate'], 100) ?>%;"></div></div>
+            </div>
+            <div class="ec-prog-item">
+                <div class="ec-prog-label"><span>Click Rate</span><span><?= number_format($ec['click_rate'], 1) ?>%</span></div>
+                <div class="ec-prog-track"><div class="ec-prog-fill ec-prog-click" style="width:<?= min((float)$ec['click_rate'], 100) ?>%;"></div></div>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <!-- Recipient avatars -->
+        <?php if ($rcpCount > 0): ?>
+        <div class="ec-recipients-preview">
+            <div class="ec-recipient-avatars">
+                <?php foreach (array_slice($email_recipients[$ec['id']], 0, 6) as $i => $r):
+                    $col = $avatar_colors[$i % count($avatar_colors)];
+                    $ini = strtoupper(substr($r['name'] ?? 'U', 0, 1));
+                ?>
+                <div class="ec-avatar" style="background:<?= $col ?>;" title="<?= Security::escapeHTML($r['name']) ?> &lt;<?= Security::escapeHTML($r['email']) ?>&gt;"><?= $ini ?></div>
+                <?php endforeach; ?>
+            </div>
+            <span class="ec-recipients-more">
+                <?php if ($rcpCount > 6): ?>+<?= $rcpCount - 6 ?> more · <?php endif; ?>
+                <?= $rcpCount ?> recipient<?= $rcpCount !== 1 ? 's' : '' ?>
+            </span>
+        </div>
+        <?php endif; ?>
+
+        <!-- Footer actions -->
+        <div class="ec-card-foot">
+            <span style="font-size:.72rem;color:#9ca3af;">Created <?= date('M j, Y', strtotime($ec['created_at'])) ?></span>
+            <?php if (in_array($role, ['admin','manager'])): ?>
+            <div class="ec-action-row">
+                <button class="btn-xs" onclick="toggleInlineEditEC('ec-<?= $ec['id'] ?>')">✏️ Edit</button>
+                <button class="btn-xs" onclick="openRecipientModal(<?= $ec['id'] ?>)" style="background:#f0fdf4;border-color:#bbf7d0;color:#166534;">👤 Add Recipient</button>
+                <?php if ($ec['status'] === 'draft' && $rcpCount > 0): ?>
+                <form method="post" style="display:inline;" onsubmit="return confirm('Send to <?= $rcpCount ?> recipient<?= $rcpCount!==1?'s':'' ?>?')">
+                    <?= Security::getCSRFTokenField() ?><input type="hidden" name="campaign_id" value="<?= $ec['id'] ?>">
+                    <button type="submit" name="send_email_campaign" class="btn-xs" style="background:#ede9fe;border-color:#c4b5fd;color:#6d28d9;">🚀 Send Now</button>
+                </form>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- Inline edit -->
+        <?php if (in_array($role, ['admin','manager'])): ?>
+        <div id="ec-<?= $ec['id'] ?>" class="inline-edit" style="display:none;">
+            <h5>✏️ Edit Campaign</h5>
+            <form method="post" class="ec-edit-form" data-id="<?= $ec['id'] ?>">
+                <?= Security::getCSRFTokenField() ?><input type="hidden" name="campaign_id" value="<?= $ec['id'] ?>">
+                <div class="form-2col">
+                    <div class="fg"><label>Send Date</label><input type="datetime-local" name="send_date" value="<?= date('Y-m-d\TH:i', strtotime($ec['send_date'])) ?>" required></div>
+                    <div class="fg"><label>Status</label>
+                        <select name="status" required>
+                            <?php foreach (['draft'=>'Draft','scheduled'=>'Scheduled','sent'=>'Sent'] as $v=>$l): ?>
+                            <option value="<?= $v ?>" <?= $ec['status']===$v?'selected':'' ?>><?= $l ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="fg" style="grid-column:1/-1;"><label>Subject</label><input type="text" name="subject" value="<?= Security::escapeHTML($ec['subject']) ?>" required></div>
+                </div>
+                <div class="fg">
+                    <label>Content</label>
+                    <div id="ec-edit-quill-<?= $ec['id'] ?>" style="min-height:200px;"><?= $ec['content'] ?></div>
+                    <input type="hidden" name="content" id="ec-edit-content-<?= $ec['id'] ?>">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" name="update_email_campaign" class="btn" style="background:#8b5cf6;color:#fff;border-color:#8b5cf6;">💾 Save</button>
+                    <button type="button" class="btn btn-secondary" onclick="toggleInlineEditEC('ec-<?= $ec['id'] ?>')">Cancel</button>
+                </div>
+            </form>
+        </div>
+        <?php endif; ?>
+    </div>
+    <?php endforeach; ?>
+</div>
+<?php endif; ?>
+
+<!-- ══ BLOG POSTS ══ -->
+<?php elseif ($view==='blog-posts'): ?>
+
+<?php if (in_array($role,['admin','manager'])): ?>
+<div class="section-header-row">
+    <h3>📝 Blog Posts</h3>
+    <button class="create-btn" id="bp-toggle" onclick="toggleForm('bp-form-wrap','bp-toggle','➕ New Post','✕ Cancel')">➕ New Post</button>
+</div>
+<div id="bp-form-wrap" style="display:none;">
+    <div class="form-card">
+        <div class="form-card-head"><h3>📝 Create Blog Post</h3><p>Write and publish content for your clients</p></div>
+        <div class="form-card-body">
+            <form method="post">
+                <?= Security::getCSRFTokenField() ?>
+                <div class="form-section"><h4>📋 Post Details</h4>
+                    <div class="form-2col">
+                        <div class="fg" style="grid-column:1/-1;"><label>Title <span class="req">*</span></label><input type="text" name="title" required placeholder="e.g. 10 Tips for Digital Marketing Success"></div>
+                        <div class="fg"><label>Author <span class="req">*</span></label>
+                            <select name="author_id" required>
+                                <?php foreach ($all_users as $u): ?><option value="<?= $u['id'] ?>" <?= $u['id']===$_SESSION['user_id']?'selected':'' ?>><?= Security::escapeHTML($u['username']) ?></option><?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="fg"><label>Category <span class="req">*</span></label>
+                            <select name="category" required><option value="">— Select —</option>
+                                <?php foreach ($blog_categories as $cat): ?><option value="<?= $cat ?>"><?= ($cat_icons[$cat]??'📄').' '.ucwords(str_replace('-',' ',$cat)) ?></option><?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="fg"><label>Status <span class="req">*</span></label>
+                            <select name="status" required>
+                                <option value="draft">Draft</option><option value="scheduled">Scheduled</option><option value="published">Published</option>
+                            </select>
+                        </div>
+                        <div class="fg"><label>Publish Date <span class="req">*</span></label><input type="datetime-local" name="publish_date" value="<?= date('Y-m-d\TH:i') ?>" required></div>
+                        <div class="fg"><label>Tags <span class="opt">(comma-separated)</span></label><input type="text" name="tags" placeholder="seo, marketing, growth"></div>
+                    </div>
+                </div>
+                <div class="form-section" style="margin-top:1.25rem;"><h4>🔗 Association <span style="color:#9ca3af;font-weight:400;font-size:.8rem;">(optional)</span></h4>
+                    <div class="form-2col">
+                        <div class="fg"><label>Client</label>
+                            <select name="client_id"><option value="">— None —</option>
+                                <?php foreach ($clients as $c): ?><option value="<?= $c['id'] ?>"><?= Security::escapeHTML($c['name']) ?></option><?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="fg"><label>Campaign</label>
+                            <select name="campaign_id"><option value="">— None —</option>
+                                <?php foreach ($campaigns as $c): ?><option value="<?= $c['id'] ?>"><?= Security::escapeHTML($c['campaign_name']) ?></option><?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="fg" style="grid-column:1/-1;"><label>Featured Image URL</label><input type="url" name="featured_image" placeholder="https://example.com/image.jpg"></div>
+                    </div>
+                </div>
+                <div class="form-section" style="margin-top:1.25rem;"><h4>✍️ Content</h4>
+                    <div class="fg"><label>Excerpt <span class="opt">(brief description)</span></label><textarea name="excerpt" rows="2" placeholder="Short summary for previews and SEO…"></textarea></div>
+                    <div class="fg"><label>Body Content <span class="req">*</span></label><textarea name="content" rows="10" required placeholder="Write your full blog post here…"></textarea></div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" name="create_blog_post" class="btn" style="background:#ec4899;color:#fff;border-color:#ec4899;padding:.65rem 1.5rem;">📝 Publish Post</button>
+                    <button type="button" class="btn btn-secondary" onclick="toggleForm('bp-form-wrap','bp-toggle','➕ New Post','✕ Cancel')">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<?php else: ?>
+<div class="section-header-row"><h3>📝 Blog Posts</h3></div>
+<?php endif; ?>
+
+<!-- Filters -->
+<div class="controls-row">
+    <input type="text" id="bp-search" placeholder="🔍  Search title, author, tags…" oninput="filterMkt('bp-grid','bp-search',{category:'bp-filter-cat',status:'bp-filter-status'},'bp-count')">
+    <select id="bp-filter-cat" onchange="filterMkt('bp-grid','bp-search',{category:'bp-filter-cat',status:'bp-filter-status'},'bp-count')">
+        <option value="">All Categories</option>
+        <?php foreach ($blog_categories as $cat): ?><option value="<?= $cat ?>"><?= ($cat_icons[$cat]??'📄').' '.ucwords(str_replace('-',' ',$cat)) ?></option><?php endforeach; ?>
+    </select>
+    <select id="bp-filter-status" onchange="filterMkt('bp-grid','bp-search',{category:'bp-filter-cat',status:'bp-filter-status'},'bp-count')">
+        <option value="">All Statuses</option>
+        <option value="draft">Draft</option>
+        <option value="scheduled">Scheduled</option>
+        <option value="published">Published</option>
+    </select>
+    <span class="result-count" id="bp-count"><?= count($blog_posts) ?> post<?= count($blog_posts)!=1?'s':'' ?></span>
+</div>
+
+<?php if (empty($blog_posts)): ?>
+<div class="empty-box"><div class="emoji">📝</div><h3>No blog posts yet</h3><p>Create your first blog post above.</p></div>
+<?php else: ?>
+<div class="no-results" id="bp-no-results">No posts match your filters.</div>
+<div class="mkt-grid" id="bp-grid">
+    <?php foreach ($blog_posts as $bp):
+        $catIcon=$cat_icons[$bp['category']]??'📄';
+        $searchText=strtolower($bp['title'].' '.($bp['author']??'').' '.($bp['tags']??'').' '.($bp['category']??''));
+    ?>
+    <div class="mkt-card"
+         data-search="<?= htmlspecialchars($searchText,ENT_QUOTES) ?>"
+         data-category="<?= Security::escapeHTML($bp['category']??'') ?>"
+         data-status="<?= $bp['status'] ?>">
+        <?php if ($bp['featured_image']): ?>
+        <img src="<?= Security::escapeHTML($bp['featured_image']) ?>" alt="" class="blog-img" onerror="this.style.display='none'">
+        <?php else: ?>
+        <div class="blog-img-placeholder"><?= $catIcon ?></div>
+        <?php endif; ?>
+        <div class="mkt-card-top">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
+                <span class="cat-chip"><?= $catIcon ?> <?= ucwords(str_replace('-',' ',$bp['category']??'')) ?></span>
+                <span class="badge b-<?= $bp['status'] ?>"><?= ucfirst($bp['status']) ?></span>
+            </div>
+            <div style="font-size:.95rem;font-weight:700;color:#111827;margin-bottom:.35rem;line-height:1.35;"><?= Security::escapeHTML($bp['title']) ?></div>
+            <div style="font-size:.73rem;color:#9ca3af;margin-bottom:.5rem;">✍️ <?= Security::escapeHTML($bp['author']) ?> · <?= date('M j, Y',strtotime($bp['published_at']??$bp['created_at'])) ?></div>
+            <?php if ($bp['excerpt']): ?><div style="font-size:.8rem;color:#6b7280;line-height:1.5;margin-bottom:.6rem;"><?= Security::escapeHTML(mb_strimwidth($bp['excerpt'],0,100,'…')) ?></div><?php endif; ?>
+            <?php if ($bp['tags']): ?>
+            <div style="margin-bottom:.4rem;">
+                <?php foreach (array_slice(array_map('trim',explode(',',$bp['tags'])),0,4) as $tag): ?>
+                <?php if ($tag): ?><span class="tag-chip">#<?= Security::escapeHTML($tag) ?></span><?php endif; ?>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+            <?php if ($bp['client_name']||$bp['campaign_name']): ?>
+            <div style="font-size:.72rem;color:#9ca3af;margin-top:.35rem;">
+                <?= $bp['client_name']?'🏢 '.Security::escapeHTML($bp['client_name']):'' ?>
+                <?= ($bp['client_name']&&$bp['campaign_name'])?' · ':'' ?>
+                <?= $bp['campaign_name']?'📣 '.Security::escapeHTML($bp['campaign_name']):'' ?>
+            </div>
+            <?php endif; ?>
+        </div>
+        <div class="mkt-card-foot">
+            <span style="font-size:.72rem;color:#9ca3af;">#<?= $bp['id'] ?></span>
+            <?php if (in_array($role,['admin','manager'])): ?>
+            <div style="display:flex;gap:.4rem;">
+                <button class="btn-xs" onclick="toggleInlineEdit('bp-<?= $bp['id'] ?>')">✏️ Edit</button>
+                <form method="post" style="display:inline;" onsubmit="return confirm('Delete this post?')">
+                    <?= Security::getCSRFTokenField() ?><input type="hidden" name="post_id" value="<?= $bp['id'] ?>">
+                    <button type="submit" name="delete_blog_post" class="btn-xs danger">🗑 Delete</button>
+                </form>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php if (in_array($role,['admin','manager'])): ?>
+        <div id="bp-<?= $bp['id'] ?>" class="inline-edit">
+            <h5>✏️ Edit Blog Post</h5>
+            <form method="post">
+                <?= Security::getCSRFTokenField() ?><input type="hidden" name="post_id" value="<?= $bp['id'] ?>">
+                <div class="form-2col">
+                    <div class="fg" style="grid-column:1/-1;"><label>Title</label><input type="text" name="title" value="<?= Security::escapeHTML($bp['title']) ?>" required></div>
+                    <div class="fg"><label>Category</label>
+                        <select name="category" required>
+                            <?php foreach ($blog_categories as $cat): ?><option value="<?= $cat ?>" <?= $bp['category']===$cat?'selected':'' ?>><?= ($cat_icons[$cat]??'📄').' '.ucwords(str_replace('-',' ',$cat)) ?></option><?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="fg"><label>Status</label>
+                        <select name="status" required>
+                            <?php foreach (['draft'=>'Draft','scheduled'=>'Scheduled','published'=>'Published'] as $v=>$l): ?><option value="<?= $v ?>" <?= $bp['status']===$v?'selected':'' ?>><?= $l ?></option><?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="fg"><label>Publish Date</label><input type="datetime-local" name="publish_date" value="<?= date('Y-m-d\TH:i',strtotime($bp['published_at']??'now')) ?>" required></div>
+                    <div class="fg"><label>Tags</label><input type="text" name="tags" value="<?= Security::escapeHTML($bp['tags']??'') ?>"></div>
+                    <div class="fg" style="grid-column:1/-1;"><label>Featured Image URL</label><input type="url" name="featured_image" value="<?= Security::escapeHTML($bp['featured_image']??'') ?>"></div>
+                </div>
+                <div class="fg"><label>Excerpt</label><textarea name="excerpt" rows="2"><?= Security::escapeHTML($bp['excerpt']??'') ?></textarea></div>
+                <div class="fg"><label>Content</label><textarea name="content" rows="6" required><?= Security::escapeHTML($bp['content']) ?></textarea></div>
+                <div class="form-actions">
+                    <button type="submit" name="update_blog_post" class="btn" style="background:#ec4899;color:#fff;border-color:#ec4899;">💾 Save</button>
+                    <button type="button" class="btn btn-secondary" onclick="toggleInlineEdit('bp-<?= $bp['id'] ?>')">Cancel</button>
+                </div>
+            </form>
+        </div>
+        <?php endif; ?>
+    </div>
+    <?php endforeach; ?>
+</div>
+<?php endif; ?>
+
+<!-- ══ CAMPAIGNS ══ -->
+<?php elseif ($view==='campaigns'): ?>
+
+<?php if (in_array($role,['admin','manager'])): ?>
+<div class="section-header-row">
+    <h3>📣 Marketing Campaigns</h3>
+    <button class="create-btn" id="cp-toggle" onclick="toggleForm('cp-form-wrap','cp-toggle','➕ New Campaign','✕ Cancel')">➕ New Campaign</button>
+</div>
+<div id="cp-form-wrap" style="display:none;">
+    <div class="form-card">
+        <div class="form-card-head"><h3>📣 Create New Campaign</h3><p>Launch a new marketing campaign for a client</p></div>
+        <div class="form-card-body">
+            <form method="post">
+                <?= Security::getCSRFTokenField() ?>
+                <div class="form-section"><h4>📋 Campaign Info</h4>
+                    <div class="form-2col">
+                        <div class="fg"><label>Campaign Name <span class="req">*</span></label><input type="text" name="campaign_name" required placeholder="e.g. Q3 Brand Awareness"></div>
+                        <div class="fg"><label>Client <span class="req">*</span></label>
+                            <select name="client_id" required><option value="">— Select Client —</option>
+                                <?php foreach ($clients as $c): ?><option value="<?= $c['id'] ?>"><?= Security::escapeHTML($c['name']) ?> — <?= Security::escapeHTML($c['company']) ?></option><?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="fg"><label>Campaign Type <span class="req">*</span></label>
+                            <select name="campaign_type" required>
+                                <?php foreach ($campaign_types as $v=>$l): ?><option value="<?= $v ?>"><?= $l ?></option><?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="fg"><label>Budget (R) <span class="req">*</span></label><input type="number" name="budget" step="0.01" min="0" required placeholder="0.00"></div>
+                        <div class="fg"><label>Start Date <span class="req">*</span></label><input type="date" name="start_date" required></div>
+                        <div class="fg"><label>End Date <span class="req">*</span></label><input type="date" name="end_date" required></div>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" name="create_campaign" class="btn" style="background:#ec4899;color:#fff;border-color:#ec4899;padding:.65rem 1.5rem;">📣 Create Campaign</button>
+                    <button type="button" class="btn btn-secondary" onclick="toggleForm('cp-form-wrap','cp-toggle','➕ New Campaign','✕ Cancel')">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<?php else: ?>
+<div class="section-header-row"><h3>📣 Marketing Campaigns</h3></div>
+<?php endif; ?>
+
+<!-- Filters -->
+<div class="controls-row">
+    <input type="text" id="cp-search" placeholder="🔍  Search name, client…" oninput="filterMkt('cp-grid','cp-search',{type:'cp-filter-type',status:'cp-filter-status'},'cp-count')">
+    <select id="cp-filter-type" onchange="filterMkt('cp-grid','cp-search',{type:'cp-filter-type',status:'cp-filter-status'},'cp-count')">
+        <option value="">All Types</option>
+        <?php foreach ($campaign_types as $v=>$l): ?><option value="<?= $v ?>"><?= $l ?></option><?php endforeach; ?>
+    </select>
+    <select id="cp-filter-status" onchange="filterMkt('cp-grid','cp-search',{type:'cp-filter-type',status:'cp-filter-status'},'cp-count')">
+        <option value="">All Statuses</option>
+        <option value="planning">Planning</option>
+        <option value="active">Active</option>
+        <option value="completed">Completed</option>
+        <option value="paused">Paused</option>
+    </select>
+    <span class="result-count" id="cp-count"><?= count($campaigns) ?> campaign<?= count($campaigns)!=1?'s':'' ?></span>
+</div>
+
+<?php if (empty($campaigns)): ?>
+<div class="empty-box"><div class="emoji">📣</div><h3>No campaigns yet</h3><p>Create your first campaign above.</p></div>
+<?php else: ?>
+<div class="no-results" id="cp-no-results">No campaigns match your filters.</div>
+<div class="mkt-grid" id="cp-grid">
+    <?php
+    $status_colors=['active'=>'#22c55e','planning'=>'#6b7280','completed'=>'#3b82f6','paused'=>'#f59e0b'];
+    foreach ($campaigns as $c):
+        $sDate=$c['start_date']?date('M j, Y',strtotime($c['start_date'])):'—';
+        $eDate=$c['end_date']?date('M j, Y',strtotime($c['end_date'])):'—';
+        $bgCol=$status_colors[$c['status']]??'#6b7280';
+        $searchText=strtolower($c['campaign_name'].' '.($c['client_name']??'').' '.($c['campaign_type']??''));
+    ?>
+    <div class="mkt-card" style="border-top:3px solid <?= $bgCol ?>;"
+         data-search="<?= htmlspecialchars($searchText,ENT_QUOTES) ?>"
+         data-type="<?= Security::escapeHTML($c['campaign_type']??'') ?>"
+         data-status="<?= $c['status'] ?>">
+        <div class="mkt-card-top">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.5rem;flex-wrap:wrap;gap:.4rem;">
+                <div style="font-size:.95rem;font-weight:700;color:#111827;"><?= Security::escapeHTML($c['campaign_name']) ?></div>
+                <span class="badge b-<?= $c['status'] ?>"><?= ucfirst($c['status']) ?></span>
+            </div>
+            <div style="font-size:.78rem;color:#6b7280;margin-bottom:.65rem;"><?= Security::escapeHTML($c['client_name']??'Unknown') ?><?= $c['client_company']?' — '.Security::escapeHTML($c['client_company']):'' ?></div>
+            <div class="campaign-card-meta">
+                <div><span class="cm-label">Type</span><?= Security::escapeHTML(str_replace('_',' ',ucfirst($c['campaign_type']??''))) ?></div>
+                <div><span class="cm-label">Budget</span><strong style="color:#ec4899;">R <?= number_format($c['budget']??0,2) ?></strong></div>
+                <div><span class="cm-label">Start</span><?= $sDate ?></div>
+                <div><span class="cm-label">End</span><?= $eDate ?></div>
+            </div>
+            <?php if (!empty($c['metrics'])): $met=json_decode($c['metrics'],true); if ($met): ?>
+            <div style="background:#fdf2f8;border-radius:8px;padding:.6rem .85rem;margin-top:.5rem;">
+                <?php foreach ($met as $mk=>$mv): ?><span style="font-size:.73rem;color:#6b7280;">📊 <?= ucfirst(str_replace('_',' ',$mk)) ?>: <strong style="color:#ec4899;"><?= Security::escapeHTML((string)$mv) ?></strong>&nbsp;&nbsp;</span><?php endforeach; ?>
+            </div>
+            <?php endif; endif; ?>
+        </div>
+        <div class="mkt-card-foot">
+            <span style="font-size:.72rem;color:#9ca3af;">Created <?= date('M j, Y',strtotime($c['created_at'])) ?></span>
+            <?php if (in_array($role,['admin','manager'])): ?>
+            <button class="btn-xs" onclick="toggleInlineEdit('cp-<?= $c['id'] ?>')">✏️ Update</button>
+            <?php endif; ?>
+        </div>
+        <?php if (in_array($role,['admin','manager'])): ?>
+        <div id="cp-<?= $c['id'] ?>" class="inline-edit">
+            <h5>✏️ Update Campaign</h5>
+            <form method="post">
+                <?= Security::getCSRFTokenField() ?><input type="hidden" name="campaign_id" value="<?= $c['id'] ?>">
+                <div class="form-2col">
+                    <div class="fg"><label>Status</label>
+                        <select name="status" required>
+                            <?php foreach (['planning'=>'Planning','active'=>'Active','completed'=>'Completed','paused'=>'Paused'] as $v=>$l): ?><option value="<?= $v ?>" <?= $c['status']===$v?'selected':'' ?>><?= $l ?></option><?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="fg"><label>Metrics <span class="opt">(JSON)</span></label><input type="text" name="metrics" value="<?= Security::escapeHTML($c['metrics']??'') ?>" placeholder='{"reach":1000}'></div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" name="update_campaign" class="btn" style="background:#ec4899;color:#fff;border-color:#ec4899;">💾 Save</button>
+                    <button type="button" class="btn btn-secondary" onclick="toggleInlineEdit('cp-<?= $c['id'] ?>')">Cancel</button>
+                </div>
+            </form>
+        </div>
+        <?php endif; ?>
+    </div>
+    <?php endforeach; ?>
+</div>
+<?php endif; ?>
+
+<?php endif; ?>
+
+</div><!-- /.main-content -->
+
+<!-- Recipient Modal -->
+<div id="recipientModal" class="modal-overlay">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3>👤 Add Recipient</h3>
+            <button class="modal-close" onclick="closeModal('recipientModal')">✕</button>
+        </div>
+        <div class="modal-body">
+            <form method="post">
+                <?= Security::getCSRFTokenField() ?>
+                <input type="hidden" id="modal-campaign-id" name="campaign_id" value="">
+                <div class="fg"><label>Email Address <span class="req">*</span></label><input type="email" name="email" required placeholder="recipient@example.com"></div>
+                <div class="fg"><label>Full Name <span class="req">*</span></label><input type="text" name="name" required placeholder="Jane Smith"></div>
+                <div class="form-actions">
+                    <button type="submit" name="add_email_recipient" class="btn" style="background:#8b5cf6;color:#fff;border-color:#8b5cf6;">➕ Add Recipient</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('recipientModal')">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="../js/notification.js"></script>
+<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+<script>
+// Toggle create form visibility
+function toggleForm(wrapId, btnId, labelOpen, labelClose) {
+    const wrap = document.getElementById(wrapId);
+    const btn  = document.getElementById(btnId);
+    const isOpen = wrap.style.display === 'block';
+    wrap.style.display = isOpen ? 'none' : 'block';
+    if (btn) {
+        btn.textContent = isOpen ? labelOpen : labelClose;
+        btn.classList.toggle('open', !isOpen);
+    }
+    if (!isOpen) wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// Toggle inline edit section inside a card
+function toggleInlineEdit(id) {
+    const el = document.getElementById(id);
+    el.style.display = el.style.display === 'block' ? 'none' : 'block';
+}
+
+// Client-side filter for card grids / flex lists
+function filterMkt(containerId, searchInputId, filterMap, countId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const searchVal = (document.getElementById(searchInputId)?.value || '').toLowerCase().trim();
+    const filterVals = {};
+    for (const [dataKey, selectId] of Object.entries(filterMap)) {
+        filterVals[dataKey] = document.getElementById(selectId)?.value || '';
+    }
+    const cards = container.querySelectorAll('[data-search]');
+    let visible = 0;
+    cards.forEach(card => {
+        let show = true;
+        if (searchVal && !(card.dataset.search || '').includes(searchVal)) show = false;
+        for (const [dataKey, val] of Object.entries(filterVals)) {
+            if (val && card.dataset[dataKey] !== val) show = false;
         }
-        
-        function editPost(postId) {
-            const form = document.getElementById('edit-' + postId);
-            form.style.display = form.style.display === 'none' || form.style.display === '' ? 'block' : 'none';
-        }
-        
-        function editEmailCampaign(campaignId) {
-            const form = document.getElementById('edit-email-' + campaignId);
-            form.style.display = form.style.display === 'none' || form.style.display === '' ? 'block' : 'none';
-        }
-        
-        function showAddRecipient(campaignId) {
-            document.getElementById('modal-campaign-id').value = campaignId;
-            document.getElementById('recipientModal').style.display = 'block';
-        }
-        
-        function closeRecipientModal() {
-            document.getElementById('recipientModal').style.display = 'none';
-        }
-        
-        function viewPost(postId) {
-            // Could implement a post detail modal here
-            alert('Post details for ID: ' + postId);
-        }
-        
-        function changeMonth(direction) {
-            const url = new URL(window.location);
-            let month = parseInt(url.searchParams.get('month') || '<?php echo $current_month; ?>');
-            let year = parseInt(url.searchParams.get('year') || '<?php echo $current_year; ?>');
-            
-            month += direction;
-            if (month > 12) {
-                month = 1;
-                year++;
-            } else if (month < 1) {
-                month = 12;
-                year--;
-            }
-            
-            url.searchParams.set('month', month.toString().padStart(2, '0'));
-            url.searchParams.set('year', year.toString());
-            window.location.href = url.toString();
-        }
-        
-        // Navigation functions
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('active');
-        }
-        
-        function toggleNotifications() {
-            // Placeholder for notifications
-        }
-        
-        // Close sidebar when clicking outside on mobile
-        document.addEventListener('click', function(event) {
-            const sidebar = document.getElementById('sidebar');
-            const menuToggle = document.querySelector('.menu-toggle');
-            
-            if (window.innerWidth <= 768 && 
-                !sidebar.contains(event.target) && 
-                !menuToggle.contains(event.target) && 
-                sidebar.classList.contains('active')) {
-                sidebar.classList.remove('active');
-            }
+        card.style.display = show ? '' : 'none';
+        if (show) visible++;
+    });
+    const countEl = document.getElementById(countId);
+    if (countEl) {
+        const noun = countEl.textContent.replace(/^\d+\s*/,'').replace(/s$/,'');
+        countEl.textContent = visible + ' ' + noun + (visible !== 1 ? 's' : '');
+    }
+    // Show "no results" message
+    const noRes = document.getElementById(containerId.replace('-grid','-no-results').replace('-list','-no-results'));
+    if (noRes) noRes.style.display = visible === 0 ? 'block' : 'none';
+}
+
+// Modal
+function openRecipientModal(id) {
+    document.getElementById('modal-campaign-id').value = id;
+    document.getElementById('recipientModal').classList.add('open');
+}
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(o => o.addEventListener('click', e => { if (e.target===o) o.classList.remove('open'); }));
+
+// Calendar nav
+function changeMonth(dir) {
+    const url = new URL(window.location);
+    let month = parseInt(url.searchParams.get('month') || '<?= $current_month ?>');
+    let year  = parseInt(url.searchParams.get('year')  || '<?= $current_year ?>');
+    month += dir;
+    if (month > 12) { month = 1; year++; } else if (month < 1) { month = 12; year--; }
+    url.searchParams.set('month', month.toString().padStart(2,'0'));
+    url.searchParams.set('year',  year.toString());
+    window.location.href = url.toString();
+}
+
+// ── Quill rich-text editors ──
+const EC_TOOLBAR = [
+    [{ header: [1, 2, 3, false] }],
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ color: [] }, { background: [] }],
+    [{ list: 'ordered' }, { list: 'bullet' }],
+    ['link', 'blockquote'],
+    ['clean']
+];
+const EC_TOOLBAR_COMPACT = [
+    ['bold', 'italic', 'underline'],
+    [{ list: 'ordered' }, { list: 'bullet' }],
+    ['link'],
+    ['clean']
+];
+
+let ecCreateQuill = null;
+const ecEditQuills = {};
+
+// Init create-form Quill on page load (runs even when form is hidden — OK for Quill)
+(function () {
+    const el = document.getElementById('ec-quill-editor');
+    if (!el) return;
+    ecCreateQuill = new Quill('#ec-quill-editor', {
+        theme: 'snow',
+        placeholder: 'Write your email content here, use the toolbar to format headings, lists, links and more…',
+        modules: { toolbar: EC_TOOLBAR }
+    });
+    const form = document.getElementById('ec-create-form');
+    if (form) {
+        form.addEventListener('submit', () => {
+            document.getElementById('ec-content-hidden').value = ecCreateQuill.root.innerHTML;
         });
-        
-        // Close modal when clicking outside
-        window.onclick = function(event) {
-            const modal = document.getElementById('recipientModal');
-            if (event.target == modal) {
-                modal.style.display = 'none';
+    }
+})();
+
+// Lazily init Quill for an inline edit when it opens
+function toggleInlineEditEC(id) {
+    const el = document.getElementById(id);
+    const isOpen = el.style.display === 'block';
+    el.style.display = isOpen ? 'none' : 'block';
+    if (!isOpen) {
+        const numId = id.replace('ec-', '');
+        if (!ecEditQuills[numId]) {
+            const editorEl = document.getElementById('ec-edit-quill-' + numId);
+            if (editorEl) {
+                const savedHTML = editorEl.innerHTML;
+                ecEditQuills[numId] = new Quill('#ec-edit-quill-' + numId, {
+                    theme: 'snow',
+                    modules: { toolbar: EC_TOOLBAR_COMPACT }
+                });
+                // Quill clears innerHTML on init — restore saved content as delta-safe HTML
+                ecEditQuills[numId].root.innerHTML = savedHTML;
             }
         }
-    </script>
+        // Wire submit once
+        const form = el.querySelector('.ec-edit-form');
+        if (form && !form.dataset.wired) {
+            form.dataset.wired = '1';
+            form.addEventListener('submit', () => {
+                const fid = form.dataset.id;
+                if (ecEditQuills[fid]) {
+                    document.getElementById('ec-edit-content-' + fid).value = ecEditQuills[fid].root.innerHTML;
+                }
+            });
+        }
+    }
+}
+
+// Auto-dismiss flash
+const flash = document.getElementById('flashMsg');
+if (flash) setTimeout(() => { flash.style.transition='opacity .5s'; flash.style.opacity=0; setTimeout(()=>flash.remove(),500); }, 3500);
+</script>
 </body>
 </html>
