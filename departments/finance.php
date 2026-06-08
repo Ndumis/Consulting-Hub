@@ -1011,9 +1011,11 @@ $outstanding_amount = array_sum(array_map(function($i) {
     return !in_array($i['status'], ['paid', 'cancelled']) ? max(0, $i['total_amount'] - $i['paid_amount']) : 0;
 }, $invoices));
 
-// Expenses: purchase orders + expenses table amounts
+// Expenses: purchase orders + approved expenses only (pending/rejected excluded)
 $po_expense_total  = array_sum(array_column($purchase_orders, 'total_amount'));
-$exp_table_total   = array_sum(array_column($expenses, 'amount'));
+$exp_table_total   = array_sum(array_map(function($e) {
+    return $e['status'] === 'approved' ? (float)$e['amount'] : 0;
+}, $expenses));
 $total_expenses    = $po_expense_total + $exp_table_total;
 
 // Net P&L: cash collected minus total expenses incurred
@@ -1475,7 +1477,7 @@ if (!isset($expenses)) {
             <div class="fin-stat">
                 <div class="fin-stat-lbl">Total Expenses</div>
                 <div class="fin-stat-val red">R <?php echo number_format($total_expenses, 2); ?></div>
-                <div style="font-size:.72rem;color:#6b7280;margin-top:3px;">POs R<?php echo number_format($po_expense_total,2); ?> + Claims R<?php echo number_format($exp_table_total,2); ?></div>
+                <div style="font-size:.72rem;color:#6b7280;margin-top:3px;">POs R<?php echo number_format($po_expense_total,2); ?> + Approved Claims R<?php echo number_format($exp_table_total,2); ?></div>
             </div>
             <div class="fin-stat">
                 <div class="fin-stat-lbl">Net P&amp;L</div>
