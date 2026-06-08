@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once 'config/session.php';
 
 // Check if user is logged in

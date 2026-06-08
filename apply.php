@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // Public External Candidates Application Page
 // No authentication required - accessible to external candidates
 
