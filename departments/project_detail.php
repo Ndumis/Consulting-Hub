@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once '../config/session.php';
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../auth/login.php");
@@ -107,6 +107,7 @@ $avatar_colors = ['#6366f1','#0ea5e9','#8b5cf6','#f59e0b','#22c55e','#ec4899','#
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= Security::escapeHTML($project['name']) ?> — KConsulting Hub</title>
+    <link rel="icon" type="image/png" href="../img/KConsultingLogo1.png">
     <link rel="stylesheet" href="../css/main.css">
     <style>
         /* ── HERO ── */
@@ -642,3 +643,4 @@ setTimeout(() => document.querySelectorAll('.page-alert').forEach(el => {
 </script>
 </body>
 </html>
+

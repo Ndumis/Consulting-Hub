@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // Public External Candidates Application Page
 // No authentication required - accessible to external candidates
 
@@ -144,6 +144,7 @@ if ($_POST && isset($_POST['create_candidate'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Apply for Position - Business Management System</title>
+    <link rel="icon" type="image/png" href="img/KConsultingLogo1.png">
     <link rel="stylesheet" href="css/main.css">
     <style>
         body {

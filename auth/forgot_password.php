@@ -14,7 +14,7 @@ $error   = '';
 $success = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!Security::checkCSRFToken($_POST['csrf_token'] ?? '')) {
+    if (!Security::validateCSRFToken($_POST['csrf_token'] ?? '')) {
         $error = 'Invalid request. Please try again.';
     } else {
         $email = trim($_POST['email'] ?? '');
@@ -56,6 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Forgot Password — KConsulting Hub</title>
+    <link rel="icon" type="image/png" href="../img/KConsultingLogo1.png">
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 

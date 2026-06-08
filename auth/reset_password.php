@@ -35,7 +35,7 @@ $tokenValid = $tokenRow
     && strtotime($tokenRow['expires_at']) > time();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!Security::checkCSRFToken($_POST['csrf_token'] ?? '')) {
+    if (!Security::validateCSRFToken($_POST['csrf_token'] ?? '')) {
         $error = 'Invalid request. Please try again.';
     } elseif (!$tokenValid) {
         $error = 'This reset link is invalid or has expired.';
@@ -75,6 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reset Password — KConsulting Hub</title>
+    <link rel="icon" type="image/png" href="../img/KConsultingLogo1.png">
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 

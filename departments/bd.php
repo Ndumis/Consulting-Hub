@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once '../config/session.php';
 if (!isset($_SESSION['user_id'])) { header("Location: ../auth/login.php"); exit(); }
 
@@ -123,7 +123,8 @@ $ind_icons     = ['insurance'=>'🛡️','finance'=>'💰','technology'=>'💻',
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Business Development — KConsulting Hub</title>
-<link rel="stylesheet" href="../css/main.css">
+<link rel="icon" type="image/png" href="../img/KConsultingLogo1.png">
+    <link rel="stylesheet" href="../css/main.css">
 <style>
 /* BD color tokens: emerald #059669, blue #2563eb */
 
@@ -1005,3 +1006,4 @@ if (flash) setTimeout(() => { flash.style.transition='opacity .5s'; flash.style.
 </script>
 </body>
 </html>
+

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once '../config/session.php';
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../auth/login.php");
@@ -116,7 +116,8 @@ $vendor_colors = ['#6366f1','#0ea5e9','#f59e0b','#22c55e','#ec4899','#ef4444','#
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>IT Department — KConsulting Hub</title>
-<link rel="stylesheet" href="../css/main.css">
+<link rel="icon" type="image/png" href="../img/KConsultingLogo1.png">
+    <link rel="stylesheet" href="../css/main.css">
 <style>
 /* ── PAGE HERO ── */
 .it-hero { background:linear-gradient(135deg,#0ea5e9 0%,#6366f1 100%); border-radius:14px; padding:1.75rem 2rem; color:#fff; margin-bottom:1.5rem; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem; }
@@ -836,3 +837,4 @@ if (flash) setTimeout(() => { flash.style.transition='opacity .5s'; flash.style.
 </script>
 </body>
 </html>
+

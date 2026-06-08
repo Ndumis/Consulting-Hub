@@ -13,20 +13,20 @@ $error   = '';
 $success = $_GET['msg'] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!Security::checkCSRFToken($_POST['csrf_token'] ?? '')) {
+    if (!Security::validateCSRFToken($_POST['csrf_token'] ?? '')) {
         $error = 'Invalid request. Please try again.';
     } else {
         $username = Security::sanitizeInput($_POST['username'] ?? '');
         $password = $_POST['password'] ?? '';
 
         if (!$username || !$password) {
-            $error = 'Please enter your username and password.';
+            $error = 'Please enter your username or email and password.';
         } else {
             $database = new Database();
             $db       = $database->getConnection();
 
-            $stmt = $db->prepare("SELECT id, username, email, password, role, department FROM users WHERE username = ? LIMIT 1");
-            $stmt->execute([$username]);
+            $stmt = $db->prepare("SELECT id, username, email, password, role, department FROM users WHERE username = ? OR email = ? LIMIT 1");
+            $stmt->execute([$username, $username]);
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($row && password_verify($password, $row['password'])) {
@@ -59,6 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign In — KConsulting Hub</title>
+    <link rel="icon" type="image/png" href="../img/KConsultingLogo1.png">
     <link rel="stylesheet" href="../css/login.css">
     <style>
         /* ── Redesign overlay ────────────────────────────────────────────── */
@@ -184,11 +185,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?= Security::getCSRFTokenField() ?>
 
                 <div class="auth-form-group">
-                    <label for="username">Username</label>
+                    <label for="username">Username or Email</label>
                     <div class="auth-input-wrap">
                         <input type="text" id="username" name="username" class="auth-input"
                                value="<?= Security::escapeHTML($_POST['username'] ?? '') ?>"
-                               placeholder="Enter your username" autocomplete="username" required autofocus>
+                               placeholder="Enter your username or email" autocomplete="username" required autofocus>
                     </div>
                 </div>
 

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
     require_once '../config/session.php';
     if (!isset($_SESSION['user_id'])) {
@@ -204,7 +204,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Marketing Department — KConsulting Hub</title>
 <link rel="stylesheet" href="https://cdn.quilljs.com/1.3.7/quill.snow.css">
-<link rel="stylesheet" href="../css/main.css">
+<link rel="icon" type="image/png" href="../img/KConsultingLogo1.png">
+    <link rel="stylesheet" href="../css/main.css">
 <style>
 /* ── HERO ── */
 .mkt-hero{background:linear-gradient(135deg,#ec4899 0%,#8b5cf6 100%);border-radius:14px;padding:1.75rem 2rem;color:#fff;margin-bottom:1.5rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;}
@@ -1378,3 +1379,4 @@ if (flash) setTimeout(() => { flash.style.transition='opacity .5s'; flash.style.
 </script>
 </body>
 </html>
+

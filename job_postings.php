@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once 'config/database.php';
 
 // Initialize database connection
@@ -30,6 +30,7 @@ $candidate_count = $db->query("SELECT COUNT(*) as total FROM candidates")->fetch
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Job Postings - Business Management</title>
+    <link rel="icon" type="image/png" href="img/KConsultingLogo1.png">
     <link rel="stylesheet" href="css/main.css">
     <style>
         .job-container {

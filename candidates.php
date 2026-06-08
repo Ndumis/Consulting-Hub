@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once 'config/database.php';
 
 // Initialize database connection
@@ -27,6 +27,7 @@ $candidates = $db->query("SELECT c.*, jp.title as job_title, jp.department as jo
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Candidate Applications - Business Management</title>
+    <link rel="icon" type="image/png" href="img/KConsultingLogo1.png">
     <link rel="stylesheet" href="css/main.css">
     <style>
         .candidate-container {

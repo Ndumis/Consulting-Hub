@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 session_start();
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../auth/login.php");
@@ -209,6 +209,7 @@ $type_info = [
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo $type_info[$type]['title']; ?> Details - <?php echo Security::escapeHTML($item[$type === 'social_post' ? 'platform' : 'campaign_name'] ?? 'Item'); ?></title>
+    <link rel="icon" type="image/png" href="../img/KConsultingLogo1.png">
     <link rel="stylesheet" href="../css/main.css">
     <style>
         .detail-header {
