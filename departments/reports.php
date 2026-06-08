@@ -243,10 +243,16 @@ $asset_base = '../'; $nav_base = '';
                     <option value="this_year" <?php echo $period==='this_year'?'selected':''; ?>>This year</option>
                     <option value="custom" <?php echo $period==='custom'?'selected':''; ?>>Custom range</option>
                 </select>
-                <span id="custom-date-wrap" style="display:<?php echo $period==='custom'?'flex':'none'; ?>;gap:8px;align-items:center;">
-                    <input type="date" name="start_date" value="<?php echo Security::escapeHTML($start_date); ?>">
+                <span id="custom-date-wrap" style="display:<?php echo $period==='custom'?'flex':'none'; ?>;gap:6px;align-items:center;">
+                    <div style="display:flex;align-items:center;gap:3px;">
+                        <input type="date" id="rpDateFrom" name="start_date" value="<?php echo Security::escapeHTML($start_date); ?>">
+                        <?php if ($start_date): ?><button type="button" onclick="clearRpDate('rpDateFrom')" style="border:none;background:none;cursor:pointer;color:#9ca3af;font-size:1.1rem;line-height:1;padding:0 2px;" title="Clear">×</button><?php endif; ?>
+                    </div>
                     <span style="font-size:.8rem;color:#9ca3af;">to</span>
-                    <input type="date" name="end_date" value="<?php echo Security::escapeHTML($end_date); ?>">
+                    <div style="display:flex;align-items:center;gap:3px;">
+                        <input type="date" id="rpDateTo" name="end_date" value="<?php echo Security::escapeHTML($end_date); ?>">
+                        <?php if ($end_date): ?><button type="button" onclick="clearRpDate('rpDateTo')" style="border:none;background:none;cursor:pointer;color:#9ca3af;font-size:1.1rem;line-height:1;padding:0 2px;" title="Clear">×</button><?php endif; ?>
+                    </div>
                 </span>
                 <button type="submit" class="rp-btn rp-btn-primary">Apply</button>
                 <a href="reports.php" class="rp-btn rp-btn-ghost">Reset</a>
@@ -669,6 +675,11 @@ $asset_base = '../'; $nav_base = '';
 
     function toggleCustomDates(val) {
         document.getElementById('custom-date-wrap').style.display = val === 'custom' ? 'flex' : 'none';
+    }
+
+    function clearRpDate(id) {
+        const el = document.getElementById(id);
+        if (el) { el.value = ''; el.closest('form').submit(); }
     }
     </script>
 </body>
