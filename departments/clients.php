@@ -9,1388 +9,646 @@ require_once '../config/database.php';
 require_once '../config/security.php';
 require_once '../includes/functions.php';
 
-// Check department access
 Security::requireDepartmentAccess('Clients');
 
 $database = new Database();
 $db = $database->getConnection();
 
-// Get user info
-$user_id = $_SESSION['user_id'];
-$username = $_SESSION['username'];
-$role = $_SESSION['role'];
-$department = $_SESSION['department'];
-$email = $_SESSION['email'];
+$can_write = in_array($_SESSION['role'] ?? '', ['admin', 'manager']);
+$csrf = Security::generateCSRFToken();
 
-// Track page visit
-try {
-    require_once '../includes/ActivityLogger.php';
-    $logger = new ActivityLogger($db);
-    $logger->logPageVisit('Clients Management', 'Viewed clients management page');
-} catch (Exception $e) {
-    error_log("Activity logging failed: " . $e->getMessage());
-}
-
-// Handle new client creation
+// ── Create client ────────────────────────────────────────────────────────────
 if ($_POST && isset($_POST['create_client'])) {
     Security::checkCSRFToken();
     Security::requireWriteAccess('Clients');
-    
-    $name = Security::sanitizeInput($_POST['name']);
-    $email = Security::sanitizeInput($_POST['email']);
-    $phone = Security::sanitizeInput($_POST['phone']);
+    $name    = Security::sanitizeInput($_POST['name']);
+    $email   = Security::sanitizeInput($_POST['email']);
+    $phone   = Security::sanitizeInput($_POST['phone']);
     $company = Security::sanitizeInput($_POST['company']);
     $address = Security::sanitizeInput($_POST['address']);
-    $status = Security::sanitizeInput($_POST['status']);
-    
-    $query = "INSERT INTO clients (name, email, phone, company, address, status) VALUES (?, ?, ?, ?, ?, ?)";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$name, $email, $phone, $company, $address, $status]);
-    $client_id = $db->lastInsertId();
-    
-    // Log activity
-    Utils::logActivity('Clients', 'client_created', "Created new client: {$name} ({$company})", 'client', $client_id);
-    
-    echo "<script>
-        alert('Client created successfully!');
-        window.location.href = 'clients.php';
-    </script>";
-    exit();
+    $status  = Security::sanitizeInput($_POST['status']);
+    if (!in_array($status, ['active','prospect','inactive'])) $status = 'prospect';
+    $stmt = $db->prepare("INSERT INTO clients (name,email,phone,company,address,status) VALUES (?,?,?,?,?,?)");
+    $stmt->execute([$name,$email,$phone,$company,$address,$status]);
+    $success_message = "Client <strong>".Security::escapeHTML($name)."</strong> created.";
 }
 
-// Handle client updates
+// ── Update client ────────────────────────────────────────────────────────────
 if ($_POST && isset($_POST['update_client'])) {
     Security::checkCSRFToken();
     Security::requireWriteAccess('Clients');
-    
-    $client_id = (int)$_POST['client_id'];
-    $name = Security::sanitizeInput($_POST['name']);
-    $email = Security::sanitizeInput($_POST['email']);
-    $phone = Security::sanitizeInput($_POST['phone']);
-    $company = Security::sanitizeInput($_POST['company']);
+    $cid    = (int)$_POST['client_id'];
+    $name   = Security::sanitizeInput($_POST['name']);
+    $email  = Security::sanitizeInput($_POST['email']);
+    $phone  = Security::sanitizeInput($_POST['phone']);
+    $company= Security::sanitizeInput($_POST['company']);
     $status = Security::sanitizeInput($_POST['status']);
-    
-    $query = "UPDATE clients SET name = ?, email = ?, phone = ?, company = ?, status = ? WHERE id = ?";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$name, $email, $phone, $company, $status, $client_id]);
+    if (!in_array($status, ['active','prospect','inactive'])) $status = 'prospect';
+    $stmt = $db->prepare("UPDATE clients SET name=?,email=?,phone=?,company=?,status=? WHERE id=?");
+    $stmt->execute([$name,$email,$phone,$company,$status,$cid]);
+    $success_message = "Client updated.";
 }
 
-// Handle new contact creation
+// ── Create contact ───────────────────────────────────────────────────────────
 if ($_POST && isset($_POST['create_contact'])) {
     Security::checkCSRFToken();
-    
-    $client_id = (int)$_POST['client_id'];
-    $contact_type = Security::sanitizeInput($_POST['contact_type']);
-    $contact_person = Security::sanitizeInput($_POST['contact_person']);
-    $email = Security::sanitizeInput($_POST['email']);
-    $phone = Security::sanitizeInput($_POST['phone']);
-    $subject = Security::sanitizeInput($_POST['subject']);
-    $message = Security::sanitizeInput($_POST['message']);
-    $priority = Security::sanitizeInput($_POST['priority']);
-    $follow_up_date = Security::sanitizeInput($_POST['follow_up_date']);
-    
-    $query = "INSERT INTO client_contacts (client_id, contact_type, contact_person, email, phone, subject, message, priority, assigned_to, follow_up_date) 
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$client_id, $contact_type, $contact_person, $email, $phone, $subject, $message, $priority, $_SESSION['user_id'], $follow_up_date]);
-    
-    // Log activity
-    $activity_query = "INSERT INTO client_activities (client_id, activity_type, description, user_id) 
-                      VALUES (?, ?, ?, ?)";
-    $activity_stmt = $db->prepare($activity_query);
-    $activity_stmt->execute([$client_id, 'contact_created', "New {$contact_type} contact: {$subject}", $_SESSION['user_id']]);
+    $cid        = (int)$_POST['client_id'];
+    $name       = Security::sanitizeInput($_POST['contact_name']);
+    $email      = Security::sanitizeInput($_POST['contact_email']);
+    $phone      = Security::sanitizeInput($_POST['contact_phone']);
+    $position   = Security::sanitizeInput($_POST['contact_position']);
+    $is_primary = isset($_POST['is_primary']) ? 1 : 0;
+    $stmt = $db->prepare("INSERT INTO client_contacts (client_id,name,email,phone,position,is_primary,assigned_to) VALUES (?,?,?,?,?,?,?)");
+    $stmt->execute([$cid,$name,$email,$phone,$position,$is_primary,$_SESSION['user_id']]);
+    $success_message = "Contact added.";
 }
 
-// Handle contact status updates
-if ($_POST && isset($_POST['update_contact_status'])) {
-    Security::checkCSRFToken();
-    
-    $contact_id = (int)$_POST['contact_id'];
-    $status = Security::sanitizeInput($_POST['status']);
-    
-    $query = "UPDATE client_contacts SET status = ? WHERE id = ?";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$status, $contact_id]);
-}
-
-// Handle meeting creation
+// ── Create meeting ───────────────────────────────────────────────────────────
 if ($_POST && isset($_POST['create_meeting'])) {
     Security::checkCSRFToken();
-    
-    $client_id = (int)$_POST['client_id'];
-    $meeting_title = Security::sanitizeInput($_POST['meeting_title']);
-    $meeting_date = Security::sanitizeInput($_POST['meeting_date']);
-    $duration = (int)$_POST['duration'];
-    $location = Security::sanitizeInput($_POST['location']);
-    $attendees = Security::sanitizeInput($_POST['attendees']);
-    $agenda = Security::sanitizeInput($_POST['agenda']);
-    
-    $query = "INSERT INTO client_meetings (client_id, meeting_title, meeting_date, duration, location, attendees, agenda, created_by, status) 
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'scheduled')";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$client_id, $meeting_title, $meeting_date, $duration, $location, $attendees, $agenda, $_SESSION['user_id']]);
-    
-    // Log activity
-    $activity_query = "INSERT INTO client_activities (client_id, activity_type, description, user_id) 
-                      VALUES (?, ?, ?, ?)";
-    $activity_stmt = $db->prepare($activity_query);
-    $activity_stmt->execute([$client_id, 'meeting_scheduled', "Meeting scheduled: {$meeting_title}", $_SESSION['user_id']]);
+    $cid     = (int)$_POST['client_id'];
+    $title   = Security::sanitizeInput($_POST['meeting_title']);
+    $date    = Security::sanitizeInput($_POST['meeting_date']);
+    $loc     = Security::sanitizeInput($_POST['location']);
+    $agenda  = Security::sanitizeInput($_POST['agenda']);
+    $stmt = $db->prepare("INSERT INTO client_meetings (client_id,meeting_title,meeting_date,location,agenda,created_by,status) VALUES (?,?,?,?,?,?,'scheduled')");
+    $stmt->execute([$cid,$title,$date,$loc,$agenda,$_SESSION['user_id']]);
+    $success_message = "Meeting scheduled.";
 }
 
-// Handle meeting updates
+// ── Update meeting ───────────────────────────────────────────────────────────
 if ($_POST && isset($_POST['update_meeting'])) {
     Security::checkCSRFToken();
-    
-    $meeting_id = (int)$_POST['meeting_id'];
-    $notes = Security::sanitizeInput($_POST['notes']);
-    $outcome = Security::sanitizeInput($_POST['outcome']);
-    $next_steps = Security::sanitizeInput($_POST['next_steps']);
+    $mid    = (int)$_POST['meeting_id'];
+    $notes  = Security::sanitizeInput($_POST['notes']);
     $status = Security::sanitizeInput($_POST['status']);
-    
-    $query = "UPDATE client_meetings SET notes = ?, outcome = ?, next_steps = ?, status = ? WHERE id = ?";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$notes, $outcome, $next_steps, $status, $meeting_id]);
+    if (!in_array($status, ['scheduled','completed','cancelled'])) $status = 'scheduled';
+    $stmt = $db->prepare("UPDATE client_meetings SET notes=?,status=? WHERE id=?");
+    $stmt->execute([$notes,$status,$mid]);
+    $success_message = "Meeting updated.";
 }
 
-// Handle document upload (simulation)
-if ($_POST && isset($_POST['upload_document'])) {
-    Security::checkCSRFToken();
-    
-    $client_id = (int)$_POST['client_id'];
-    $document_name = Security::sanitizeInput($_POST['document_name']);
-    $document_type = Security::sanitizeInput($_POST['document_type']);
-    $description = Security::sanitizeInput($_POST['description']);
-    
-    // Simulate file upload (in real implementation, handle actual file upload)
-    $file_path = "/uploads/clients/{$client_id}/" . preg_replace('/[^a-zA-Z0-9._-]/', '', $document_name);
-    
-    $query = "INSERT INTO client_documents (client_id, document_name, document_type, file_path, description, uploaded_by) 
-              VALUES (?, ?, ?, ?, ?, ?)";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$client_id, $document_name, $document_type, $file_path, $description, $_SESSION['user_id']]);
-    
-    // Log activity
-    $activity_query = "INSERT INTO client_activities (client_id, activity_type, description, user_id) 
-                      VALUES (?, ?, ?, ?)";
-    $activity_stmt = $db->prepare($activity_query);
-    $activity_stmt->execute([$client_id, 'document_uploaded', "Document uploaded: {$document_name}", $_SESSION['user_id']]);
-}
+// ── Fetch data ───────────────────────────────────────────────────────────────
+$clients = $db->query("SELECT c.*,
+    (SELECT COUNT(*) FROM projects p WHERE p.client_id=c.id) AS project_count,
+    (SELECT COALESCE(SUM(i.total_amount),0) FROM invoices i WHERE i.client_id=c.id) AS total_invoiced,
+    (SELECT COALESCE(SUM(i.total_amount),0) FROM invoices i WHERE i.client_id=c.id AND i.status NOT IN ('paid')) AS outstanding,
+    (SELECT COUNT(*) FROM client_contacts cc WHERE cc.client_id=c.id) AS contact_count
+    FROM clients c ORDER BY c.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
 
-// Get data for display
-$clients = $db->query("SELECT * FROM clients ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+$contacts = $db->query("SELECT cc.*, c.name AS client_name
+    FROM client_contacts cc JOIN clients c ON cc.client_id=c.id
+    ORDER BY cc.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
 
-$contacts = $db->query("SELECT cc.*, c.name as client_name, u.username as assigned_to_name 
-                       FROM client_contacts cc 
-                       JOIN clients c ON cc.client_id = c.id 
-                       LEFT JOIN users u ON cc.assigned_to = u.id 
-                       ORDER BY cc.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+$meetings = $db->query("SELECT cm.*, c.name AS client_name, u.username AS created_by_name
+    FROM client_meetings cm JOIN clients c ON cm.client_id=c.id
+    LEFT JOIN users u ON cm.created_by=u.id
+    ORDER BY cm.meeting_date DESC LIMIT 20")->fetchAll(PDO::FETCH_ASSOC);
 
-$meetings = $db->query("SELECT cm.*, c.name as client_name, u.username as created_by_name 
-                       FROM client_meetings cm 
-                       JOIN clients c ON cm.client_id = c.id 
-                       LEFT JOIN users u ON cm.created_by = u.id 
-                       ORDER BY cm.meeting_date DESC")->fetchAll(PDO::FETCH_ASSOC);
+// Stats
+$total_clients  = count($clients);
+$active_clients = count(array_filter($clients, fn($c)=>$c['status']==='active'));
+$prospects      = count(array_filter($clients, fn($c)=>$c['status']==='prospect'));
+$total_revenue  = array_sum(array_column($clients, 'total_invoiced'));
+$total_outstanding = array_sum(array_column($clients, 'outstanding'));
 
-// Check if client_documents table exists before querying
-try {
-    $documents = $db->query("SELECT cd.*, c.name as client_name, u.username as uploaded_by_name 
-                            FROM client_documents cd 
-                            JOIN clients c ON cd.client_id = c.id 
-                            LEFT JOIN users u ON cd.uploaded_by = u.id 
-                            ORDER BY cd.uploaded_at DESC")->fetchAll(PDO::FETCH_ASSOC);
-} catch (Exception $e) {
-    // Table doesn't exist, use empty array
-    $documents = [];
-}
-
-// Check if client_activities table exists before querying
-try {
-    $activities = $db->query("SELECT ca.*, c.name as client_name, u.username as user_name 
-                             FROM client_activities ca 
-                             JOIN clients c ON ca.client_id = c.id 
-                             LEFT JOIN users u ON ca.user_id = u.id 
-                             ORDER BY ca.created_at DESC LIMIT 50")->fetchAll(PDO::FETCH_ASSOC);
-} catch (Exception $e) {
-    // Table doesn't exist, use empty array
-    $activities = [];
-}
+$asset_base = '../';
+$nav_base   = '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clients Department - Business Management</title>
+    <title>Clients - KConsulting Hub</title>
     <link rel="stylesheet" href="../css/main.css">
     <style>
-        /* Client Statistics */
-        .client-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
+        :root {
+            --cl:      #0ea5e9;
+            --cl-dk:   #0284c7;
+            --cl-navy: #0c4a6e;
+            --cl-grad: linear-gradient(135deg, #0c4a6e 0%, #0ea5e9 100%);
         }
 
-        /* Client Cards Grid */
-        .clients-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-            gap: 1.5rem;
+        /* Hero */
+        .cl-hero {
+            background: var(--cl-grad);
+            border-radius: 16px; padding: 28px 32px;
+            display: flex; align-items: center; gap: 20px;
+            margin-bottom: 20px; flex-wrap: wrap;
         }
-
-        .client-card {
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            transition: transform 0.2s, box-shadow 0.2s;
+        .cl-hero-icon { font-size: 2.8rem; }
+        .cl-hero-info { flex: 1; min-width: 180px; }
+        .cl-hero-info h1 { color: #fff; font-size: 1.6rem; font-weight: 800; margin: 0 0 4px; }
+        .cl-hero-info p  { color: rgba(255,255,255,.75); font-size: .87rem; margin: 0; }
+        .cl-hero-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-left: auto; }
+        .cl-hero-btn {
+            background: rgba(255,255,255,.15); color: #fff;
+            border: 1px solid rgba(255,255,255,.3); border-radius: 8px;
+            padding: 8px 16px; font-size: .83rem; font-weight: 600; cursor: pointer; transition: background .2s;
         }
+        .cl-hero-btn:hover { background: rgba(255,255,255,.28); }
 
-        .client-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-        }
+        /* Stats */
+        .cl-stats { display: grid; grid-template-columns: repeat(5,1fr); gap: 12px; margin-bottom: 20px; }
+        @media(max-width:900px){ .cl-stats{ grid-template-columns: repeat(3,1fr); } }
+        @media(max-width:580px){ .cl-stats{ grid-template-columns: 1fr 1fr; } }
+        .cl-stat { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px 18px; box-shadow: 0 1px 4px rgba(0,0,0,.05); }
+        .cl-stat .num { font-size: 1.75rem; font-weight: 800; color: #111827; display: block; }
+        .cl-stat .lbl { font-size: .72rem; text-transform: uppercase; letter-spacing: .5px; color: #9ca3af; font-weight: 600; }
+        .cl-stat .num.sky   { color: var(--cl); }
+        .cl-stat .num.green { color: #059669; }
+        .cl-stat .num.amber { color: #d97706; }
+        .cl-stat .num.rose  { color: #e11d48; }
+        .cl-stat .num.slate { color: #475569; }
 
-        .client-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 1rem;
-        }
+        /* Flash */
+        .cl-flash { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: .87rem; font-weight: 500; }
+        .cl-flash.success { background: #e0f2fe; color: #0c4a6e; border-left: 4px solid var(--cl); }
+        .cl-flash.error   { background: #fee2e2; color: #991b1b; border-left: 4px solid #dc2626; }
 
-        .client-info {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 0.75rem;
-            margin-bottom: 1.5rem;
-        }
+        /* Tab nav */
+        .cl-tabs { display: flex; gap: 0; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 4px; margin-bottom: 20px; overflow-x: auto; }
+        .cl-tab  { flex: none; padding: 9px 20px; border: none; background: transparent; border-radius: 7px; cursor: pointer; font-size: .87rem; font-weight: 600; color: #6b7280; transition: all .2s; white-space: nowrap; }
+        .cl-tab:hover  { background: #f3f4f6; color: #111827; }
+        .cl-tab.active { background: var(--cl); color: #fff; }
+        .cl-tab-content { display: none; }
+        .cl-tab-content.active { display: block; }
 
-        .client-actions {
-            display: flex;
-            gap: 0.75rem;
-            border-top: 1px solid #ecf0f1;
-            padding-top: 1rem;
-        }
+        /* Controls */
+        .cl-controls { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+        .cl-search  { flex: 1; min-width: 180px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: .87rem; }
+        .cl-search:focus { outline: none; border-color: var(--cl); box-shadow: 0 0 0 3px rgba(14,165,233,.1); }
+        .cl-filter  { padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: .85rem; background: #fff; }
+        .cl-count   { font-size: .8rem; color: #9ca3af; margin-left: auto; }
 
-        /* Form Styles */
-        .form-container {
-            background: white;
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-            margin-bottom: 2rem;
-        }
+        /* Table */
+        .cl-table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: 0 1px 4px rgba(0,0,0,.05); }
+        .cl-table { width: 100%; border-collapse: collapse; background: #fff; font-size: .86rem; }
+        .cl-table th { background: var(--cl); color: #fff; padding: 11px 14px; text-align: left; font-size: .75rem; text-transform: uppercase; letter-spacing: .5px; font-weight: 700; white-space: nowrap; }
+        .cl-table td { padding: 11px 14px; border-bottom: 1px solid #f3f4f6; color: #374151; vertical-align: middle; }
+        .cl-table tr:last-child td { border-bottom: none; }
+        .cl-table tr:hover td { background: #f0f9ff; }
+        .cl-no-results { text-align: center; padding: 32px; color: #9ca3af; font-size: .88rem; display: none; }
 
-        .form-grid-2col {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 1.5rem;
-        }
+        /* Client avatar */
+        .cl-avatar { width: 36px; height: 36px; border-radius: 10px; background: var(--cl-grad); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: .78rem; font-weight: 700; flex-shrink: 0; }
+        .cl-name-cell { display: flex; align-items: center; gap: 10px; }
 
-        .form-group-full {
-            grid-column: 1 / -1;
-        }
+        /* Badges */
+        .cbadge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: .72rem; font-weight: 700; text-transform: capitalize; }
+        .cbadge-active   { background: #e0f2fe; color: #0c4a6e; }
+        .cbadge-prospect { background: #fef9c3; color: #713f12; }
+        .cbadge-inactive { background: #f3f4f6; color: #6b7280; }
+        .cbadge-scheduled{ background: #dbeafe; color: #1e40af; }
+        .cbadge-completed{ background: #d1fae5; color: #065f46; }
+        .cbadge-cancelled{ background: #f3f4f6; color: #6b7280; }
+        .cbadge-primary  { background: #e0f2fe; color: #0c4a6e; }
 
-        .form-label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: 600;
-            color: #2c3e50;
-        }
+        /* Buttons */
+        .cl-btn { padding: 6px 14px; border: none; border-radius: 7px; font-size: .8rem; font-weight: 600; cursor: pointer; transition: all .2s; text-decoration: none; display: inline-block; }
+        .cl-btn-sky   { background: var(--cl); color: #fff; }
+        .cl-btn-sky:hover   { background: var(--cl-dk); }
+        .cl-btn-gray  { background: #f3f4f6; color: #374151; }
+        .cl-btn-gray:hover  { background: #e5e7eb; }
+        .cl-btn-green { background: #059669; color: #fff; }
+        .cl-btn-green:hover { background: #047857; }
 
-        .form-input, .form-select, .form-textarea {
-            width: 100%;
-            padding: 0.75rem;
-            border: 2px solid #ecf0f1;
-            border-radius: 8px;
-            font-size: 1rem;
-            transition: border-color 0.3s;
-        }
+        /* Collapsible */
+        .cl-collapsible { margin-bottom: 16px; }
+        .cl-collapsible-header { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px; padding: 12px 16px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-weight: 600; color: var(--cl-navy); font-size: .9rem; }
+        .cl-collapsible-body { display: none; padding: 18px; border: 1px solid #bae6fd; border-top: none; border-radius: 0 0 10px 10px; background: #fff; }
+        .cl-collapsible-body.open { display: block; }
 
-        .form-input:focus, .form-select:focus, .form-textarea:focus {
-            outline: none;
-            border-color: #3498db;
-        }
+        /* Form grid */
+        .cl-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .cl-form-grid .full { grid-column: 1/-1; }
+        @media(max-width:600px){ .cl-form-grid{ grid-template-columns: 1fr; } }
+        .cl-field label { display: block; font-size: .78rem; font-weight: 600; color: #374151; margin-bottom: 4px; }
+        .cl-field input, .cl-field select, .cl-field textarea { width: 100%; padding: 8px 11px; border: 1px solid #d1d5db; border-radius: 7px; font-size: .87rem; color: #111827; }
+        .cl-field textarea { height: 70px; resize: vertical; }
+        .cl-field input:focus, .cl-field select:focus, .cl-field textarea:focus { outline: none; border-color: var(--cl); box-shadow: 0 0 0 3px rgba(14,165,233,.1); }
 
-        .form-textarea {
-            resize: vertical;
-            min-height: 100px;
-        }
+        /* Modal */
+        .cl-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 1000; align-items: center; justify-content: center; }
+        .cl-modal-overlay.open { display: flex; }
+        .cl-modal { background: #fff; border-radius: 16px; width: min(560px,95vw); max-height: 90vh; overflow-y: auto; padding: 28px; position: relative; box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+        .cl-modal h2 { font-size: 1.1rem; font-weight: 700; color: #111827; margin: 0 0 20px; }
+        .cl-modal-close { position: absolute; top: 16px; right: 16px; background: #f3f4f6; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; }
+        .cl-modal-close:hover { background: #e5e7eb; }
 
-        .btn-primary {
-            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-            color: white;
-            border: none;
-            padding: 1rem 2rem;
-            border-radius: 8px;
-            font-size: 1.1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-1px);
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-            color: white;
-        }
-
-        .btn-purple {
-            background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
-            color: white;
-        }
-
-        .btn-orange {
-            background: linear-gradient(135deg, #e67e22 0%, #d35400 100%);
-            color: white;
-        }
-
-        .btn-small {
-            flex: 1;
-            text-align: center;
-            padding: 0.5rem;
-            text-decoration: none;
-            border-radius: 6px;
-            font-size: 0.85rem;
-            border: none;
-            cursor: pointer;
-        }
-
-        /* Status and Priority Badges */
-        .status-badge, .priority-badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        .status-active { background: #d4edda; color: #155724; }
-        .status-prospect { background: #cce7ff; color: #004085; }
-        .status-inactive { background: #f8d7da; color: #721c24; }
-        .status-lead { background: #fff3cd; color: #856404; }
-        .status-open { background: #d4edda; color: #155724; }
-        .status-in_progress { background: #fff3cd; color: #856404; }
-        .status-resolved { background: #cce7ff; color: #004085; }
-        .status-closed { background: #e2e3e5; color: #383d41; }
-        .status-scheduled { background: #cce7ff; color: #004085; }
-        .status-completed { background: #d4edda; color: #155724; }
-        .status-cancelled { background: #f8d7da; color: #721c24; }
-
-        .priority-low { background: #d4edda; color: #155724; }
-        .priority-medium { background: #fff3cd; color: #856404; }
-        .priority-high { background: #ffeaa7; color: #e17055; }
-        .priority-urgent { background: #f8d7da; color: #721c24; }
-
-        /* Activity Timeline */
-        .activity-timeline {
-            position: relative;
-            max-width: 800px;
-            margin: 0 auto;
-        }
-
-        .activity-item {
-            display: flex;
-            margin-bottom: 2rem;
-            position: relative;
-        }
-
-        .timeline-dot {
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            background: #3498db;
-            margin: 0 auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 0.8rem;
-            position: relative;
-            z-index: 2;
-        }
-
-        .timeline-content {
-            flex: 1;
-            background: white;
-            border: 1px solid #ecf0f1;
-            border-radius: 12px;
-            padding: 1.5rem;
-            margin-left: 1rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-
-        .timeline-line {
-            position: absolute;
-            left: 30px;
-            top: 50px;
-            bottom: -2rem;
-            width: 2px;
-            background: #3498db;
-            z-index: 1;
-        }
-
-        /* Calendar Styles */
-        .calendar-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-            padding: 1rem;
-            background: #f8f9fa;
-            border-radius: 8px;
-        }
-
-        .calendar-grid {
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            gap: 1px;
-            background: #ddd;
-            border: 1px solid #ddd;
-        }
-
-        .calendar-day {
-            padding: 0.5rem;
-            background: white;
-            border-bottom: 1px solid #ddd;
-            min-height: 100px;
-            vertical-align: top;
-        }
-
-        .calendar-legend {
-            margin-top: 1rem;
-            display: flex;
-            gap: 2rem;
-            justify-content: center;
-            font-size: 0.9rem;
-        }
-
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .legend-color {
-            width: 20px;
-            height: 20px;
-            border-radius: 3px;
-        }
-
-        /* Modal Styles */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-        }
-
-        .modal-content {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            max-width: 500px;
-            width: 90%;
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 2px solid #ecf0f1;
-        }
-
-        .close-btn {
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: #7f8c8d;
-        }
-
-        .close-btn:hover {
-            color: #34495e;
-        }
-
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 3rem;
-            color: #7f8c8d;
-            background: white;
-            border-radius: 12px;
-            border: 2px dashed #ecf0f1;
-        }
-
-        .empty-state-icon {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-        }
-
-        /* Section Headers */
-        .section-header h2 {
-            margin-bottom: 0.5rem;
-            color: #2c3e50;
-        }
-
-        .section-subtitle {
-            color: #7f8c8d;
-            margin-top: 0.5rem;
-        }
-
-        /* Card Styles */
-        .card {
-            background: white;
-            border: 1px solid #ecf0f1;
-            border-radius: 12px;
-            padding: 1.5rem;
-            margin-bottom: 1rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
+        /* Revenue pill */
+        .rev-pill { font-size: .78rem; font-weight: 700; color: #059669; background: #d1fae5; padding: 2px 8px; border-radius: 20px; }
+        .outstanding-pill { font-size: .78rem; font-weight: 700; color: #d97706; background: #fef3c7; padding: 2px 8px; border-radius: 20px; }
     </style>
 </head>
 <body>
-    
     <?php include '../includes/header.php'; ?>
-
     <?php include '../includes/sidebar.php'; ?>
-    
-    <div class="main-content">
-        <h1>🏢 Clients Department</h1>
-        
-        <!-- Client Statistics -->
-        <div class="client-stats">
-            <div class="stat-card">
-                <div class="stat-number"><?php echo count($clients); ?></div>
-                <div class="stat-label">Total Clients</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number"><?php echo count(array_filter($clients, function($c) { return $c['status'] === 'active'; })); ?></div>
-                <div class="stat-label">Active Clients</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number"><?php echo count(array_filter($contacts, function($c) { return $c['status'] === 'open'; })); ?></div>
-                <div class="stat-label">Open Contacts</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number"><?php echo count($meetings); ?></div>
-                <div class="stat-label">Total Meetings</div>
-            </div>
-        </div>
 
-        <!-- Create New Client Button -->
-        <?php if (Security::canWriteInDepartment($_SESSION['role'], $_SESSION['department'], 'Clients')): ?>
-        <div class="text-center" style="margin: 20px 0; text-align: center;">
-            <button onclick="openCreateClientModal()" class="btn-primary btn-success">
-                ➕ Create New Client
-            </button>
-        </div>
+    <div class="main-content">
+
+        <?php if (!empty($success_message)): ?>
+        <div class="cl-flash success"><?php echo $success_message; ?></div>
+        <?php endif; ?>
+        <?php if (!empty($error_message)): ?>
+        <div class="cl-flash error"><?php echo Security::escapeHTML($error_message); ?></div>
         <?php endif; ?>
 
-        <!-- Tab Navigation -->
-        <div class="tab-nav">
-            <button class="tab-btn active" onclick="showTab('clients')">Client Management</button>
-            <button class="tab-btn" onclick="showTab('communications')">Communications</button>
-            <button class="tab-btn" onclick="showTab('meetings')">Meetings</button>
-            <button class="tab-btn" onclick="showTab('documents')">Documents</button>
-            <button class="tab-btn" onclick="showTab('activity')">Activity Timeline</button>
-        </div>
-        
-        <!-- Clients Tab -->
-        <div id="clients" class="tab-content active">
-            <div class="section">
-                <div class="section-content">
-                    <h3>Current Clients</h3>
-                    <div class="clients-grid">
-                        <?php foreach ($clients as $client): ?>
-                            <div class="client-card">
-                                <div class="client-header">
-                                    <div class="client-title">
-                                        <h4><?php echo Security::escapeHTML($client['name']); ?></h4>
-                                        <p class="client-company"><?php echo Security::escapeHTML($client['company']); ?></p>
-                                    </div>
-                                    <span class="status-badge status-<?php echo $client['status']; ?>">
-                                        <?php echo ucfirst($client['status']); ?>
-                                    </span>
-                                </div>
-                                
-                                <div class="client-info">
-                                    <?php if ($client['email']): ?>
-                                        <div class="client-detail">
-                                            <span class="client-icon">📧</span>
-                                            <span class="client-value"><?php echo Security::escapeHTML($client['email']); ?></span>
-                                        </div>
-                                    <?php endif; ?>
-                                    
-                                    <?php if ($client['phone']): ?>
-                                        <div class="client-detail">
-                                            <span class="client-icon">📞</span>
-                                            <span class="client-value"><?php echo Security::escapeHTML($client['phone']); ?></span>
-                                        </div>
-                                    <?php endif; ?>
-                                    
-                                    <div class="client-detail">
-                                        <span class="client-icon">📅</span>
-                                        <span class="client-value">Since <?php echo Utils::formatDate($client['created_at']); ?></span>
-                                    </div>
-                                </div>
-                                
-                                <div class="client-actions">
-                                    <a href="client_detail.php?id=<?php echo $client['id']; ?>" class="btn btn-view">
-                                        View Details
-                                    </a>
-                                    <?php if (Security::canWriteInDepartment($_SESSION['role'], $_SESSION['department'], 'Clients')): ?>
-                                        <a href="client_detail.php?id=<?php echo $client['id']; ?>&edit=1" class="btn btn-edit">
-                                            Edit Client
-                                        </a>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
+        <!-- Hero -->
+        <div class="cl-hero">
+            <div class="cl-hero-icon">🏢</div>
+            <div class="cl-hero-info">
+                <h1>Clients</h1>
+                <p>Manage client relationships, contacts, and meetings</p>
             </div>
+            <?php if ($can_write): ?>
+            <div class="cl-hero-actions">
+                <button class="cl-hero-btn" onclick="openCollapsible('addClient')">+ Add Client</button>
+                <button class="cl-hero-btn" onclick="switchTab('meetings');openCollapsible('addMeeting')">+ Schedule Meeting</button>
+            </div>
+            <?php endif; ?>
         </div>
 
-        <!-- Communications Tab -->
-        <div id="communications" class="tab-content">
-            <div class="section">
-                <div class="section-header">
-                    <h2>Client Communications</h2>
-                    <p class="section-subtitle">Track all client interactions and communications</p>
-                </div>
-                <div class="section-content">
-                    <div class="form-container">
-                        <h3>New Communication</h3>
-                        
-                        <form method="POST" class="form-grid-2col">
-                            <?php echo Security::getCSRFTokenField(); ?>
-                            
-                            <div class="form-group-full">
-                                <label class="form-label">Client *</label>
-                                <select name="client_id" id="client-selector" onchange="fillClientDetails()" required class="form-select">
-                                    <option value="">Select Client</option>
-                                    <?php foreach ($clients as $client): ?>
-                                        <option value="<?php echo $client['id']; ?>" 
-                                                data-name="<?php echo Security::escapeHTML($client['name']); ?>"
-                                                data-email="<?php echo Security::escapeHTML($client['email']); ?>"
-                                                data-phone="<?php echo Security::escapeHTML($client['phone']); ?>">
-                                            <?php echo Security::escapeHTML($client['name'] . ' - ' . $client['company']); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Contact Type *</label>
-                                <select name="contact_type" required class="form-select">
-                                    <option value="">Select Type</option>
-                                    <option value="email">📧 Email</option>
-                                    <option value="phone">📞 Phone Call</option>
-                                    <option value="meeting">🤝 Meeting</option>
-                                    <option value="support">🔧 Support Request</option>
-                                    <option value="inquiry">❓ General Inquiry</option>
-                                </select>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Priority *</label>
-                                <select name="priority" required class="form-select">
-                                    <option value="low">🟢 Low</option>
-                                    <option value="medium" selected>🟡 Medium</option>
-                                    <option value="high">🟠 High</option>
-                                    <option value="urgent">🔴 Urgent</option>
-                                </select>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Contact Person</label>
-                                <input type="text" name="contact_person" id="contact-person-field" class="form-input" placeholder="Contact person's name">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Email</label>
-                                <input type="email" name="email" id="email-field" class="form-input" placeholder="contact@company.com">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Phone</label>
-                                <input type="tel" name="phone" id="phone-field" class="form-input" placeholder="+27-11-123-4567">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Follow-up Date</label>
-                                <input type="date" name="follow_up_date" class="form-input">
-                            </div>
-                            
-                            <div class="form-group-full">
-                                <label class="form-label">Subject *</label>
-                                <input type="text" name="subject" required class="form-input" placeholder="Brief subject of the communication">
-                            </div>
-                            
-                            <div class="form-group-full">
-                                <label class="form-label">Message *</label>
-                                <textarea name="message" rows="6" required class="form-textarea" placeholder="Detailed message or notes about the communication"></textarea>
-                            </div>
-                            
-                            <div class="form-group-full text-center">
-                                <button type="submit" name="create_contact" class="btn-primary">
-                                    💬 Log Communication
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                    
-                    <h3>Recent Communications</h3>
-                    <?php foreach ($contacts as $contact): ?>
-                        <div class="card">
-                            <div class="card-header">
-                                <h4><?php echo Security::escapeHTML($contact['subject']); ?></h4>
-                                <div>
-                                    <span class="priority-badge priority-<?php echo $contact['priority']; ?>"><?php echo ucfirst($contact['priority']); ?></span>
-                                    <span class="status-badge status-<?php echo $contact['status']; ?>"><?php echo ucfirst($contact['status']); ?></span>
-                                </div>
-                            </div>
-                            <div class="form-grid-2col">
-                                <div><strong>Client:</strong> <?php echo Security::escapeHTML($contact['client_name']); ?></div>
-                                <div><strong>Type:</strong> <?php echo ucfirst($contact['contact_type']); ?></div>
-                                <div><strong>Contact Person:</strong> <?php echo Security::escapeHTML($contact['contact_person']); ?></div>
-                                <div><strong>Date:</strong> <?php echo Utils::formatDate($contact['created_at']); ?></div>
-                                <?php if ($contact['email']): ?>
-                                    <div><strong>Email:</strong> <?php echo Security::escapeHTML($contact['email']); ?></div>
-                                <?php endif; ?>
-                                <?php if ($contact['phone']): ?>
-                                    <div><strong>Phone:</strong> <?php echo Security::escapeHTML($contact['phone']); ?></div>
-                                <?php endif; ?>
-                                <?php if ($contact['follow_up_date']): ?>
-                                    <div><strong>Follow-up:</strong> <?php echo Utils::formatDate($contact['follow_up_date']); ?></div>
-                                <?php endif; ?>
-                                <div><strong>Assigned to:</strong> <?php echo Security::escapeHTML($contact['assigned_to_name']); ?></div>
-                            </div>
-                            <div style="margin-top: 1rem;">
-                                <strong>Message:</strong><br>
-                                <?php echo nl2br(Security::escapeHTML($contact['message'])); ?>
-                            </div>
-                            
-                            <?php if ($contact['status'] === 'open'): ?>
-                                <form method="POST" style="margin-top: 1rem;">
-                                    <?php echo Security::getCSRFTokenField(); ?>
-                                    <input type="hidden" name="contact_id" value="<?php echo $contact['id']; ?>">
-                                    <select name="status" class="form-select" style="display: inline; width: auto; margin-right: 1rem;">
-                                        <option value="in_progress">In Progress</option>
-                                        <option value="resolved">Resolved</option>
-                                        <option value="closed">Closed</option>
-                                    </select>
-                                    <button type="submit" name="update_contact_status" class="btn-small" style="background: #3498db; color: white;">Update Status</button>
-                                </form>
-                            <?php endif; ?>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
+        <!-- Stats -->
+        <div class="cl-stats">
+            <div class="cl-stat"><span class="num sky"><?php echo $total_clients; ?></span><span class="lbl">Total Clients</span></div>
+            <div class="cl-stat"><span class="num green"><?php echo $active_clients; ?></span><span class="lbl">Active</span></div>
+            <div class="cl-stat"><span class="num amber"><?php echo $prospects; ?></span><span class="lbl">Prospects</span></div>
+            <div class="cl-stat"><span class="num slate">R<?php echo number_format($total_revenue,0); ?></span><span class="lbl">Total Invoiced</span></div>
+            <div class="cl-stat"><span class="num rose">R<?php echo number_format($total_outstanding,0); ?></span><span class="lbl">Outstanding</span></div>
         </div>
 
-        <!-- Meetings Tab -->
-        <div id="meetings" class="tab-content">
-            <div class="section">
-                <div class="section-header">
-                    <h2>Client Meetings</h2>
-                    <div style="margin-top: 1rem;">
-                        <button class="btn-small" onclick="showMeetingView('list')" id="meeting-list-btn" style="background: #007bff; color: white;">📋 List View</button>
-                        <button class="btn-small" onclick="showMeetingView('calendar')" id="meeting-calendar-btn" style="background: #6c757d; color: white; margin-left: 0.5rem;">📅 Calendar View</button>
-                    </div>
-                </div>
-                
-                <!-- Meeting List View -->
-                <div id="meeting-list-view" class="section-content">
-                    <div class="form-container">
-                        <h3>Schedule New Meeting</h3>
-                        <form method="POST" class="form-grid-2col">
-                            <?php echo Security::getCSRFTokenField(); ?>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Client *</label>
-                                <select name="client_id" required class="form-select">
-                                    <option value="">Select Client</option>
-                                    <?php foreach ($clients as $client): ?>
-                                        <option value="<?php echo $client['id']; ?>"><?php echo Security::escapeHTML($client['name'] . ' - ' . $client['company']); ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Meeting Title *</label>
-                                <input type="text" name="meeting_title" required class="form-input" placeholder="Meeting purpose or title">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Meeting Date & Time *</label>
-                                <input type="datetime-local" name="meeting_date" required class="form-input">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Duration (minutes) *</label>
-                                <input type="number" name="duration" value="60" required class="form-input">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Location</label>
-                                <input type="text" name="location" class="form-input" placeholder="Meeting location">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Attendees</label>
-                                <input type="text" name="attendees" class="form-input" placeholder="Names of attendees">
-                            </div>
-                            
-                            <div class="form-group-full">
-                                <label class="form-label">Agenda</label>
-                                <textarea name="agenda" rows="4" class="form-textarea" placeholder="Meeting agenda and discussion points"></textarea>
-                            </div>
-                            
-                            <div class="form-group-full text-center">
-                                <button type="submit" name="create_meeting" class="btn-primary btn-purple">
-                                    📅 Schedule Meeting
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                    
-                    <h3>Scheduled Meetings</h3>
-                    <?php foreach ($meetings as $meeting): ?>
-                        <div class="card">
-                            <div class="card-header">
-                                <h4><?php echo Security::escapeHTML($meeting['meeting_title']); ?></h4>
-                                <span class="status-badge status-<?php echo $meeting['status']; ?>"><?php echo ucfirst($meeting['status']); ?></span>
-                            </div>
-                            <div class="form-grid-2col">
-                                <div><strong>Client:</strong> <?php echo Security::escapeHTML($meeting['client_name']); ?></div>
-                                <div><strong>Date:</strong> <?php echo Utils::formatDate($meeting['meeting_date']); ?></div>
-                                <div><strong>Duration:</strong> <?php echo $meeting['duration']; ?> minutes</div>
-                                <div><strong>Location:</strong> <?php echo Security::escapeHTML($meeting['location']); ?></div>
-                                <div><strong>Created by:</strong> <?php echo Security::escapeHTML($meeting['created_by_name']); ?></div>
-                                <div><strong>Attendees:</strong> <?php echo Security::escapeHTML($meeting['attendees']); ?></div>
-                            </div>
-                            <?php if ($meeting['agenda']): ?>
-                                <div style="margin-top: 1rem;">
-                                    <strong>Agenda:</strong><br>
-                                    <?php echo nl2br(Security::escapeHTML($meeting['agenda'])); ?>
-                                </div>
-                            <?php endif; ?>
-                            <?php if ($meeting['notes']): ?>
-                                <div style="margin-top: 1rem;">
-                                    <strong>Notes:</strong><br>
-                                    <?php echo nl2br(Security::escapeHTML($meeting['notes'])); ?>
-                                </div>
-                            <?php endif; ?>
-                            <?php if ($meeting['outcome']): ?>
-                                <div style="margin-top: 1rem;">
-                                    <strong>Outcome:</strong><br>
-                                    <?php echo nl2br(Security::escapeHTML($meeting['outcome'])); ?>
-                                </div>
-                            <?php endif; ?>
-                            <?php if ($meeting['next_steps']): ?>
-                                <div style="margin-top: 1rem;">
-                                    <strong>Next Steps:</strong><br>
-                                    <?php echo nl2br(Security::escapeHTML($meeting['next_steps'])); ?>
-                                </div>
-                            <?php endif; ?>
-                            
-                            <?php if ($meeting['status'] === 'scheduled' || $meeting['status'] === 'in_progress'): ?>
-                                <form method="POST" style="margin-top: 1rem;" class="form-grid-2col">
-                                    <?php echo Security::getCSRFTokenField(); ?>
-                                    <input type="hidden" name="meeting_id" value="<?php echo $meeting['id']; ?>">
-                                    <div class="form-group-full">
-                                        <label class="form-label">Meeting Notes</label>
-                                        <textarea name="notes" rows="3" class="form-textarea"><?php echo Security::escapeHTML($meeting['notes']); ?></textarea>
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="form-label">Outcome</label>
-                                        <textarea name="outcome" rows="2" class="form-textarea"><?php echo Security::escapeHTML($meeting['outcome']); ?></textarea>
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="form-label">Next Steps</label>
-                                        <textarea name="next_steps" rows="2" class="form-textarea"><?php echo Security::escapeHTML($meeting['next_steps']); ?></textarea>
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="form-label">Status</label>
-                                        <select name="status" class="form-select">
-                                            <option value="scheduled" <?php echo $meeting['status'] === 'scheduled' ? 'selected' : ''; ?>>Scheduled</option>
-                                            <option value="in_progress" <?php echo $meeting['status'] === 'in_progress' ? 'selected' : ''; ?>>In Progress</option>
-                                            <option value="completed" <?php echo $meeting['status'] === 'completed' ? 'selected' : ''; ?>>Completed</option>
-                                            <option value="cancelled" <?php echo $meeting['status'] === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group-full">
-                                        <button type="submit" name="update_meeting" class="btn-small" style="background: #3498db; color: white;">Update Meeting</button>
-                                    </div>
-                                </form>
-                            <?php endif; ?>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-                
-                <!-- Meeting Calendar View -->
-                <div id="meeting-calendar-view" class="section-content" style="display: none;">
-                    <div class="form-container">
-                        <div class="calendar-header">
-                            <button onclick="previousMonth()" class="btn-small">← Previous</button>
-                            <h3 id="calendar-month-year">Loading...</h3>
-                            <button onclick="nextMonth()" class="btn-small">Next →</button>
-                        </div>
-                        
-                        <div id="calendar-grid" class="calendar-grid"></div>
-                        
-                        <div class="calendar-legend">
-                            <div class="legend-item">
-                                <div class="legend-color" style="background: #007bff;"></div>
-                                <span>Scheduled Meeting</span>
-                            </div>
-                            <div class="legend-item">
-                                <div class="legend-color" style="background: #28a745;"></div>
-                                <span>Completed Meeting</span>
-                            </div>
-                            <div class="legend-item">
-                                <div class="legend-color" style="background: #dc3545;"></div>
-                                <span>Cancelled Meeting</span>
-                            </div>
-                        </div>
-                        
-                        <!-- Meeting Details Modal -->
-                        <div id="meeting-modal" class="modal">
-                            <div class="modal-content">
-                                <div id="modal-meeting-details"></div>
-                                <button onclick="closeMeetingModal()" class="btn-primary" style="margin-top: 1rem;">Close</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <!-- Tab nav -->
+        <div class="cl-tabs">
+            <button class="cl-tab active" onclick="switchTab('clients')">🏢 Clients (<?php echo $total_clients; ?>)</button>
+            <button class="cl-tab" onclick="switchTab('contacts')">👤 Contacts (<?php echo count($contacts); ?>)</button>
+            <button class="cl-tab" onclick="switchTab('meetings')">📅 Meetings (<?php echo count($meetings); ?>)</button>
         </div>
 
-        <!-- Documents Tab -->
-        <div id="documents" class="tab-content">
-            <div class="section">
-                <div class="section-header">
-                    <h2>Client Documents</h2>
+        <!-- ══════════ TAB: CLIENTS ══════════ -->
+        <div id="tab-clients" class="cl-tab-content active">
+            <?php if ($can_write): ?>
+            <div class="cl-collapsible" id="addClient-wrap">
+                <div class="cl-collapsible-header" onclick="toggleCollapsible('addClient')">
+                    <span>+ Add New Client</span><span id="addClient-arrow">▼</span>
                 </div>
-                <div class="section-content">
-                    <div class="form-container">
-                        <h3>Add New Document</h3>
-                        <form method="POST" class="form-grid-2col">
-                            <?php echo Security::getCSRFTokenField(); ?>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Client *</label>
-                                <select name="client_id" required class="form-select">
-                                    <option value="">Select Client</option>
-                                    <?php foreach ($clients as $client): ?>
-                                        <option value="<?php echo $client['id']; ?>"><?php echo Security::escapeHTML($client['name'] . ' - ' . $client['company']); ?></option>
-                                    <?php endforeach; ?>
+                <div class="cl-collapsible-body" id="addClient-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
+                        <input type="hidden" name="create_client" value="1">
+                        <div class="cl-form-grid">
+                            <div class="cl-field"><label>Contact Name *</label><input type="text" name="name" required></div>
+                            <div class="cl-field"><label>Company *</label><input type="text" name="company" required></div>
+                            <div class="cl-field"><label>Email</label><input type="email" name="email"></div>
+                            <div class="cl-field"><label>Phone</label><input type="tel" name="phone"></div>
+                            <div class="cl-field"><label>Status</label>
+                                <select name="status">
+                                    <option value="prospect">Prospect</option>
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
                                 </select>
                             </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Document Type *</label>
-                                <select name="document_type" required class="form-select">
-                                    <option value="">Select Type</option>
-                                    <option value="contract">📄 Contract</option>
-                                    <option value="proposal">📋 Proposal</option>
-                                    <option value="invoice">🧾 Invoice</option>
-                                    <option value="report">📊 Report</option>
-                                    <option value="presentation">📽️ Presentation</option>
-                                    <option value="other">📎 Other</option>
-                                </select>
-                            </div>
-                            
-                            <div class="form-group-full">
-                                <label class="form-label">Document Name *</label>
-                                <input type="text" name="document_name" required class="form-input" placeholder="Enter document name">
-                            </div>
-                            
-                            <div class="form-group-full">
-                                <label class="form-label">Description</label>
-                                <textarea name="description" rows="3" class="form-textarea" placeholder="Document description and purpose"></textarea>
-                            </div>
-                            
-                            <div class="form-group-full text-center">
-                                <button type="submit" name="upload_document" class="btn-primary btn-orange">
-                                    📤 Add Document
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                    
-                    <h3>Client Documents</h3>
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Document Name</th>
-                                <th>Client</th>
-                                <th>Type</th>
-                                <th>Uploaded By</th>
-                                <th>Upload Date</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($documents as $document): ?>
-                                <tr>
-                                    <td><?php echo Security::escapeHTML($document['document_name']); ?></td>
-                                    <td><?php echo Security::escapeHTML($document['client_name']); ?></td>
-                                    <td><?php echo ucfirst($document['document_type']); ?></td>
-                                    <td><?php echo Security::escapeHTML($document['uploaded_by_name']); ?></td>
-                                    <td><?php echo Utils::formatDate($document['uploaded_at']); ?></td>
-                                    <td>
-                                        <span class="btn-small" style="background: #ccc; cursor: not-allowed;">Download</span>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                            <div class="cl-field"><label>Address</label><input type="text" name="address"></div>
+                        </div>
+                        <div style="margin-top:14px;"><button type="submit" class="cl-btn cl-btn-sky">+ Create Client</button></div>
+                    </form>
                 </div>
             </div>
-        </div>
+            <?php endif; ?>
 
-        <!-- Activity Timeline Tab -->
-        <div id="activity" class="tab-content">
-            <div class="section">
-                <div class="section-header">
-                    <h2>Activity Timeline</h2>
-                    <p class="section-subtitle">Recent client-related activities and interactions</p>
-                </div>
-                <div class="section-content">
-                    <div class="activity-timeline">
-                        <?php foreach ($activities as $index => $activity): ?>
-                            <div class="activity-item">
-                                <?php if ($index < count($activities) - 1): ?>
-                                    <div class="timeline-line"></div>
-                                <?php endif; ?>
-                                
-                                <div style="width: 60px; flex-shrink: 0; text-align: center; position: relative; z-index: 2;">
-                                    <div class="timeline-dot">
-                                        <?php 
-                                        $icons = [
-                                            'client_created' => '👤',
-                                            'contact_created' => '💬',
-                                            'meeting_scheduled' => '📅',
-                                            'document_uploaded' => '📄'
-                                        ];
-                                        echo $icons[$activity['activity_type']] ?? '📝';
-                                        ?>
-                                    </div>
-                                    <div style="font-size: 0.8rem; color: #7f8c8d; margin-top: 0.5rem;">
-                                        <?php echo date('H:i', strtotime($activity['created_at'])); ?>
-                                    </div>
-                                </div>
-                                
-                                <div class="timeline-content">
-                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
-                                        <div>
-                                            <strong><?php echo ucfirst(str_replace('_', ' ', $activity['activity_type'])); ?></strong>
-                                            <div style="color: #7f8c8d; font-size: 0.9rem; margin-top: 0.25rem;">
-                                                Client: <?php echo Security::escapeHTML($activity['client_name']); ?>
-                                            </div>
-                                        </div>
-                                        <small style="color: #95a5a6; font-size: 0.85rem;">
-                                            <?php echo Utils::formatDate($activity['created_at']); ?>
-                                        </small>
-                                    </div>
-                                    
-                                    <div style="color: #34495e; line-height: 1.5; margin-bottom: 1rem;">
-                                        <?php echo Security::escapeHTML($activity['description']); ?>
-                                    </div>
-                                    
-                                    <div style="font-size: 0.85rem; color: #7f8c8d; border-top: 1px solid #ecf0f1; padding-top: 1rem;">
-                                        <strong>Performed by:</strong> <?php echo Security::escapeHTML($activity['user_name']); ?>
-                                    </div>
-                                </div>
+            <div class="cl-controls">
+                <input class="cl-search" type="text" id="cl-search" placeholder="Search clients…" oninput="filterCL('cl-tbody','cl-search','','cl-status-filter','cl-count')">
+                <select class="cl-filter" id="cl-status-filter" onchange="filterCL('cl-tbody','cl-search','','cl-status-filter','cl-count')">
+                    <option value="">All Statuses</option>
+                    <option value="active">Active</option>
+                    <option value="prospect">Prospect</option>
+                    <option value="inactive">Inactive</option>
+                </select>
+                <span class="cl-count" id="cl-count"><?php echo $total_clients; ?> clients</span>
+            </div>
+
+            <div class="cl-table-wrap">
+            <table class="cl-table">
+                <thead><tr>
+                    <th>Client</th><th>Company</th><th>Contact</th>
+                    <th>Projects</th><th>Invoiced</th><th>Outstanding</th>
+                    <th>Status</th><th>Actions</th>
+                </tr></thead>
+                <tbody id="cl-tbody">
+                <?php foreach ($clients as $cl):
+                    $initials = strtoupper(substr($cl['company'],0,1).substr($cl['name'],0,1));
+                    $search_str = strtolower($cl['name'].' '.$cl['company'].' '.$cl['email'].' '.$cl['phone']);
+                ?>
+                <tr data-search="<?php echo htmlspecialchars($search_str,ENT_QUOTES); ?>"
+                    data-status="<?php echo $cl['status']; ?>">
+                    <td>
+                        <div class="cl-name-cell">
+                            <div class="cl-avatar"><?php echo $initials; ?></div>
+                            <div>
+                                <div style="font-weight:600;color:#111827;"><?php echo Security::escapeHTML($cl['name']); ?></div>
+                                <div style="font-size:.75rem;color:#9ca3af;"><?php echo Security::escapeHTML($cl['email']??''); ?></div>
                             </div>
-                        <?php endforeach; ?>
-                        
-                        <?php if (empty($activities)): ?>
-                            <div class="empty-state">
-                                <div class="empty-state-icon">📊</div>
-                                <h3>No Activity Yet</h3>
-                                <p>Client activities will appear here once you start interacting with clients.</p>
-                            </div>
+                        </div>
+                    </td>
+                    <td><?php echo Security::escapeHTML($cl['company']); ?></td>
+                    <td style="font-size:.8rem;"><?php echo Security::escapeHTML($cl['phone']??'—'); ?></td>
+                    <td><?php echo (int)$cl['project_count']; ?></td>
+                    <td><span class="rev-pill">R<?php echo number_format($cl['total_invoiced'],0); ?></span></td>
+                    <td>
+                        <?php if ($cl['outstanding'] > 0): ?>
+                        <span class="outstanding-pill">R<?php echo number_format($cl['outstanding'],0); ?></span>
+                        <?php else: ?>
+                        <span style="color:#9ca3af;font-size:.78rem;">—</span>
                         <?php endif; ?>
-                    </div>
-                </div>
+                    </td>
+                    <td><span class="cbadge cbadge-<?php echo $cl['status']; ?>"><?php echo ucfirst($cl['status']); ?></span></td>
+                    <td style="white-space:nowrap;">
+                        <a href="client_detail.php?id=<?php echo $cl['id']; ?>" class="cl-btn cl-btn-sky" style="font-size:.75rem;">View</a>
+                        <?php if ($can_write): ?>
+                        <button class="cl-btn cl-btn-gray" style="font-size:.75rem;" onclick="openEditClient(<?php echo htmlspecialchars(json_encode($cl),ENT_QUOTES); ?>)">✏️</button>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            <div class="cl-no-results" id="cl-tbody-no-results">No clients match your search.</div>
             </div>
         </div>
-    </div>
 
-    <script src="../js/notification.js"></script>  
-    <script>
-        // Meeting data for calendar
-        const meetingsData = <?php echo json_encode($meetings); ?>;
-        let currentDate = new Date();
-        
-        function showTab(tabName) {
-            // Hide all tab contents
-            const tabContents = document.querySelectorAll('.tab-content');
-            tabContents.forEach(content => {
-                content.classList.remove('active');
-            });
-            
-            // Remove active class from all tab buttons
-            const tabBtns = document.querySelectorAll('.tab-btn');
-            tabBtns.forEach(btn => {
-                btn.classList.remove('active');
-            });
-            
-            // Show selected tab content
-            document.getElementById(tabName).classList.add('active');
-            
-            // Add active class to clicked tab button
-            event.target.classList.add('active');
-            
-            // If meetings tab is selected, initialize calendar
-            if (tabName === 'meetings') {
-                renderCalendar();
-            }
-        }
-        
-        function showMeetingView(viewType) {
-            const listView = document.getElementById('meeting-list-view');
-            const calendarView = document.getElementById('meeting-calendar-view');
-            const listBtn = document.getElementById('meeting-list-btn');
-            const calendarBtn = document.getElementById('meeting-calendar-btn');
-            
-            if (viewType === 'list') {
-                listView.style.display = 'block';
-                calendarView.style.display = 'none';
-                listBtn.style.background = '#007bff';
-                calendarBtn.style.background = '#6c757d';
-            } else {
-                listView.style.display = 'none';
-                calendarView.style.display = 'block';
-                listBtn.style.background = '#6c757d';
-                calendarBtn.style.background = '#007bff';
-                renderCalendar();
-            }
-        }
-        
-        function renderCalendar() {
-            const monthNames = ["January", "February", "March", "April", "May", "June",
-                "July", "August", "September", "October", "November", "December"];
-            const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-            
-            const year = currentDate.getFullYear();
-            const month = currentDate.getMonth();
-            
-            document.getElementById('calendar-month-year').textContent = `${monthNames[month]} ${year}`;
-            
-            const firstDay = new Date(year, month, 1).getDay();
-            const daysInMonth = new Date(year, month + 1, 0).getDate();
-            
-            let calendarHTML = '';
-            
-            // Add day headers
-            dayNames.forEach(day => {
-                calendarHTML += `<div class="calendar-day" style="padding: 0.75rem; background: #f8f9fa; font-weight: bold; text-align: center; border-bottom: 1px solid #ddd;">${day}</div>`;
-            });
-            
-            // Add empty cells for days before month starts
-            for (let i = 0; i < firstDay; i++) {
-                calendarHTML += `<div class="calendar-day"></div>`;
-            }
-            
-            // Add days of the month
-            for (let day = 1; day <= daysInMonth; day++) {
-                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                const dayMeetings = getDayMeetings(dateStr);
-                
-                let cellContent = `<div style="font-weight: bold; margin-bottom: 0.5rem;">${day}</div>`;
-                
-                if (dayMeetings.length > 0) {
-                    dayMeetings.forEach(meeting => {
-                        const statusColor = getStatusColor(meeting.status);
-                        const time = new Date(meeting.meeting_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                        cellContent += `<div onclick="showMeetingDetails(${meeting.id})" style="background: ${statusColor}; color: white; padding: 0.25rem; margin: 0.125rem 0; border-radius: 3px; font-size: 0.7rem; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${time} - ${meeting.client_name}</div>`;
-                    });
-                }
-                
-                calendarHTML += `<div class="calendar-day">${cellContent}</div>`;
-            }
-            
-            document.getElementById('calendar-grid').innerHTML = calendarHTML;
-        }
-        
-        function getDayMeetings(dateStr) {
-            return meetingsData.filter(meeting => {
-                const meetingDate = new Date(meeting.meeting_date).toISOString().split('T')[0];
-                return meetingDate === dateStr;
-            });
-        }
-        
-        function getStatusColor(status) {
-            switch(status) {
-                case 'completed': return '#28a745';
-                case 'cancelled': return '#dc3545';
-                case 'in_progress': return '#ffc107';
-                default: return '#007bff';
-            }
-        }
-        
-        function showMeetingDetails(meetingId) {
-            const meeting = meetingsData.find(m => m.id == meetingId);
-            if (!meeting) return;
-            
-            const date = new Date(meeting.meeting_date);
-            const detailsHTML = `
-                <h4>${meeting.meeting_title}</h4>
-                <p><strong>Client:</strong> ${meeting.client_name}</p>
-                <p><strong>Date:</strong> ${date.toLocaleDateString()} at ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                <p><strong>Duration:</strong> ${meeting.duration} minutes</p>
-                <p><strong>Location:</strong> ${meeting.location || 'Not specified'}</p>
-                <p><strong>Status:</strong> ${meeting.status}</p>
-                <p><strong>Attendees:</strong> ${meeting.attendees || 'Not specified'}</p>
-                ${meeting.agenda ? `<p><strong>Agenda:</strong><br>${meeting.agenda}</p>` : ''}
-                ${meeting.notes ? `<p><strong>Notes:</strong><br>${meeting.notes}</p>` : ''}
-            `;
-            
-            document.getElementById('modal-meeting-details').innerHTML = detailsHTML;
-            document.getElementById('meeting-modal').style.display = 'block';
-        }
-        
-        function closeMeetingModal() {
-            document.getElementById('meeting-modal').style.display = 'none';
-        }
-        
-        function previousMonth() {
-            currentDate.setMonth(currentDate.getMonth() - 1);
-            renderCalendar();
-        }
-        
-        function nextMonth() {
-            currentDate.setMonth(currentDate.getMonth() + 1);
-            renderCalendar();
-        }
-        
-        // Auto-fill client details in communications form
-        function fillClientDetails() {
-            const clientSelector = document.getElementById('client-selector');
-            const selectedOption = clientSelector.options[clientSelector.selectedIndex];
-            
-            if (selectedOption && selectedOption.value) {
-                const clientName = selectedOption.getAttribute('data-name');
-                const clientEmail = selectedOption.getAttribute('data-email');
-                const clientPhone = selectedOption.getAttribute('data-phone');
-                
-                document.getElementById('contact-person-field').value = clientName || '';
-                document.getElementById('email-field').value = clientEmail || '';
-                document.getElementById('phone-field').value = clientPhone || '';
-            } else {
-                document.getElementById('contact-person-field').value = '';
-                document.getElementById('email-field').value = '';
-                document.getElementById('phone-field').value = '';
-            }
-        }
-        
-        // Create Client Modal Functions
-        function openCreateClientModal() {
-            document.getElementById('create-client-modal').style.display = 'block';
-        }
-        
-        function closeCreateClientModal() {
-            document.getElementById('create-client-modal').style.display = 'none';
-            document.getElementById('create-client-form').reset();
-        }
-        
-        // Close modals when clicking outside
-        window.onclick = function(event) {
-            const modal = document.getElementById('meeting-modal');
-            const createModal = document.getElementById('create-client-modal');
-            
-            if (event.target === modal) {
-                closeMeetingModal();
-            }
-            if (event.target === createModal) {
-                closeCreateClientModal();
-            }
-        }
-    </script>
-    
-    <!-- Create Client Modal -->
-    <div id="create-client-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Create New Client</h3>
-                <span class="close-btn" onclick="closeCreateClientModal()">&times;</span>
+        <!-- ══════════ TAB: CONTACTS ══════════ -->
+        <div id="tab-contacts" class="cl-tab-content">
+            <?php if ($can_write): ?>
+            <div class="cl-collapsible">
+                <div class="cl-collapsible-header" onclick="toggleCollapsible('addContact')">
+                    <span>+ Add Contact</span><span id="addContact-arrow">▼</span>
+                </div>
+                <div class="cl-collapsible-body" id="addContact-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
+                        <input type="hidden" name="create_contact" value="1">
+                        <div class="cl-form-grid">
+                            <div class="cl-field full"><label>Client *</label>
+                                <select name="client_id" required>
+                                    <option value="">Select client…</option>
+                                    <?php foreach ($clients as $cl): ?>
+                                    <option value="<?php echo $cl['id']; ?>"><?php echo Security::escapeHTML($cl['company']); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="cl-field"><label>Full Name *</label><input type="text" name="contact_name" required></div>
+                            <div class="cl-field"><label>Position</label><input type="text" name="contact_position" placeholder="e.g. CEO, Procurement Manager"></div>
+                            <div class="cl-field"><label>Email</label><input type="email" name="contact_email"></div>
+                            <div class="cl-field"><label>Phone</label><input type="tel" name="contact_phone"></div>
+                            <div class="cl-field" style="display:flex;align-items:center;gap:8px;margin-top:20px;">
+                                <input type="checkbox" name="is_primary" id="is_primary" style="width:auto;">
+                                <label for="is_primary" style="margin:0;font-size:.87rem;">Primary contact</label>
+                            </div>
+                        </div>
+                        <div style="margin-top:14px;"><button type="submit" class="cl-btn cl-btn-sky">Add Contact</button></div>
+                    </form>
+                </div>
             </div>
-            <div class="modal-body">
-                <form method="POST" id="create-client-form" class="form-grid-2col">
-                    <?php echo Security::getCSRFTokenField(); ?>
-                    <input type="hidden" name="create_client" value="1">
-                    
-                    <div class="form-group">
-                        <label class="form-label">Client Name *</label>
-                        <input type="text" name="name" required class="form-input" placeholder="Enter client's full name">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Company *</label>
-                        <input type="text" name="company" required class="form-input" placeholder="Enter company name">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Email</label>
-                        <input type="email" name="email" class="form-input" placeholder="client@company.com">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Phone</label>
-                        <input type="tel" name="phone" class="form-input" placeholder="+27-11-123-4567">
-                    </div>
-                    
-                    <div class="form-group-full">
-                        <label class="form-label">Address</label>
-                        <textarea name="address" rows="3" class="form-textarea" placeholder="Enter company address"></textarea>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Status *</label>
-                        <select name="status" required class="form-select">
-                            <option value="">Select Status</option>
+            <?php endif; ?>
+
+            <div class="cl-controls">
+                <input class="cl-search" type="text" id="ct-search" placeholder="Search contacts…" oninput="filterCL('ct-tbody','ct-search','','','ct-count')">
+                <span class="cl-count" id="ct-count"><?php echo count($contacts); ?> contacts</span>
+            </div>
+
+            <div class="cl-table-wrap">
+            <table class="cl-table">
+                <thead><tr><th>Name</th><th>Client</th><th>Position</th><th>Email</th><th>Phone</th><th>Primary</th></tr></thead>
+                <tbody id="ct-tbody">
+                <?php foreach ($contacts as $ct):
+                    $search_ct = strtolower($ct['name'].' '.$ct['client_name'].' '.$ct['position'].' '.$ct['email']);
+                ?>
+                <tr data-search="<?php echo htmlspecialchars($search_ct,ENT_QUOTES); ?>" data-status="" data-dept="">
+                    <td style="font-weight:500;"><?php echo Security::escapeHTML($ct['name']); ?></td>
+                    <td><?php echo Security::escapeHTML($ct['client_name']); ?></td>
+                    <td style="font-size:.82rem;"><?php echo Security::escapeHTML($ct['position']??'—'); ?></td>
+                    <td style="font-size:.82rem;"><?php echo Security::escapeHTML($ct['email']??'—'); ?></td>
+                    <td style="font-size:.82rem;"><?php echo Security::escapeHTML($ct['phone']??'—'); ?></td>
+                    <td><?php if ($ct['is_primary']): ?><span class="cbadge cbadge-primary">Primary</span><?php else: ?><span style="color:#d1d5db;">—</span><?php endif; ?></td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            <?php if (empty($contacts)): ?>
+            <div style="text-align:center;padding:32px;color:#9ca3af;font-size:.88rem;">No contacts yet. Add the first one above.</div>
+            <?php endif; ?>
+            <div class="cl-no-results" id="ct-tbody-no-results">No contacts match your search.</div>
+            </div>
+        </div>
+
+        <!-- ══════════ TAB: MEETINGS ══════════ -->
+        <div id="tab-meetings" class="cl-tab-content">
+            <?php if ($can_write): ?>
+            <div class="cl-collapsible">
+                <div class="cl-collapsible-header" onclick="toggleCollapsible('addMeeting')">
+                    <span>+ Schedule Meeting</span><span id="addMeeting-arrow">▼</span>
+                </div>
+                <div class="cl-collapsible-body" id="addMeeting-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
+                        <input type="hidden" name="create_meeting" value="1">
+                        <div class="cl-form-grid">
+                            <div class="cl-field"><label>Client *</label>
+                                <select name="client_id" required>
+                                    <option value="">Select client…</option>
+                                    <?php foreach ($clients as $cl): ?>
+                                    <option value="<?php echo $cl['id']; ?>"><?php echo Security::escapeHTML($cl['company']); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="cl-field"><label>Meeting Title *</label><input type="text" name="meeting_title" required></div>
+                            <div class="cl-field"><label>Date &amp; Time *</label><input type="datetime-local" name="meeting_date" required></div>
+                            <div class="cl-field"><label>Location</label><input type="text" name="location" placeholder="Office, Teams, Google Meet…"></div>
+                            <div class="cl-field full"><label>Agenda</label><textarea name="agenda" placeholder="Topics to discuss…"></textarea></div>
+                        </div>
+                        <div style="margin-top:14px;"><button type="submit" class="cl-btn cl-btn-sky">Schedule Meeting</button></div>
+                    </form>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <div class="cl-controls">
+                <input class="cl-search" type="text" id="mt-search" placeholder="Search meetings…" oninput="filterCL('mt-tbody','mt-search','','mt-status-filter','mt-count')">
+                <select class="cl-filter" id="mt-status-filter" onchange="filterCL('mt-tbody','mt-search','','mt-status-filter','mt-count')">
+                    <option value="">All Statuses</option>
+                    <option value="scheduled">Scheduled</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                </select>
+                <span class="cl-count" id="mt-count"><?php echo count($meetings); ?> meetings</span>
+            </div>
+
+            <div class="cl-table-wrap">
+            <table class="cl-table">
+                <thead><tr><th>Meeting</th><th>Client</th><th>Date</th><th>Location</th><th>Status</th><th>Notes</th><?php if($can_write):?><th>Actions</th><?php endif;?></tr></thead>
+                <tbody id="mt-tbody">
+                <?php foreach ($meetings as $mt):
+                    $search_mt = strtolower($mt['meeting_title'].' '.$mt['client_name'].' '.$mt['location']);
+                ?>
+                <tr data-search="<?php echo htmlspecialchars($search_mt,ENT_QUOTES); ?>" data-dept="" data-status="<?php echo $mt['status']??'scheduled'; ?>">
+                    <td style="font-weight:600;"><?php echo Security::escapeHTML($mt['meeting_title']); ?></td>
+                    <td><?php echo Security::escapeHTML($mt['client_name']); ?></td>
+                    <td style="font-size:.82rem;"><?php echo date('d M Y H:i',strtotime($mt['meeting_date'])); ?></td>
+                    <td style="font-size:.82rem;"><?php echo Security::escapeHTML($mt['location']??'—'); ?></td>
+                    <td><span class="cbadge cbadge-<?php echo $mt['status']??'scheduled'; ?>"><?php echo ucfirst($mt['status']??'Scheduled'); ?></span></td>
+                    <td style="font-size:.78rem;color:#6b7280;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                        <?php echo Security::escapeHTML(substr($mt['notes']??'',0,60)); ?>
+                    </td>
+                    <?php if ($can_write): ?>
+                    <td>
+                        <button class="cl-btn cl-btn-gray" style="font-size:.73rem;" onclick="openUpdateMeeting(<?php echo htmlspecialchars(json_encode($mt),ENT_QUOTES); ?>)">✏️ Update</button>
+                    </td>
+                    <?php endif; ?>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            <?php if (empty($meetings)): ?>
+            <div style="text-align:center;padding:32px;color:#9ca3af;font-size:.88rem;">No meetings scheduled yet.</div>
+            <?php endif; ?>
+            <div class="cl-no-results" id="mt-tbody-no-results">No meetings match your filter.</div>
+            </div>
+        </div>
+
+    </div><!-- /.main-content -->
+
+    <!-- Edit Client Modal -->
+    <div class="cl-modal-overlay" id="editClientModal">
+        <div class="cl-modal">
+            <button class="cl-modal-close" onclick="closeModal('editClientModal')">✕</button>
+            <h2>Edit Client</h2>
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
+                <input type="hidden" name="update_client" value="1">
+                <input type="hidden" name="client_id" id="edit_cl_id">
+                <div class="cl-form-grid">
+                    <div class="cl-field"><label>Contact Name *</label><input type="text" name="name" id="edit_cl_name" required></div>
+                    <div class="cl-field"><label>Company *</label><input type="text" name="company" id="edit_cl_company" required></div>
+                    <div class="cl-field"><label>Email</label><input type="email" name="email" id="edit_cl_email"></div>
+                    <div class="cl-field"><label>Phone</label><input type="tel" name="phone" id="edit_cl_phone"></div>
+                    <div class="cl-field full"><label>Status</label>
+                        <select name="status" id="edit_cl_status">
+                            <option value="active">Active</option>
                             <option value="prospect">Prospect</option>
-                            <option value="active">Active Client</option>
                             <option value="inactive">Inactive</option>
-                            <option value="lead">Lead</option>
                         </select>
                     </div>
-                    
-                    <div class="form-group-full text-center">
-                        <button type="submit" name="create_client" value="1" class="btn-primary btn-success">
-                            ✅ Create Client
-                        </button>
-                        <button type="button" onclick="closeCreateClientModal()" class="btn-primary" style="background: #6c757d; margin-left: 0.5rem;">
-                            Cancel
-                        </button>
-                    </div>
-                </form>
-            </div>
+                </div>
+                <div style="margin-top:20px;display:flex;gap:10px;">
+                    <button type="submit" class="cl-btn cl-btn-sky">Save</button>
+                    <button type="button" class="cl-btn cl-btn-gray" onclick="closeModal('editClientModal')">Cancel</button>
+                </div>
+            </form>
         </div>
     </div>
+
+    <!-- Update Meeting Modal -->
+    <div class="cl-modal-overlay" id="updateMeetingModal">
+        <div class="cl-modal">
+            <button class="cl-modal-close" onclick="closeModal('updateMeetingModal')">✕</button>
+            <h2>Update Meeting</h2>
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
+                <input type="hidden" name="update_meeting" value="1">
+                <input type="hidden" name="meeting_id" id="edit_mt_id">
+                <div class="cl-form-grid">
+                    <div class="cl-field full" id="edit_mt_title_wrap" style="color:#6b7280;font-size:.85rem;"></div>
+                    <div class="cl-field"><label>Status</label>
+                        <select name="status" id="edit_mt_status">
+                            <option value="scheduled">Scheduled</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="cl-field full"><label>Notes / Outcome</label><textarea name="notes" id="edit_mt_notes" placeholder="Meeting outcomes, action items…"></textarea></div>
+                </div>
+                <div style="margin-top:20px;display:flex;gap:10px;">
+                    <button type="submit" class="cl-btn cl-btn-sky">Save</button>
+                    <button type="button" class="cl-btn cl-btn-gray" onclick="closeModal('updateMeetingModal')">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="../js/notification.js"></script>
+    <script>
+    function switchTab(name) {
+        document.querySelectorAll('.cl-tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.cl-tab').forEach(el => el.classList.remove('active'));
+        const content = document.getElementById('tab-' + name);
+        if (content) content.classList.add('active');
+        document.querySelectorAll('.cl-tab').forEach(btn => {
+            if (btn.textContent.toLowerCase().includes(name.slice(0,4))) btn.classList.add('active');
+        });
+    }
+
+    function toggleCollapsible(id) {
+        const body = document.getElementById(id + '-body');
+        const arrow = document.getElementById(id + '-arrow');
+        if (!body) return;
+        const open = body.classList.toggle('open');
+        if (arrow) arrow.textContent = open ? '▲' : '▼';
+    }
+    function openCollapsible(id) {
+        const body = document.getElementById(id + '-body');
+        if (body && !body.classList.contains('open')) toggleCollapsible(id);
+        body && body.scrollIntoView({behavior:'smooth',block:'start'});
+    }
+
+    function filterCL(tbodyId, searchId, f1Id, f2Id, countId) {
+        const q     = (document.getElementById(searchId)?.value||'').toLowerCase().trim();
+        const f2    = (document.getElementById(f2Id)?.value||'').toLowerCase();
+        const tbody = document.getElementById(tbodyId);
+        if (!tbody) return;
+        let visible = 0;
+        tbody.querySelectorAll('tr').forEach(row => {
+            const txt  = (row.dataset.search||'').toLowerCase();
+            const stat = (row.dataset.status||'').toLowerCase();
+            const show = (!q||txt.includes(q)) && (!f2||stat===f2);
+            row.style.display = show ? '' : 'none';
+            if (show) visible++;
+        });
+        const noRes = document.getElementById(tbodyId + '-no-results');
+        if (noRes) noRes.style.display = visible ? 'none' : 'block';
+        const cnt = document.getElementById(countId);
+        if (cnt) cnt.textContent = visible + (tbodyId.includes('ct')?'contacts':tbodyId.includes('mt')?'meetings':' clients').replace(/^\d+/,'');
+        if (cnt) cnt.textContent = visible + ' ' + (tbodyId.includes('ct')?'contacts':tbodyId.includes('mt')?'meetings':'clients');
+    }
+
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+    document.querySelectorAll('.cl-modal-overlay').forEach(o => {
+        o.addEventListener('click', e => { if (e.target===o) o.classList.remove('open'); });
+    });
+
+    function openEditClient(cl) {
+        document.getElementById('edit_cl_id').value      = cl.id;
+        document.getElementById('edit_cl_name').value    = cl.name    || '';
+        document.getElementById('edit_cl_company').value = cl.company || '';
+        document.getElementById('edit_cl_email').value   = cl.email   || '';
+        document.getElementById('edit_cl_phone').value   = cl.phone   || '';
+        setSelVal('edit_cl_status', cl.status);
+        document.getElementById('editClientModal').classList.add('open');
+    }
+
+    function openUpdateMeeting(mt) {
+        document.getElementById('edit_mt_id').value    = mt.id;
+        document.getElementById('edit_mt_notes').value = mt.notes || '';
+        document.getElementById('edit_mt_title_wrap').textContent = mt.meeting_title + ' — ' + mt.client_name;
+        setSelVal('edit_mt_status', mt.status || 'scheduled');
+        document.getElementById('updateMeetingModal').classList.add('open');
+    }
+
+    function setSelVal(id, val) {
+        const s = document.getElementById(id);
+        if (!s||!val) return;
+        for (let i=0;i<s.options.length;i++) if (s.options[i].value===val) { s.selectedIndex=i; return; }
+    }
+    </script>
 </body>
 </html>

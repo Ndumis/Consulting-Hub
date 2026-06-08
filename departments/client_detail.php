@@ -9,355 +9,234 @@ require_once '../config/database.php';
 require_once '../config/security.php';
 require_once '../includes/functions.php';
 
-// Check department access
 Security::requireDepartmentAccess('Clients');
 
 $database = new Database();
 $db = $database->getConnection();
 
-// Get client ID from URL
 $client_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-$edit_mode = isset($_GET['edit']) && $_GET['edit'] == '1';
+if (!$client_id) { header("Location: clients.php"); exit(); }
 
-if (!$client_id) {
-    header("Location: clients.php");
-    exit();
-}
+$can_write = in_array($_SESSION['role'] ?? '', ['admin', 'manager']);
+$csrf = Security::generateCSRFToken();
 
-// Handle client update
+// ── Update client ────────────────────────────────────────────────────────────
 if ($_POST && isset($_POST['update_client'])) {
     Security::checkCSRFToken();
     Security::requireWriteAccess('Clients');
-    
-    $name = Security::sanitizeInput($_POST['name']);
-    $email = Security::sanitizeInput($_POST['email']);
-    $phone = Security::sanitizeInput($_POST['phone']);
-    $company = Security::sanitizeInput($_POST['company']);
+    $name   = Security::sanitizeInput($_POST['name']);
+    $email  = Security::sanitizeInput($_POST['email']);
+    $phone  = Security::sanitizeInput($_POST['phone']);
+    $company= Security::sanitizeInput($_POST['company']);
+    $address= Security::sanitizeInput($_POST['address']);
     $status = Security::sanitizeInput($_POST['status']);
-    
-    $query = "UPDATE clients SET name = ?, email = ?, phone = ?, company = ?, status = ? WHERE id = ?";
-    $stmt = $db->prepare($query);
-    if ($stmt->execute([$name, $email, $phone, $company, $status, $client_id])) {
-        // Log activity
-        $activity_query = "INSERT INTO client_activities (client_id, activity_type, description, user_id) 
-                          VALUES (?, ?, ?, ?)";
-        $activity_stmt = $db->prepare($activity_query);
-        $activity_stmt->execute([$client_id, 'client_updated', "Client information updated", $_SESSION['user_id']]);
-        
-        $success_message = "Client updated successfully!";
-        $edit_mode = false; // Switch back to view mode after successful update
-    } else {
-        $error_message = "Error updating client.";
-    }
+    if (!in_array($status, ['active','prospect','inactive'])) $status = 'prospect';
+    $stmt = $db->prepare("UPDATE clients SET name=?,email=?,phone=?,company=?,address=?,status=? WHERE id=?");
+    $stmt->execute([$name,$email,$phone,$company,$address,$status,$client_id]);
+    $success_message = "Client updated.";
 }
 
-// Get client details
-$client_query = "SELECT * FROM clients WHERE id = ?";
-$client_stmt = $db->prepare($client_query);
-$client_stmt->execute([$client_id]);
-$client = $client_stmt->fetch(PDO::FETCH_ASSOC);
-
-if (!$client) {
-    header("Location: clients.php");
-    exit();
+// ── Add contact ──────────────────────────────────────────────────────────────
+if ($_POST && isset($_POST['create_contact'])) {
+    Security::checkCSRFToken();
+    $name       = Security::sanitizeInput($_POST['contact_name']);
+    $email      = Security::sanitizeInput($_POST['contact_email']);
+    $phone      = Security::sanitizeInput($_POST['contact_phone']);
+    $position   = Security::sanitizeInput($_POST['contact_position']);
+    $is_primary = isset($_POST['is_primary']) ? 1 : 0;
+    // Only one primary per client
+    if ($is_primary) $db->prepare("UPDATE client_contacts SET is_primary=0 WHERE client_id=?")->execute([$client_id]);
+    $stmt = $db->prepare("INSERT INTO client_contacts (client_id,name,email,phone,position,is_primary,assigned_to) VALUES (?,?,?,?,?,?,?)");
+    $stmt->execute([$client_id,$name,$email,$phone,$position,$is_primary,$_SESSION['user_id']]);
+    $success_message = "Contact added.";
 }
 
-// Get client communications
-$communications_query = "SELECT cc.*, u.username as assigned_to_name 
-                        FROM client_contacts cc 
-                        LEFT JOIN users u ON cc.assigned_to = u.id 
-                        WHERE cc.client_id = ? 
-                        ORDER BY cc.created_at DESC";
-$communications_stmt = $db->prepare($communications_query);
-$communications_stmt->execute([$client_id]);
-$communications = $communications_stmt->fetchAll(PDO::FETCH_ASSOC);
+// ── Schedule meeting ─────────────────────────────────────────────────────────
+if ($_POST && isset($_POST['create_meeting'])) {
+    Security::checkCSRFToken();
+    $title  = Security::sanitizeInput($_POST['meeting_title']);
+    $date   = Security::sanitizeInput($_POST['meeting_date']);
+    $loc    = Security::sanitizeInput($_POST['location']);
+    $agenda = Security::sanitizeInput($_POST['agenda']);
+    $stmt = $db->prepare("INSERT INTO client_meetings (client_id,meeting_title,meeting_date,location,agenda,created_by,status) VALUES (?,?,?,?,?,?,'scheduled')");
+    $stmt->execute([$client_id,$title,$date,$loc,$agenda,$_SESSION['user_id']]);
+    $success_message = "Meeting scheduled.";
+}
 
-// Get client meetings
-$meetings_query = "SELECT cm.*, u.username as created_by_name 
-                  FROM client_meetings cm 
-                  LEFT JOIN users u ON cm.created_by = u.id 
-                  WHERE cm.client_id = ? 
-                  ORDER BY cm.meeting_date DESC";
-$meetings_stmt = $db->prepare($meetings_query);
+// ── Update meeting ───────────────────────────────────────────────────────────
+if ($_POST && isset($_POST['update_meeting'])) {
+    Security::checkCSRFToken();
+    $mid    = (int)$_POST['meeting_id'];
+    $notes  = Security::sanitizeInput($_POST['notes']);
+    $status = Security::sanitizeInput($_POST['status']);
+    if (!in_array($status, ['scheduled','completed','cancelled'])) $status = 'scheduled';
+    $db->prepare("UPDATE client_meetings SET notes=?,status=? WHERE id=? AND client_id=?")->execute([$notes,$status,$mid,$client_id]);
+    $success_message = "Meeting updated.";
+}
+
+// ── Fetch client ─────────────────────────────────────────────────────────────
+$stmt = $db->prepare("SELECT * FROM clients WHERE id=?");
+$stmt->execute([$client_id]);
+$client = $stmt->fetch(PDO::FETCH_ASSOC);
+if (!$client) { header("Location: clients.php"); exit(); }
+
+// ── Fetch related data ───────────────────────────────────────────────────────
+$contacts = $db->prepare("SELECT cc.*, u.username AS assigned_to_name FROM client_contacts cc LEFT JOIN users u ON cc.assigned_to=u.id WHERE cc.client_id=? ORDER BY cc.is_primary DESC, cc.created_at ASC");
+$contacts->execute([$client_id]);
+$contacts = $contacts->fetchAll(PDO::FETCH_ASSOC);
+
+$meetings_stmt = $db->prepare("SELECT cm.*, u.username AS created_by_name FROM client_meetings cm LEFT JOIN users u ON cm.created_by=u.id WHERE cm.client_id=? ORDER BY cm.meeting_date DESC");
 $meetings_stmt->execute([$client_id]);
 $meetings = $meetings_stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Get client documents (with error handling for missing table)
-try {
-    $documents_query = "SELECT cd.*, u.username as uploaded_by_name 
-                       FROM client_documents cd 
-                       LEFT JOIN users u ON cd.uploaded_by = u.id 
-                       WHERE cd.client_id = ? 
-                       ORDER BY cd.uploaded_at DESC";
-    $documents_stmt = $db->prepare($documents_query);
-    $documents_stmt->execute([$client_id]);
-    $documents = $documents_stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (Exception $e) {
-    // Table doesn't exist, use empty array
-    $documents = [];
-}
+$projects_stmt = $db->prepare("SELECT p.*, u.username AS created_by_name FROM projects p LEFT JOIN users u ON p.created_by=u.id WHERE p.client_id=? ORDER BY p.created_at DESC");
+$projects_stmt->execute([$client_id]);
+$projects = $projects_stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Get client activities (with error handling for missing table)
-try {
-    $activities_query = "SELECT ca.*, u.username as user_name 
-                        FROM client_activities ca 
-                        LEFT JOIN users u ON ca.user_id = u.id 
-                        WHERE ca.client_id = ? 
-                        ORDER BY ca.created_at DESC 
-                        LIMIT 20";
-    $activities_stmt = $db->prepare($activities_query);
-    $activities_stmt->execute([$client_id]);
-    $activities = $activities_stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (Exception $e) {
-    // Table doesn't exist, use empty array
-    $activities = [];
-}
+$invoices_stmt = $db->prepare("SELECT i.*, u.username AS created_by_name FROM invoices i LEFT JOIN users u ON i.created_by=u.id WHERE i.client_id=? ORDER BY i.created_at DESC");
+$invoices_stmt->execute([$client_id]);
+$invoices = $invoices_stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$quotes_stmt = $db->prepare("SELECT q.*, u.username AS created_by_name FROM quotations q LEFT JOIN users u ON q.created_by=u.id WHERE q.client_id=? ORDER BY q.created_at DESC");
+$quotes_stmt->execute([$client_id]);
+$quotes = $quotes_stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Financial totals
+$total_invoiced   = array_sum(array_column($invoices, 'total_amount'));
+$total_paid       = array_sum(array_column(array_filter($invoices, fn($i)=>$i['status']==='paid'), 'total_amount'));
+$total_outstanding= $total_invoiced - $total_paid;
+$total_quoted     = array_sum(array_column($quotes, 'total_amount'));
+
+$initials = strtoupper(substr($client['company'],0,1).substr($client['name'],0,1));
+
+$asset_base = '../';
+$nav_base   = '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Client Details - <?php echo Security::escapeHTML($client['name']); ?></title>
+    <title><?php echo Security::escapeHTML($client['company']); ?> - KConsulting Hub</title>
     <link rel="stylesheet" href="../css/main.css">
     <style>
-        .client-detail-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 2rem;
+        :root {
+            --cl:      #0ea5e9;
+            --cl-dk:   #0284c7;
+            --cl-navy: #0c4a6e;
+            --cl-grad: linear-gradient(135deg, #0c4a6e 0%, #0ea5e9 100%);
         }
-        .client-header {
-            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #ec4899 100%);
-            color: white;
-            padding: 2.5rem;
-            border-radius: 16px;
-            margin-bottom: 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 10px 30px rgba(79, 70, 229, 0.3);
-            position: relative;
-            overflow: hidden;
+
+        /* Hero */
+        .cd-hero {
+            background: var(--cl-grad);
+            border-radius: 16px; padding: 28px 32px;
+            display: flex; align-items: center; gap: 20px;
+            margin-bottom: 20px; flex-wrap: wrap;
         }
-        
-        .client-header::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
-            opacity: 0.3;
+        .cd-logo {
+            width: 64px; height: 64px; border-radius: 14px;
+            background: rgba(255,255,255,.2); border: 2px solid rgba(255,255,255,.35);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.4rem; font-weight: 800; color: #fff; flex-shrink: 0;
         }
-        
-        .client-header-content {
-            position: relative;
-            z-index: 1;
-        }
-        
-        .client-header-actions {
-            position: relative;
-            z-index: 1;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        
-        .client-header h1 {
-            margin: 0;
-            font-size: 2.5rem;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .client-header .company-name {
-            margin: 0.75rem 0 0 0;
-            font-size: 1.2rem;
-            opacity: 0.9;
-            font-weight: 400;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        .client-status-badge {
-            background: rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border-radius: 25px;
-            font-size: 1rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        }
-        
-        .client-edit-btn {
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border-radius: 25px;
-            text-decoration: none;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        }
-        
-        .client-edit-btn:hover {
-            background: rgba(255, 255, 255, 0.25);
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-            color: white;
-        }
-        
-        @media (max-width: 768px) {
-            .nav-container {
-                flex-direction: column !important;
-                gap: 1rem;
-                padding: 1rem !important;
-            }
-            
-            .main-nav {
-                flex-wrap: wrap;
-                justify-content: center;
-                gap: 0.5rem !important;
-            }
-            
-            .main-nav a {
-                padding: 0.25rem 0.5rem !important;
-                font-size: 0.9rem;
-            }
-            
-            .client-header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 1.5rem;
-                padding: 2rem;
-                margin-top: 1rem;
-            }
-            
-            .client-header h1 {
-                font-size: 2rem;
-            }
-            
-            .client-header-actions {
-                align-self: stretch;
-                justify-content: space-between;
-            }
-        }
-        .client-info-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
-            margin-bottom: 2rem;
-        }
-        .info-card {
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 1.5rem;
-        }
-        .info-card h3 {
-            margin-top: 0;
-            color: #333;
-            border-bottom: 2px solid #f0f0f0;
-            padding-bottom: 0.5rem;
-        }
-        .detail-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 0.5rem 0;
-            border-bottom: 1px solid #f5f5f5;
-        }
-        .detail-row:last-child {
-            border-bottom: none;
-        }
-        .detail-label {
-            font-weight: bold;
-            color: #666;
-        }
-        .detail-value {
-            color: #333;
-        }
-        .tab-content-detail {
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-top: 1rem;
-            display: none;
-        }
-        
-        .tab-content-detail.active {
-            display: block;
-        }
-        
-        .tab-nav {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-            border-bottom: 2px solid #e0e0e0;
-            padding-bottom: 0.5rem;
-        }
-        
-        .tab-btn {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            padding: 0.75rem 1.5rem;
-            border-radius: 6px 6px 0 0;
-            cursor: pointer;
-            font-weight: 500;
-            color: #666;
-            transition: all 0.3s ease;
-            border-bottom: none;
-        }
-        
-        .tab-btn:hover {
-            background: #e9ecef;
-            color: #333;
-        }
-        
-        .tab-btn.active {
-            background: white;
-            color: #333;
-            border-color: #dee2e6;
-            border-bottom: 2px solid white;
-            margin-bottom: -2px;
-            font-weight: 600;
-        }
-        .edit-form {
-            background: #f8f9fa;
-            padding: 2rem;
-            border-radius: 8px;
-            border: 1px solid #dee2e6;
-        }
-        .communication-item, .meeting-item, .document-item, .activity-item {
-            border: 1px solid #e0e0e0;
-            border-radius: 6px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            background: #fafafa;
-        }
-        .item-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.5rem;
-        }
-        .item-title {
-            font-weight: bold;
-            color: #333;
-        }
-        .item-date {
-            color: #666;
-            font-size: 0.9rem;
-        }
+        .cd-hero-info { flex: 1; min-width: 180px; }
+        .cd-hero-info h1 { color: #fff; font-size: 1.6rem; font-weight: 800; margin: 0 0 3px; }
+        .cd-hero-info .sub { color: rgba(255,255,255,.75); font-size: .87rem; }
+        .cd-hero-chips { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+        .cd-chip { background: rgba(255,255,255,.15); color: #fff; padding: 3px 12px; border-radius: 20px; font-size: .75rem; font-weight: 600; border: 1px solid rgba(255,255,255,.2); }
+        .cd-chip.green { background: rgba(16,185,129,.4); }
+        .cd-chip.amber { background: rgba(245,158,11,.4); }
+        .cd-hero-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-left: auto; }
+        .cd-hero-btn { background: rgba(255,255,255,.15); color: #fff; border: 1px solid rgba(255,255,255,.3); border-radius: 8px; padding: 8px 16px; font-size: .83rem; font-weight: 600; cursor: pointer; transition: background .2s; text-decoration: none; display: inline-block; }
+        .cd-hero-btn:hover { background: rgba(255,255,255,.28); }
+        .cd-hero-btn.back { background: transparent; border-color: rgba(255,255,255,.3); }
+
+        /* Stats */
+        .cd-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 20px; }
+        @media(max-width:700px){ .cd-stats{ grid-template-columns: 1fr 1fr; } }
+        .cd-stat { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px 18px; box-shadow: 0 1px 4px rgba(0,0,0,.05); }
+        .cd-stat .num { font-size: 1.5rem; font-weight: 800; color: #111827; display: block; }
+        .cd-stat .lbl { font-size: .72rem; text-transform: uppercase; letter-spacing: .5px; color: #9ca3af; font-weight: 600; }
+        .cd-stat .num.sky   { color: var(--cl); }
+        .cd-stat .num.green { color: #059669; }
+        .cd-stat .num.amber { color: #d97706; }
+        .cd-stat .num.rose  { color: #e11d48; }
+
+        /* Flash */
+        .cd-flash { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: .87rem; font-weight: 500; }
+        .cd-flash.success { background: #e0f2fe; color: #0c4a6e; border-left: 4px solid var(--cl); }
+        .cd-flash.error   { background: #fee2e2; color: #991b1b; border-left: 4px solid #dc2626; }
+
+        /* Tab nav */
+        .cd-tabs { display: flex; gap: 0; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 4px; margin-bottom: 20px; overflow-x: auto; }
+        .cd-tab  { flex: none; padding: 9px 20px; border: none; background: transparent; border-radius: 7px; cursor: pointer; font-size: .87rem; font-weight: 600; color: #6b7280; transition: all .2s; white-space: nowrap; }
+        .cd-tab:hover  { background: #f3f4f6; color: #111827; }
+        .cd-tab.active { background: var(--cl); color: #fff; }
+        .cd-tab-content { display: none; }
+        .cd-tab-content.active { display: block; }
+
+        /* Card */
+        .cd-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.05); margin-bottom: 16px; }
+        .cd-card h3 { font-size: .95rem; font-weight: 700; color: #111827; margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; justify-content: space-between; }
+
+        /* Info grid */
+        .cd-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .cd-info-item .lbl { font-size: .72rem; text-transform: uppercase; letter-spacing: .4px; color: #9ca3af; font-weight: 600; margin-bottom: 3px; }
+        .cd-info-item .val { font-size: .9rem; color: #111827; font-weight: 500; }
+
+        /* Table */
+        .cd-table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid #e5e7eb; }
+        .cd-table { width: 100%; border-collapse: collapse; font-size: .85rem; background: #fff; }
+        .cd-table th { background: var(--cl); color: #fff; padding: 10px 13px; text-align: left; font-size: .73rem; text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; }
+        .cd-table td { padding: 10px 13px; border-bottom: 1px solid #f3f4f6; color: #374151; vertical-align: middle; }
+        .cd-table tr:last-child td { border-bottom: none; }
+        .cd-table tr:hover td { background: #f0f9ff; }
+
+        /* Badges */
+        .cbadge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: .72rem; font-weight: 700; text-transform: capitalize; }
+        .cbadge-active, .cbadge-completed, .cbadge-paid { background: #d1fae5; color: #065f46; }
+        .cbadge-prospect,.cbadge-pending,.cbadge-in_progress { background: #fef3c7; color: #92400e; }
+        .cbadge-inactive,.cbadge-cancelled { background: #f3f4f6; color: #6b7280; }
+        .cbadge-scheduled { background: #dbeafe; color: #1e40af; }
+        .cbadge-overdue   { background: #fee2e2; color: #991b1b; }
+        .cbadge-sent      { background: #ede9fe; color: #5b21b6; }
+        .cbadge-accepted  { background: #d1fae5; color: #065f46; }
+        .cbadge-draft     { background: #f9fafb; color: #6b7280; border: 1px solid #e5e7eb; }
+        .cbadge-primary   { background: #e0f2fe; color: #0c4a6e; }
+
+        /* Buttons */
+        .cd-btn { padding: 6px 14px; border: none; border-radius: 7px; font-size: .8rem; font-weight: 600; cursor: pointer; transition: all .2s; text-decoration: none; display: inline-block; }
+        .cd-btn-sky  { background: var(--cl); color: #fff; }
+        .cd-btn-sky:hover  { background: var(--cl-dk); }
+        .cd-btn-gray { background: #f3f4f6; color: #374151; }
+        .cd-btn-gray:hover { background: #e5e7eb; }
+
+        /* Collapsible */
+        .cd-collapsible-header { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px; padding: 11px 16px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-weight: 600; color: var(--cl-navy); font-size: .88rem; margin-bottom: 0; }
+        .cd-collapsible-body { display: none; padding: 18px; border: 1px solid #bae6fd; border-top: none; border-radius: 0 0 10px 10px; background: #fff; margin-bottom: 16px; }
+        .cd-collapsible-body.open { display: block; }
+
+        /* Form grid */
+        .cd-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .cd-form-grid .full { grid-column: 1/-1; }
+        @media(max-width:600px){ .cd-form-grid{grid-template-columns:1fr;} }
+        .cd-field label { display: block; font-size: .77rem; font-weight: 600; color: #374151; margin-bottom: 4px; }
+        .cd-field input,.cd-field select,.cd-field textarea { width: 100%; padding: 8px 11px; border: 1px solid #d1d5db; border-radius: 7px; font-size: .87rem; color: #111827; }
+        .cd-field textarea { height: 70px; resize: vertical; }
+        .cd-field input:focus,.cd-field select:focus,.cd-field textarea:focus { outline: none; border-color: var(--cl); box-shadow: 0 0 0 3px rgba(14,165,233,.1); }
+
+        /* Progress bar */
+        .prog-wrap { width: 100px; height: 6px; background: #e5e7eb; border-radius: 6px; overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 6px; }
+        .prog-fill { height: 100%; border-radius: 6px; background: var(--cl); }
+
+        /* Modal */
+        .cd-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 1000; align-items: center; justify-content: center; }
+        .cd-modal-overlay.open { display: flex; }
+        .cd-modal { background: #fff; border-radius: 16px; width: min(560px,95vw); max-height: 90vh; overflow-y: auto; padding: 28px; position: relative; box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+        .cd-modal h2 { font-size: 1.1rem; font-weight: 700; color: #111827; margin: 0 0 20px; }
+        .cd-modal-close { position: absolute; top: 16px; right: 16px; background: #f3f4f6; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; }
+        .cd-modal-close:hover { background: #e5e7eb; }
     </style>
 </head>
 <body>
@@ -365,345 +244,414 @@ try {
     <?php include '../includes/sidebar.php'; ?>
 
     <div class="main-content">
-        <!-- Success/Error Messages -->
-        <?php if (isset($success_message)): ?>
-            <div class="alert alert-success" style="background: #d4edda; color: #155724; padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">
-                <?php echo $success_message; ?>
-            </div>
+
+        <?php if (!empty($success_message)): ?>
+        <div class="cd-flash success"><?php echo Security::escapeHTML($success_message); ?></div>
         <?php endif; ?>
-        
-        <?php if (isset($error_message)): ?>
-            <div class="alert alert-error" style="background: #f8d7da; color: #721c24; padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">
-                <?php echo $error_message; ?>
-            </div>
+        <?php if (!empty($error_message)): ?>
+        <div class="cd-flash error"><?php echo Security::escapeHTML($error_message); ?></div>
         <?php endif; ?>
 
-        <!-- Back Button -->
-        <div style="margin-bottom: 1rem;">
-            <a href="clients.php" class="btn btn-small">← Back to Clients</a>
-        </div>
-
-        <!-- Client Header -->
-        <div class="client-header">
-            <div class="client-header-content">
-                <h1><?php echo Security::escapeHTML($client['name']); ?></h1>
-                <p class="company-name">
-                    🏢 <?php echo Security::escapeHTML($client['company']); ?>
-                </p>
+        <!-- Hero -->
+        <div class="cd-hero">
+            <div class="cd-logo"><?php echo $initials; ?></div>
+            <div class="cd-hero-info">
+                <h1><?php echo Security::escapeHTML($client['company']); ?></h1>
+                <div class="sub"><?php echo Security::escapeHTML($client['name']); ?> &middot; <?php echo Security::escapeHTML($client['email']??''); ?></div>
+                <div class="cd-hero-chips">
+                    <span class="cd-chip <?php echo $client['status']==='active'?'green':($client['status']==='prospect'?'amber':''); ?>">
+                        <?php echo ucfirst($client['status']); ?>
+                    </span>
+                    <span class="cd-chip"><?php echo count($projects); ?> projects</span>
+                    <span class="cd-chip"><?php echo count($contacts); ?> contacts</span>
+                    <?php if ($total_outstanding > 0): ?>
+                    <span class="cd-chip amber">R<?php echo number_format($total_outstanding,0); ?> outstanding</span>
+                    <?php endif; ?>
+                </div>
             </div>
-            <div class="client-header-actions">
-                <span class="client-status-badge">
-                    <?php echo ucfirst($client['status']); ?>
-                </span>
-                <?php if (!$edit_mode && Security::canWriteInDepartment($_SESSION['role'], $_SESSION['department'], 'Clients')): ?>
-                    <a href="?id=<?php echo $client_id; ?>&edit=1" class="client-edit-btn">✏️ Edit Client</a>
+            <div class="cd-hero-actions">
+                <a href="clients.php" class="cd-hero-btn back">← Back</a>
+                <?php if ($can_write): ?>
+                <button class="cd-hero-btn" onclick="document.getElementById('editClientModal').classList.add('open')">✏️ Edit</button>
                 <?php endif; ?>
+                <a href="finance.php" class="cd-hero-btn">💰 Finance</a>
             </div>
         </div>
 
-        <?php if ($edit_mode && Security::canWriteInDepartment($_SESSION['role'], $_SESSION['department'], 'Clients')): ?>
-            <!-- Edit Form -->
-            <div class="edit-form">
-                <h3>Edit Client Information</h3>
-                <form method="POST" class="form-grid">
-                    <?php echo Security::getCSRFTokenField(); ?>
-                    <div class="form-group">
-                        <label>Name:</label>
-                        <input type="text" name="name" value="<?php echo Security::escapeHTML($client['name']); ?>" required>
+        <!-- Stats -->
+        <div class="cd-stats">
+            <div class="cd-stat">
+                <span class="num sky"><?php echo count($projects); ?></span>
+                <span class="lbl">Projects</span>
+            </div>
+            <div class="cd-stat">
+                <span class="num green">R<?php echo number_format($total_paid,0); ?></span>
+                <span class="lbl">Paid</span>
+            </div>
+            <div class="cd-stat">
+                <span class="num amber">R<?php echo number_format($total_outstanding,0); ?></span>
+                <span class="lbl">Outstanding</span>
+            </div>
+            <div class="cd-stat">
+                <span class="num rose"><?php echo count(array_filter($meetings,fn($m)=>$m['status']==='scheduled')); ?></span>
+                <span class="lbl">Upcoming Meetings</span>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="cd-tabs">
+            <button class="cd-tab active" onclick="switchTab('overview')">📋 Overview</button>
+            <button class="cd-tab" onclick="switchTab('contacts')">👤 Contacts (<?php echo count($contacts); ?>)</button>
+            <button class="cd-tab" onclick="switchTab('meetings')">📅 Meetings (<?php echo count($meetings); ?>)</button>
+            <button class="cd-tab" onclick="switchTab('projects')">🗂 Projects (<?php echo count($projects); ?>)</button>
+            <button class="cd-tab" onclick="switchTab('financials')">💰 Financials</button>
+        </div>
+
+        <!-- ══════════ TAB: OVERVIEW ══════════ -->
+        <div id="tab-overview" class="cd-tab-content active">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;flex-wrap:wrap;">
+                <!-- Client info -->
+                <div class="cd-card">
+                    <h3>Client Information</h3>
+                    <div class="cd-info-grid">
+                        <div class="cd-info-item"><div class="lbl">Contact Name</div><div class="val"><?php echo Security::escapeHTML($client['name']); ?></div></div>
+                        <div class="cd-info-item"><div class="lbl">Company</div><div class="val"><?php echo Security::escapeHTML($client['company']); ?></div></div>
+                        <div class="cd-info-item"><div class="lbl">Email</div><div class="val"><?php echo Security::escapeHTML($client['email']??'—'); ?></div></div>
+                        <div class="cd-info-item"><div class="lbl">Phone</div><div class="val"><?php echo Security::escapeHTML($client['phone']??'—'); ?></div></div>
+                        <div class="cd-info-item" style="grid-column:1/-1;"><div class="lbl">Address</div><div class="val"><?php echo Security::escapeHTML($client['address']??'—'); ?></div></div>
+                        <div class="cd-info-item"><div class="lbl">Status</div><div class="val"><span class="cbadge cbadge-<?php echo $client['status']; ?>"><?php echo ucfirst($client['status']); ?></span></div></div>
+                        <div class="cd-info-item"><div class="lbl">Client Since</div><div class="val"><?php echo date('d M Y',strtotime($client['created_at'])); ?></div></div>
                     </div>
-                    <div class="form-group">
-                        <label>Email:</label>
-                        <input type="email" name="email" value="<?php echo Security::escapeHTML($client['email']); ?>">
+                </div>
+                <!-- Financial summary -->
+                <div class="cd-card">
+                    <h3>Financial Summary</h3>
+                    <div class="cd-info-grid">
+                        <div class="cd-info-item"><div class="lbl">Total Quoted</div><div class="val" style="color:var(--cl);font-weight:700;">R<?php echo number_format($total_quoted,2); ?></div></div>
+                        <div class="cd-info-item"><div class="lbl">Total Invoiced</div><div class="val" style="font-weight:700;">R<?php echo number_format($total_invoiced,2); ?></div></div>
+                        <div class="cd-info-item"><div class="lbl">Paid</div><div class="val" style="color:#059669;font-weight:700;">R<?php echo number_format($total_paid,2); ?></div></div>
+                        <div class="cd-info-item"><div class="lbl">Outstanding</div><div class="val" style="color:#d97706;font-weight:700;">R<?php echo number_format($total_outstanding,2); ?></div></div>
+                        <div class="cd-info-item"><div class="lbl">Quotations</div><div class="val"><?php echo count($quotes); ?></div></div>
+                        <div class="cd-info-item"><div class="lbl">Invoices</div><div class="val"><?php echo count($invoices); ?></div></div>
                     </div>
-                    <div class="form-group">
-                        <label>Phone:</label>
-                        <input type="tel" name="phone" value="<?php echo Security::escapeHTML($client['phone']); ?>">
+                </div>
+            </div>
+
+            <!-- Recent projects -->
+            <?php if (!empty($projects)): ?>
+            <div class="cd-card">
+                <h3>Active Projects <a href="?id=<?php echo $client_id; ?>&tab=projects" onclick="switchTab('projects');return false;" style="font-size:.78rem;font-weight:400;color:var(--cl);">View all →</a></h3>
+                <div class="cd-table-wrap">
+                <table class="cd-table">
+                    <thead><tr><th>Project</th><th>Status</th><th>Progress</th><th>End Date</th></tr></thead>
+                    <tbody>
+                    <?php foreach (array_slice($projects,0,4) as $pr): ?>
+                    <tr>
+                        <td style="font-weight:500;"><?php echo Security::escapeHTML($pr['name']); ?></td>
+                        <td><span class="cbadge cbadge-<?php echo str_replace(' ','_',$pr['status']); ?>"><?php echo ucfirst($pr['status']); ?></span></td>
+                        <td>
+                            <div class="prog-wrap"><div class="prog-fill" style="width:<?php echo min(100,(int)$pr['progress']); ?>%"></div></div>
+                            <span style="font-size:.78rem;color:#6b7280;"><?php echo (int)$pr['progress']; ?>%</span>
+                        </td>
+                        <td style="font-size:.8rem;"><?php echo $pr['end_date'] ? date('d M Y',strtotime($pr['end_date'])) : '—'; ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <!-- Primary contact -->
+            <?php $primary = array_values(array_filter($contacts, fn($c)=>$c['is_primary']))[0] ?? ($contacts[0] ?? null); ?>
+            <?php if ($primary): ?>
+            <div class="cd-card">
+                <h3>Primary Contact</h3>
+                <div class="cd-info-grid">
+                    <div class="cd-info-item"><div class="lbl">Name</div><div class="val"><?php echo Security::escapeHTML($primary['name']); ?></div></div>
+                    <div class="cd-info-item"><div class="lbl">Position</div><div class="val"><?php echo Security::escapeHTML($primary['position']??'—'); ?></div></div>
+                    <div class="cd-info-item"><div class="lbl">Email</div><div class="val"><?php echo Security::escapeHTML($primary['email']??'—'); ?></div></div>
+                    <div class="cd-info-item"><div class="lbl">Phone</div><div class="val"><?php echo Security::escapeHTML($primary['phone']??'—'); ?></div></div>
+                </div>
+            </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- ══════════ TAB: CONTACTS ══════════ -->
+        <div id="tab-contacts" class="cd-tab-content">
+            <?php if ($can_write): ?>
+            <div style="margin-bottom:4px;">
+            <div class="cd-collapsible-header" onclick="toggleCD('ctForm')">
+                <span>+ Add Contact</span><span id="ctForm-arrow">▼</span>
+            </div>
+            <div class="cd-collapsible-body" id="ctForm-body">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
+                    <input type="hidden" name="create_contact" value="1">
+                    <div class="cd-form-grid">
+                        <div class="cd-field"><label>Full Name *</label><input type="text" name="contact_name" required></div>
+                        <div class="cd-field"><label>Position</label><input type="text" name="contact_position"></div>
+                        <div class="cd-field"><label>Email</label><input type="email" name="contact_email"></div>
+                        <div class="cd-field"><label>Phone</label><input type="tel" name="contact_phone"></div>
+                        <div class="cd-field" style="display:flex;align-items:center;gap:8px;margin-top:20px;">
+                            <input type="checkbox" name="is_primary" id="cd_is_primary" style="width:auto;">
+                            <label for="cd_is_primary" style="margin:0;font-size:.87rem;">Set as primary contact</label>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Company:</label>
-                        <input type="text" name="company" value="<?php echo Security::escapeHTML($client['company']); ?>">
-                    </div>
-                    <div class="form-group">
-                        <label>Status:</label>
-                        <select name="status">
-                            <option value="prospect" <?php echo $client['status'] === 'prospect' ? 'selected' : ''; ?>>Prospect</option>
-                            <option value="active" <?php echo $client['status'] === 'active' ? 'selected' : ''; ?>>Active</option>
-                            <option value="inactive" <?php echo $client['status'] === 'inactive' ? 'selected' : ''; ?>>Inactive</option>
-                            <option value="closed" <?php echo $client['status'] === 'closed' ? 'selected' : ''; ?>>Closed</option>
-                        </select>
-                    </div>
-                    <div class="form-group" style="grid-column: 1 / -1;">
-                        <button type="submit" name="update_client" class="btn">Update Client</button>
-                        <a href="?id=<?php echo $client_id; ?>" class="btn btn-small" style="background: #6c757d; color: white; margin-left: 1rem;">View Details</a>
-                    </div>
+                    <div style="margin-top:14px;"><button type="submit" class="cd-btn cd-btn-sky">Add Contact</button></div>
                 </form>
             </div>
-        <?php else: ?>
-            <!-- View Mode -->
-            <div class="client-info-grid">
-                <!-- Basic Information -->
-                <div class="info-card">
-                    <h3>📋 Basic Information</h3>
-                    <div class="detail-row">
-                        <span class="detail-label">Name:</span>
-                        <span class="detail-value"><?php echo Security::escapeHTML($client['name']); ?></span>
+            </div>
+            <?php endif; ?>
+
+            <?php if (empty($contacts)): ?>
+            <div class="cd-card" style="text-align:center;color:#9ca3af;">No contacts yet.</div>
+            <?php else: ?>
+            <div class="cd-table-wrap">
+            <table class="cd-table">
+                <thead><tr><th>Name</th><th>Position</th><th>Email</th><th>Phone</th><th>Primary</th></tr></thead>
+                <tbody>
+                <?php foreach ($contacts as $ct): ?>
+                <tr>
+                    <td style="font-weight:600;"><?php echo Security::escapeHTML($ct['name']); ?></td>
+                    <td><?php echo Security::escapeHTML($ct['position']??'—'); ?></td>
+                    <td style="font-size:.82rem;"><?php echo Security::escapeHTML($ct['email']??'—'); ?></td>
+                    <td style="font-size:.82rem;"><?php echo Security::escapeHTML($ct['phone']??'—'); ?></td>
+                    <td><?php echo $ct['is_primary']?'<span class="cbadge cbadge-primary">Primary</span>':'<span style="color:#d1d5db;">—</span>'; ?></td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- ══════════ TAB: MEETINGS ══════════ -->
+        <div id="tab-meetings" class="cd-tab-content">
+            <?php if ($can_write): ?>
+            <div style="margin-bottom:4px;">
+            <div class="cd-collapsible-header" onclick="toggleCD('mtForm')">
+                <span>+ Schedule Meeting</span><span id="mtForm-arrow">▼</span>
+            </div>
+            <div class="cd-collapsible-body" id="mtForm-body">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
+                    <input type="hidden" name="create_meeting" value="1">
+                    <div class="cd-form-grid">
+                        <div class="cd-field"><label>Title *</label><input type="text" name="meeting_title" required></div>
+                        <div class="cd-field"><label>Date &amp; Time *</label><input type="datetime-local" name="meeting_date" required></div>
+                        <div class="cd-field"><label>Location</label><input type="text" name="location" placeholder="Office / Teams / Google Meet…"></div>
+                        <div class="cd-field full"><label>Agenda</label><textarea name="agenda"></textarea></div>
                     </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Company:</span>
-                        <span class="detail-value"><?php echo Security::escapeHTML($client['company']); ?></span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Email:</span>
-                        <span class="detail-value">
-                            <?php if ($client['email']): ?>
-                                <a href="mailto:<?php echo Security::escapeHTML($client['email']); ?>">
-                                    <?php echo Security::escapeHTML($client['email']); ?>
-                                </a>
-                            <?php else: ?>
-                                Not provided
-                            <?php endif; ?>
-                        </span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Phone:</span>
-                        <span class="detail-value">
-                            <?php if ($client['phone']): ?>
-                                <a href="tel:<?php echo Security::escapeHTML($client['phone']); ?>">
-                                    <?php echo Security::escapeHTML($client['phone']); ?>
-                                </a>
-                            <?php else: ?>
-                                Not provided
-                            <?php endif; ?>
-                        </span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Status:</span>
-                        <span class="detail-value">
-                            <span class="status-badge status-<?php echo $client['status']; ?>">
-                                <?php echo ucfirst($client['status']); ?>
-                            </span>
-                        </span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Client Since:</span>
-                        <span class="detail-value"><?php echo Utils::formatDate($client['created_at']); ?></span>
+                    <div style="margin-top:14px;"><button type="submit" class="cd-btn cd-btn-sky">Schedule</button></div>
+                </form>
+            </div>
+            </div>
+            <?php endif; ?>
+
+            <?php if (empty($meetings)): ?>
+            <div class="cd-card" style="text-align:center;color:#9ca3af;">No meetings scheduled yet.</div>
+            <?php else: ?>
+            <div class="cd-table-wrap">
+            <table class="cd-table">
+                <thead><tr><th>Title</th><th>Date</th><th>Location</th><th>Status</th><th>Notes</th><?php if($can_write):?><th>Actions</th><?php endif;?></tr></thead>
+                <tbody>
+                <?php foreach ($meetings as $mt): ?>
+                <tr>
+                    <td style="font-weight:600;"><?php echo Security::escapeHTML($mt['meeting_title']); ?></td>
+                    <td style="font-size:.82rem;"><?php echo date('d M Y H:i',strtotime($mt['meeting_date'])); ?></td>
+                    <td style="font-size:.82rem;"><?php echo Security::escapeHTML($mt['location']??'—'); ?></td>
+                    <td><span class="cbadge cbadge-<?php echo $mt['status']??'scheduled'; ?>"><?php echo ucfirst($mt['status']??'Scheduled'); ?></span></td>
+                    <td style="font-size:.78rem;color:#6b7280;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?php echo Security::escapeHTML(substr($mt['notes']??'',0,80)); ?></td>
+                    <?php if ($can_write): ?>
+                    <td><button class="cd-btn cd-btn-gray" style="font-size:.73rem;" onclick="openMtUpdate(<?php echo htmlspecialchars(json_encode($mt),ENT_QUOTES); ?>)">✏️ Update</button></td>
+                    <?php endif; ?>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- ══════════ TAB: PROJECTS ══════════ -->
+        <div id="tab-projects" class="cd-tab-content">
+            <?php if (empty($projects)): ?>
+            <div class="cd-card" style="text-align:center;color:#9ca3af;">No projects linked to this client yet.</div>
+            <?php else: ?>
+            <div class="cd-table-wrap">
+            <table class="cd-table">
+                <thead><tr><th>Project</th><th>Department</th><th>Priority</th><th>Status</th><th>Progress</th><th>End Date</th></tr></thead>
+                <tbody>
+                <?php foreach ($projects as $pr): ?>
+                <tr>
+                    <td>
+                        <div style="font-weight:600;"><?php echo Security::escapeHTML($pr['name']); ?></div>
+                        <div style="font-size:.75rem;color:#9ca3af;"><?php echo Security::escapeHTML(substr($pr['description']??'',0,60)); ?></div>
+                    </td>
+                    <td><?php echo Security::escapeHTML($pr['department']??'—'); ?></td>
+                    <td><?php
+                        $pclr = ['high'=>'#dc2626','medium'=>'#d97706','low'=>'#059669'];
+                        $clr  = $pclr[$pr['priority']] ?? '#9ca3af';
+                    ?><span style="font-size:.75rem;font-weight:700;color:<?php echo $clr; ?>;text-transform:uppercase;"><?php echo $pr['priority']??'—'; ?></span></td>
+                    <td><span class="cbadge cbadge-<?php echo str_replace(' ','_',$pr['status']); ?>"><?php echo ucfirst($pr['status']); ?></span></td>
+                    <td style="white-space:nowrap;">
+                        <div class="prog-wrap"><div class="prog-fill" style="width:<?php echo min(100,(int)$pr['progress']); ?>%"></div></div>
+                        <span style="font-size:.78rem;color:#6b7280;"><?php echo (int)$pr['progress']; ?>%</span>
+                    </td>
+                    <td style="font-size:.8rem;"><?php echo $pr['end_date'] ? date('d M Y',strtotime($pr['end_date'])) : '—'; ?></td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- ══════════ TAB: FINANCIALS ══════════ -->
+        <div id="tab-financials" class="cd-tab-content">
+            <!-- Invoices -->
+            <div class="cd-card">
+                <h3>Invoices (<?php echo count($invoices); ?>)</h3>
+                <?php if (empty($invoices)): ?>
+                <p style="color:#9ca3af;font-size:.87rem;">No invoices yet.</p>
+                <?php else: ?>
+                <div class="cd-table-wrap">
+                <table class="cd-table">
+                    <thead><tr><th>#</th><th>Date</th><th>Due Date</th><th>Amount</th><th>Status</th><th>PDF</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($invoices as $inv): ?>
+                    <tr>
+                        <td style="font-family:monospace;font-size:.8rem;"><?php echo Security::escapeHTML($inv['invoice_number']??'—'); ?></td>
+                        <td style="font-size:.82rem;"><?php echo $inv['invoice_date'] ? date('d M Y',strtotime($inv['invoice_date'])) : '—'; ?></td>
+                        <td style="font-size:.82rem;"><?php echo $inv['due_date'] ? date('d M Y',strtotime($inv['due_date'])) : '—'; ?></td>
+                        <td style="font-weight:700;">R<?php echo number_format($inv['total_amount'],2); ?></td>
+                        <td><span class="cbadge cbadge-<?php echo $inv['status']; ?>"><?php echo ucfirst($inv['status']); ?></span></td>
+                        <td><a href="finance_pdf.php?type=invoice&id=<?php echo $inv['id']; ?>" target="_blank" class="cd-btn cd-btn-gray" style="font-size:.73rem;">📄 PDF</a></td>
+                    </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+                </div>
+                <?php endif; ?>
+            </div>
+
+            <!-- Quotations -->
+            <div class="cd-card">
+                <h3>Quotations (<?php echo count($quotes); ?>)</h3>
+                <?php if (empty($quotes)): ?>
+                <p style="color:#9ca3af;font-size:.87rem;">No quotations yet.</p>
+                <?php else: ?>
+                <div class="cd-table-wrap">
+                <table class="cd-table">
+                    <thead><tr><th>#</th><th>Date</th><th>Valid Until</th><th>Amount</th><th>Status</th><th>PDF</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($quotes as $q): ?>
+                    <tr>
+                        <td style="font-family:monospace;font-size:.8rem;"><?php echo Security::escapeHTML($q['quotation_number']??'—'); ?></td>
+                        <td style="font-size:.82rem;"><?php echo $q['quotation_date'] ? date('d M Y',strtotime($q['quotation_date'])) : '—'; ?></td>
+                        <td style="font-size:.82rem;"><?php echo $q['valid_until'] ? date('d M Y',strtotime($q['valid_until'])) : '—'; ?></td>
+                        <td style="font-weight:700;">R<?php echo number_format($q['total_amount'],2); ?></td>
+                        <td><span class="cbadge cbadge-<?php echo $q['status']; ?>"><?php echo ucfirst($q['status']); ?></span></td>
+                        <td><a href="finance_pdf.php?type=quotation&id=<?php echo $q['id']; ?>" target="_blank" class="cd-btn cd-btn-gray" style="font-size:.73rem;">📄 PDF</a></td>
+                    </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+    </div><!-- /.main-content -->
+
+    <!-- Edit Client Modal -->
+    <div class="cd-modal-overlay" id="editClientModal">
+        <div class="cd-modal">
+            <button class="cd-modal-close" onclick="document.getElementById('editClientModal').classList.remove('open')">✕</button>
+            <h2>Edit Client</h2>
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
+                <input type="hidden" name="update_client" value="1">
+                <div class="cd-form-grid">
+                    <div class="cd-field"><label>Contact Name *</label><input type="text" name="name" value="<?php echo Security::escapeHTML($client['name']); ?>" required></div>
+                    <div class="cd-field"><label>Company *</label><input type="text" name="company" value="<?php echo Security::escapeHTML($client['company']); ?>" required></div>
+                    <div class="cd-field"><label>Email</label><input type="email" name="email" value="<?php echo Security::escapeHTML($client['email']??''); ?>"></div>
+                    <div class="cd-field"><label>Phone</label><input type="tel" name="phone" value="<?php echo Security::escapeHTML($client['phone']??''); ?>"></div>
+                    <div class="cd-field full"><label>Address</label><input type="text" name="address" value="<?php echo Security::escapeHTML($client['address']??''); ?>"></div>
+                    <div class="cd-field"><label>Status</label>
+                        <select name="status">
+                            <option value="active" <?php echo $client['status']==='active'?'selected':''; ?>>Active</option>
+                            <option value="prospect" <?php echo $client['status']==='prospect'?'selected':''; ?>>Prospect</option>
+                            <option value="inactive" <?php echo $client['status']==='inactive'?'selected':''; ?>>Inactive</option>
+                        </select>
                     </div>
                 </div>
-
-                <!-- Quick Stats -->
-                <div class="info-card">
-                    <h3>📊 Quick Stats</h3>
-                    <div class="detail-row">
-                        <span class="detail-label">Total Communications:</span>
-                        <span class="detail-value"><?php echo count($communications); ?></span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Open Communications:</span>
-                        <span class="detail-value">
-                            <?php echo count(array_filter($communications, function($c) { return $c['status'] === 'open'; })); ?>
-                        </span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Total Meetings:</span>
-                        <span class="detail-value"><?php echo count($meetings); ?></span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Upcoming Meetings:</span>
-                        <span class="detail-value">
-                            <?php 
-                            $upcoming = array_filter($meetings, function($m) { 
-                                return $m['status'] === 'scheduled' && strtotime($m['meeting_date']) > time(); 
-                            });
-                            echo count($upcoming);
-                            ?>
-                        </span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Documents:</span>
-                        <span class="detail-value"><?php echo count($documents); ?></span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Last Activity:</span>
-                        <span class="detail-value">
-                            <?php if (!empty($activities)): ?>
-                                <?php echo Utils::formatDate($activities[0]['created_at']); ?>
-                            <?php else: ?>
-                                No activity
-                            <?php endif; ?>
-                        </span>
-                    </div>
+                <div style="margin-top:20px;display:flex;gap:10px;">
+                    <button type="submit" class="cd-btn cd-btn-sky">Save Changes</button>
+                    <button type="button" class="cd-btn cd-btn-gray" onclick="document.getElementById('editClientModal').classList.remove('open')">Cancel</button>
                 </div>
-            </div>
-
-            <!-- Tab Navigation -->
-            <div class="tab-nav">
-                <button class="tab-btn active" onclick="showDetailTab('communications-detail')">💬 Communications</button>
-                <button class="tab-btn" onclick="showDetailTab('meetings-detail')">📅 Meetings</button>
-                <button class="tab-btn" onclick="showDetailTab('documents-detail')">📄 Documents</button>
-                <button class="tab-btn" onclick="showDetailTab('activity-detail')">📈 Activity Timeline</button>
-            </div>
-
-            <!-- Communications Tab -->
-            <div id="communications-detail" class="tab-content-detail active">
-                <h3>Recent Communications</h3>
-                <?php if (!empty($communications)): ?>
-                    <?php foreach ($communications as $comm): ?>
-                        <div class="communication-item">
-                            <div class="item-header">
-                                <span class="item-title"><?php echo Security::escapeHTML($comm['subject']); ?></span>
-                                <span class="item-date"><?php echo Utils::formatDate($comm['created_at']); ?></span>
-                            </div>
-                            <div style="margin-bottom: 0.5rem;">
-                                <strong>Type:</strong> <?php echo ucfirst($comm['contact_type']); ?> |
-                                <strong>Priority:</strong> <span class="priority-badge priority-<?php echo $comm['priority']; ?>"><?php echo ucfirst($comm['priority']); ?></span> |
-                                <strong>Status:</strong> <span class="status-badge status-<?php echo $comm['status']; ?>"><?php echo ucfirst($comm['status']); ?></span>
-                            </div>
-                            <?php if ($comm['contact_person']): ?>
-                                <div style="margin-bottom: 0.5rem;">
-                                    <strong>Contact Person:</strong> <?php echo Security::escapeHTML($comm['contact_person']); ?>
-                                </div>
-                            <?php endif; ?>
-                            <div style="margin-bottom: 0.5rem;">
-                                <strong>Message:</strong> <?php echo nl2br(Security::escapeHTML($comm['message'])); ?>
-                            </div>
-                            <?php if ($comm['assigned_to_name']): ?>
-                                <div style="font-size: 0.9rem; color: #666;">
-                                    Assigned to: <?php echo Security::escapeHTML($comm['assigned_to_name']); ?>
-                                </div>
-                            <?php endif; ?>
-                        </div>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <p style="text-align: center; color: #666; font-style: italic; padding: 2rem;">
-                        No communications recorded for this client.
-                    </p>
-                <?php endif; ?>
-            </div>
-
-            <!-- Meetings Tab -->
-            <div id="meetings-detail" class="tab-content-detail">
-                <h3>Client Meetings</h3>
-                <?php if (!empty($meetings)): ?>
-                    <?php foreach ($meetings as $meeting): ?>
-                        <div class="meeting-item">
-                            <div class="item-header">
-                                <span class="item-title"><?php echo Security::escapeHTML($meeting['meeting_title']); ?></span>
-                                <span class="item-date"><?php echo Utils::formatDate($meeting['meeting_date']); ?></span>
-                            </div>
-                            <div style="margin-bottom: 0.5rem;">
-                                <strong>Status:</strong> <span class="status-badge status-<?php echo $meeting['status']; ?>"><?php echo ucfirst($meeting['status']); ?></span> |
-                                <strong>Duration:</strong> <?php echo $meeting['duration']; ?> minutes
-                            </div>
-                            <?php if ($meeting['location']): ?>
-                                <div style="margin-bottom: 0.5rem;">
-                                    <strong>Location:</strong> <?php echo Security::escapeHTML($meeting['location']); ?>
-                                </div>
-                            <?php endif; ?>
-                            <?php if ($meeting['attendees']): ?>
-                                <div style="margin-bottom: 0.5rem;">
-                                    <strong>Attendees:</strong> <?php echo Security::escapeHTML($meeting['attendees']); ?>
-                                </div>
-                            <?php endif; ?>
-                            <?php if ($meeting['agenda']): ?>
-                                <div style="margin-bottom: 0.5rem;">
-                                    <strong>Agenda:</strong> <?php echo nl2br(Security::escapeHTML($meeting['agenda'])); ?>
-                                </div>
-                            <?php endif; ?>
-                            <?php if ($meeting['notes']): ?>
-                                <div style="margin-bottom: 0.5rem;">
-                                    <strong>Notes:</strong> <?php echo nl2br(Security::escapeHTML($meeting['notes'])); ?>
-                                </div>
-                            <?php endif; ?>
-                            <div style="font-size: 0.9rem; color: #666;">
-                                Created by: <?php echo Security::escapeHTML($meeting['created_by_name']); ?>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <p style="text-align: center; color: #666; font-style: italic; padding: 2rem;">
-                        No meetings scheduled for this client.
-                    </p>
-                <?php endif; ?>
-            </div>
-
-            <!-- Documents Tab -->
-            <div id="documents-detail" class="tab-content-detail">
-                <h3>Client Documents</h3>
-                <?php if (!empty($documents)): ?>
-                    <?php foreach ($documents as $doc): ?>
-                        <div class="document-item">
-                            <div class="item-header">
-                                <span class="item-title"><?php echo Security::escapeHTML($doc['document_name']); ?></span>
-                                <span class="item-date"><?php echo Utils::formatDate($doc['uploaded_at']); ?></span>
-                            </div>
-                            <div style="margin-bottom: 0.5rem;">
-                                <strong>Type:</strong> <?php echo ucfirst($doc['document_type']); ?>
-                            </div>
-                            <?php if ($doc['description']): ?>
-                                <div style="margin-bottom: 0.5rem;">
-                                    <strong>Description:</strong> <?php echo Security::escapeHTML($doc['description']); ?>
-                                </div>
-                            <?php endif; ?>
-                            <div style="font-size: 0.9rem; color: #666;">
-                                Uploaded by: <?php echo Security::escapeHTML($doc['uploaded_by_name']); ?>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <p style="text-align: center; color: #666; font-style: italic; padding: 2rem;">
-                        No documents uploaded for this client.
-                    </p>
-                <?php endif; ?>
-            </div>
-
-            <!-- Activity Timeline Tab -->
-            <div id="activity-detail" class="tab-content-detail">
-                <h3>Activity Timeline</h3>
-                <?php if (!empty($activities)): ?>
-                    <?php foreach ($activities as $activity): ?>
-                        <div class="activity-item">
-                            <div class="item-header">
-                                <span class="item-title"><?php echo ucfirst(str_replace('_', ' ', $activity['activity_type'])); ?></span>
-                                <span class="item-date"><?php echo Utils::formatDate($activity['created_at']); ?></span>
-                            </div>
-                            <div style="margin-bottom: 0.5rem;">
-                                <?php echo Security::escapeHTML($activity['description']); ?>
-                            </div>
-                            <div style="font-size: 0.9rem; color: #666;">
-                                by <?php echo Security::escapeHTML($activity['user_name']); ?>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <p style="text-align: center; color: #666; font-style: italic; padding: 2rem;">
-                        No activity recorded for this client.
-                    </p>
-                <?php endif; ?>
-            </div>
-        <?php endif; ?>
+            </form>
+        </div>
     </div>
 
-    <script src="../js/notification.js"></script>  
+    <!-- Update Meeting Modal -->
+    <div class="cd-modal-overlay" id="mtUpdateModal">
+        <div class="cd-modal">
+            <button class="cd-modal-close" onclick="document.getElementById('mtUpdateModal').classList.remove('open')">✕</button>
+            <h2>Update Meeting</h2>
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
+                <input type="hidden" name="update_meeting" value="1">
+                <input type="hidden" name="meeting_id" id="mt_update_id">
+                <div class="cd-form-grid">
+                    <div class="cd-field full" id="mt_update_title" style="font-size:.85rem;color:#6b7280;"></div>
+                    <div class="cd-field"><label>Status</label>
+                        <select name="status" id="mt_update_status">
+                            <option value="scheduled">Scheduled</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="cd-field full"><label>Notes / Outcome</label><textarea name="notes" id="mt_update_notes"></textarea></div>
+                </div>
+                <div style="margin-top:20px;display:flex;gap:10px;">
+                    <button type="submit" class="cd-btn cd-btn-sky">Save</button>
+                    <button type="button" class="cd-btn cd-btn-gray" onclick="document.getElementById('mtUpdateModal').classList.remove('open')">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="../js/notification.js"></script>
     <script>
-        function showDetailTab(tabName) {
-            // Hide all tab contents
-            const tabContents = document.querySelectorAll('.tab-content-detail');
-            tabContents.forEach(content => {
-                content.classList.remove('active');
-            });
-            
-            // Remove active class from all tab buttons
-            const tabBtns = document.querySelectorAll('.tab-btn');
-            tabBtns.forEach(btn => {
-                btn.classList.remove('active');
-            });
-            
-            // Show selected tab content
-            document.getElementById(tabName).classList.add('active');
-            
-            // Add active class to clicked tab button
-            event.target.classList.add('active');
-        }
+    function switchTab(name) {
+        document.querySelectorAll('.cd-tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.cd-tab').forEach(el => el.classList.remove('active'));
+        const c = document.getElementById('tab-'+name);
+        if (c) c.classList.add('active');
+        document.querySelectorAll('.cd-tab').forEach(b => {
+            if (b.textContent.toLowerCase().includes(name.slice(0,4))) b.classList.add('active');
+        });
+    }
+    function toggleCD(id) {
+        const body = document.getElementById(id+'-body');
+        const arr  = document.getElementById(id+'-arrow');
+        if (!body) return;
+        const open = body.classList.toggle('open');
+        if (arr) arr.textContent = open ? '▲' : '▼';
+    }
+    function openMtUpdate(mt) {
+        document.getElementById('mt_update_id').value    = mt.id;
+        document.getElementById('mt_update_notes').value = mt.notes || '';
+        document.getElementById('mt_update_title').textContent = mt.meeting_title;
+        const s = document.getElementById('mt_update_status');
+        for (let i=0;i<s.options.length;i++) if (s.options[i].value===(mt.status||'scheduled')) { s.selectedIndex=i; break; }
+        document.getElementById('mtUpdateModal').classList.add('open');
+    }
+    document.querySelectorAll('.cd-modal-overlay').forEach(o => {
+        o.addEventListener('click', e => { if (e.target===o) o.classList.remove('open'); });
+    });
     </script>
 </body>
 </html>
