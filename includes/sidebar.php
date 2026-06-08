@@ -32,8 +32,7 @@ function _nav($href, $icon, $label, $active) {
 <aside class="app-sidebar" id="sidebar">
     <nav class="sidebar-nav">
         <div class="nav-section-label">Main</div>
-        <?= _nav($_ab . 'dashboard.php', '📊', 'Dashboard',  $_tab === 'dashboard') ?>
-        <?= _nav($_ab . 'profile.php',   '👤', 'My Profile', $_tab === 'profile')  ?>
+        <?= _nav($_ab . 'dashboard.php', '📊', 'Dashboard', $_tab === 'dashboard') ?>
 
         <div class="nav-section-label">Departments</div>
         <?= _nav($_nb . 'projects.php',  '📋', 'Projects',              $_tab === 'projects')  ?>
@@ -49,10 +48,5 @@ function _nav($href, $icon, $label, $active) {
         <?= _nav($_nb . 'insights.php',  '📉', 'Insights',  $_tab === 'insights') ?>
         <?= _nav($_nb . 'reports.php',   '📑', 'Reports',   $_tab === 'reports')  ?>
 
-        <?php if ($_role_s === 'admin'): ?>
-            <div class="nav-divider"></div>
-            <div class="nav-section-label">Admin</div>
-            <?= _nav($_ab . 'admin/activity_log.php', '🔧', 'Activity Log', $_cur === 'activity_log.php') ?>
-        <?php endif; ?>
     </nav>
 </aside>
