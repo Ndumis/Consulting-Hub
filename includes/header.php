@@ -25,7 +25,7 @@ try {
         FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 12");
     $s->execute([$_hdr_uid]);
     $_hdr_notifs = $s->fetchAll(PDO::FETCH_ASSOC);
-} catch (Exception $e) {
+} catch (Throwable $e) {
     $_hdr_notif_count = 0;
     $_hdr_notifs      = [];
 }

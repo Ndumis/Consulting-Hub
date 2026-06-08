@@ -63,7 +63,7 @@ class ActivityLogger {
             
             return true;
             
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             // Log error but don't break the application
             error_log("ActivityLogger Error: " . $e->getMessage());
             return false;
@@ -143,7 +143,7 @@ class ActivityLogger {
             
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
             
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             error_log("ActivityLogger Error: " . $e->getMessage());
             return [];
         }
@@ -168,7 +168,7 @@ class ActivityLogger {
             
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
             
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             error_log("ActivityLogger Error: " . $e->getMessage());
             return [];
         }

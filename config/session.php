@@ -2,9 +2,9 @@
 // Session bootstrap - centralized session configuration
 // Must be included before any session_start() calls
 
-// Enable PHP error logging
+// Enable PHP error logging — use a cross-platform writable path
 ini_set('log_errors', 1);
-ini_set('error_log', '/tmp/php_errors.log');
+ini_set('error_log', sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'kconsulting_errors.log');
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
@@ -24,14 +24,7 @@ session_set_cookie_params([
     'samesite' => 'Lax'
 ]);
 
-// Ensure session directory is writable
-$session_save_path = sys_get_temp_dir() . '/sessions';
-if (!is_dir($session_save_path)) {
-    mkdir($session_save_path, 0755, true);
-}
-session_save_path($session_save_path);
-
-// Start the session
+// Use PHP's default session save path (always writable on any OS/WAMP install)
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

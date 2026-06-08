@@ -19,7 +19,7 @@ if (isset($_SESSION['user_id'])) {
         $db = $database->getConnection();
         $logger = new ActivityLogger($db);
         $logger->logPageVisit('Dashboard', 'User accessed main dashboard');
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         error_log("Activity logging failed: " . $e->getMessage());
     }
 }
@@ -157,7 +157,7 @@ try {
     $stmt->execute();
     $stats['pending_leave_requests'] = $stmt->fetch(PDO::FETCH_ASSOC)['pending_leave_requests'] ?? 0;
 
-} catch (Exception $e) {
+} catch (Throwable $e) {
     error_log("Dashboard statistics error: " . $e->getMessage());
     // Continue with default values
 }
@@ -251,7 +251,7 @@ try {
     $stmt = $db->prepare($query);
     $stmt->execute();
     $upcoming_events = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (Exception $e) {
+} catch (Throwable $e) {
     error_log("Upcoming events error: " . $e->getMessage());
     $upcoming_events = [];
 }
@@ -266,7 +266,7 @@ try {
     foreach ($project_data as $row) {
         $project_progress[$row['status']] = $row['count'];
     }
-} catch (Exception $e) {
+} catch (Throwable $e) {
     error_log("Project progress error: " . $e->getMessage());
 }
 
@@ -280,7 +280,7 @@ try {
     foreach ($dept_data as $row) {
         $department_data[$row['department']] = $row['count'];
     }
-} catch (Exception $e) {
+} catch (Throwable $e) {
     error_log("Department data error: " . $e->getMessage());
     $department_data = ['IT' => 1, 'Marketing' => 1, 'Business Development' => 1, 'Finance' => 1, 'HR' => 1, 'Clients' => 1];
 }
@@ -299,7 +299,7 @@ try {
     $stmt = $db->prepare($query);
     $stmt->execute();
     $recent_blog_posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (Exception $e) {
+} catch (Throwable $e) {
     error_log("Blog posts error: " . $e->getMessage());
     $recent_blog_posts = [];
 }
@@ -330,7 +330,7 @@ try {
         $s = $db->prepare("SELECT COUNT(*) FROM bd_leads WHERE DATE_FORMAT(created_at,'%Y-%m')=?");
         $s->execute([$ym]); $mt_leads[] = (int)$s->fetchColumn();
     }
-} catch (Exception $e) { /* silent */ }
+} catch (Throwable $e) { /* silent */ }
 $monthly_trends = [
     'labels'             => $mt_months,
     'projects_completed' => $mt_proj,
@@ -492,7 +492,7 @@ try {
             } catch(Exception $e) {}
             break;
     }
-} catch (Exception $e) {
+} catch (Throwable $e) {
     error_log("Personal stats error: " . $e->getMessage());
 }
 
