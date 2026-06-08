@@ -3,9 +3,9 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost:3306
--- Generation Time: Nov 01, 2025 at 09:21 PM
+-- Generation Time: Jun 08, 2026 at 06:32 PM
 -- Server version: 10.5.29-MariaDB
--- PHP Version: 8.4.13
+-- PHP Version: 8.4.21
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -20,6 +20,81 @@ SET time_zone = "+00:00";
 --
 -- Database: `thekcaar_kconsulting`
 --
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `bd_activities`
+--
+
+CREATE TABLE `bd_activities` (
+  `id` int(11) NOT NULL,
+  `lead_id` int(11) DEFAULT NULL,
+  `activity_type` enum('call','email','meeting','follow_up','proposal') NOT NULL,
+  `activity_date` datetime NOT NULL,
+  `description` text DEFAULT NULL,
+  `outcome` text DEFAULT NULL,
+  `next_action` text DEFAULT NULL,
+  `next_action_date` date DEFAULT NULL,
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `bd_leads`
+--
+
+CREATE TABLE `bd_leads` (
+  `id` int(11) NOT NULL,
+  `company_name` varchar(255) NOT NULL,
+  `contact_person` varchar(100) DEFAULT NULL,
+  `email` varchar(100) DEFAULT NULL,
+  `phone` varchar(20) DEFAULT NULL,
+  `industry` varchar(50) DEFAULT NULL,
+  `status` enum('new','contacted','meeting_booked','proposal_sent','client') DEFAULT 'new',
+  `lead_score` int(11) DEFAULT 0,
+  `last_contact_date` date DEFAULT NULL,
+  `next_follow_up` date DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `bd_targets`
+--
+
+CREATE TABLE `bd_targets` (
+  `id` int(11) NOT NULL,
+  `month_year` date NOT NULL,
+  `lead_target` int(11) DEFAULT 0,
+  `meeting_target` int(11) DEFAULT 0,
+  `client_target` int(11) DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `bd_tasks`
+--
+
+CREATE TABLE `bd_tasks` (
+  `id` int(11) NOT NULL,
+  `task_description` text NOT NULL,
+  `due_date` datetime DEFAULT NULL,
+  `assigned_to` int(11) DEFAULT NULL,
+  `status` enum('pending','completed','cancelled') DEFAULT 'pending',
+  `related_lead_id` int(11) DEFAULT NULL,
+  `priority` enum('low','medium','high') DEFAULT 'medium',
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
 
 -- --------------------------------------------------------
 
@@ -144,17 +219,8 @@ CREATE TABLE `clients` (
 --
 
 INSERT INTO `clients` (`id`, `name`, `email`, `phone`, `company`, `address`, `status`, `created_at`) VALUES
-(1, 'TechCorp', 'contact@techcorp.com', NULL, 'TechCorp Solutions Inc.', NULL, 'active', '2025-09-11 10:40:33'),
-(2, 'GreenEnergy', 'info@greenenergy.com', NULL, 'GreenEnergy Solutions', NULL, 'active', '2025-09-11 10:40:33'),
-(3, 'RetailPlus', 'sales@retailplus.com', NULL, 'RetailPlus Ltd', NULL, 'prospect', '2025-09-11 10:40:33'),
-(4, 'TechCorp Solutions', 'contact@techcorp.com', '+1-555-0101', 'TechCorp Solutions Inc.', '123 Tech Street, Silicon Valley, CA 94000', 'active', '2025-09-11 10:53:23'),
-(5, 'Green Energy Ltd', 'info@greenenergy.com', '+1-555-0102', 'Green Energy Limited', '456 Solar Avenue, Austin, TX 73000', 'active', '2025-09-11 10:53:23'),
-(6, 'Fashion Forward', 'hello@fashionforward.com', '+1-555-0103', 'Fashion Forward LLC', '789 Style Boulevard, New York, NY 10001', 'prospect', '2025-09-11 10:53:24'),
-(7, 'HealthTech Innovations', 'contact@healthtech.com', '+1-555-0104', 'HealthTech Innovations Corp', '321 Medical Plaza, Boston, MA 02101', 'active', '2025-09-11 10:53:24'),
-(8, 'EduLearn Platform', 'support@edulearn.com', '+1-555-0105', 'EduLearn Educational Services', '654 Learning Lane, Chicago, IL 60601', 'prospect', '2025-09-11 10:53:25'),
-(9, 'RetailMax Chain', 'business@retailmax.com', '+1-555-0106', 'RetailMax Chain Stores', '987 Commerce Drive, Miami, FL 33101', 'active', '2025-09-11 10:53:25'),
-(10, 'StartupX', 'founders@startupx.com', '+1-555-0107', 'StartupX Technologies', '147 Innovation Hub, Seattle, WA 98101', 'prospect', '2025-09-11 10:53:25'),
-(11, 'Global Ride (Pty)Ltd', '', '+1-555-0108', 'Manufacturing Plus Industries', '258 Industrial Park, Detroit, MI 48201', 'prospect', '2025-09-11 10:53:26');
+(12, 'Gino', 'info@sewelara.co.za', '+27 76 394 0024', 'Sewelara Security & Cleaning (Pty) Ltd', 'Johannesburg, Gauteng, South Africa', 'active', '2026-02-27 07:01:02'),
+(13, 'Shai', 'jonathanshai07@gmail.com', '+27 72 963 8748', 'Jonathan Shai', 'Guateng', 'active', '2026-06-06 12:08:00');
 
 -- --------------------------------------------------------
 
@@ -236,7 +302,11 @@ INSERT INTO `consultation_requests` (`id`, `company`, `industry`, `company_size`
 (2, 'KConsulting Firm', 'other', 'startup', 'MS SINQOBILE C NDLOVU', 'coordinator', 'christobellndlovu@gmail.com', '0698367250', 'marketing', 'strategic', 'immediate', 'under-50k', 'Our pain pointsare our digital marketing.', 'We want to grow our social media through paid strategic marketing campaigns that engage our audience.', 'Non.', 'yes', 'immediate', 'early', 'in-person', 'durban', 'afternoon', '', 0, '2025-08-22 22:37:49', NULL),
 (3, 'KConsulting Firm', 'other', 'startup', 'MS SINQOBILE C NDLOVU', 'cto', 'christobellndlovu@gmail.com', '0698367250', 'marketing', 'strategic', 'immediate', 'under-50k', ' b', 'hhb', '', 'influencer', 'month', 'many', 'virtual', 'cape-town', 'afternoon', '', 0, '2025-08-22 23:10:20', NULL),
 (4, 'KConsulting', 'healthcare', 'startup', 'KHAYELIHLE SIMELANE', 'coordinator', 'mkhayguze@gmail.com', '0653307703', 'software-development', 'Basic', 'long', 'over-1m', 'No one is building and Improving current solutions', 'Improving and building new healthcare solution', '.Net, Angular, SQL and API', 'yes', 'longer', 'no', 'flexible', 'neutral', 'morning', '', 0, '2025-08-23 16:43:50', NULL),
-(5, 'NSFAS', 'government', 'large', 'KHAYELIHLE SIMELANE', 'manager', 'mkhayguze@gmail.com', '0653307703', 'it-consulting', 'Basic', 'medium', '500k-1m', 'Our consultation process ensures we can deliver the highest value for your investment. We work with businesses ready for transformation.', 'Our consultation process ensures we can deliver the highest value for your investment. We work with businesses ready for transformation.', 'Our consultation process ensures we can deliver the highest value for your investment. We work with businesses ready for transformation.', 'yes', 'month', 'few', 'virtual', 'neutral', 'afternoon', 'Our consultation process ensures we can deliver the highest value for your investment. We work with businesses ready for transformation.', 0, '2025-09-12 11:24:25', NULL);
+(5, 'NSFAS', 'government', 'large', 'KHAYELIHLE SIMELANE', 'manager', 'mkhayguze@gmail.com', '0653307703', 'it-consulting', 'Basic', 'medium', '500k-1m', 'Our consultation process ensures we can deliver the highest value for your investment. We work with businesses ready for transformation.', 'Our consultation process ensures we can deliver the highest value for your investment. We work with businesses ready for transformation.', 'Our consultation process ensures we can deliver the highest value for your investment. We work with businesses ready for transformation.', 'yes', 'month', 'few', 'virtual', 'neutral', 'afternoon', 'Our consultation process ensures we can deliver the highest value for your investment. We work with businesses ready for transformation.', 0, '2025-09-12 11:24:25', NULL),
+(6, 'Work With Us Records', 'Financial Services', 'Startup (1-10)', 'MR KHAYELIHLE N SIMELANE', 'CEO/President', 'mkhayguze@gmail.com', '0653307703', 'IT Consulting', 'Basic', 'Immediate', 'Under R50,000', 'WFDSADS', 'DGSDSDGDF', 'DGSGSF', 'Yes, I make the final decision', 'Within 2 weeks', 'Yes, considering 1-2 others', 'In-person meeting', 'Neutral location', 'Morning', 'DGSDGSFGSRFA', 0, '2026-04-08 17:04:08', NULL),
+(7, 'KConsulting Firm', 'Healthcare', 'Small (11-50)', 'Sinqobile Christobel Ndlovu', 'Department Manager', 'christobellndlovu@gmail.com', '0698367250', 'Software Development', 'Strategic', 'Immediate', 'R500,000 - R1,000,000', 'l', 'k', 'k', 'I make recommendations', 'Within 1 month', 'Yes, considering 1-2 others', 'Virtual meeting', 'Neutral location', 'Evening', 'm', 0, '2026-04-08 17:09:49', NULL),
+(8, 'KConsulting Firm (Pty)Ltd', 'Education', 'Medium (51-200)', 'Christobel Ndlovu', 'CTO/IT Director', 'christobellndlovu@gmail.com', '0817641311', 'Software Development', 'Strategic', 'Medium-term', 'R150,000 - R500,000', 'M', 'M', 'M', 'Yes, I make the final decision', 'Within 1 month', 'Yes, considering 1-2 others', 'In-person meeting', 'Neutral location', 'Afternoon', '', 0, '2026-04-17 16:44:51', NULL),
+(9, 'KConsulting Firm (Pty)Ltd', 'Healthcare', 'Startup (1-10)', 'Christobel Ndlovu', 'CEO/President', 'christobellndlovu@gmail.com', '0698367250', 'Software Development', 'Basic', 'Immediate', 'R50,000 - R150,000', 'mmm', ',m', 'nj', 'Yes, I make the final decision', 'Within 2 weeks', 'No, you&#039;re our preferred choice', 'In-person meeting', 'Neutral location', 'Afternoon', 'jn', 0, '2026-05-17 14:16:15', NULL);
 
 -- --------------------------------------------------------
 
@@ -476,12 +546,8 @@ CREATE TABLE `invoices` (
 --
 
 INSERT INTO `invoices` (`id`, `invoice_number`, `quotation_id`, `client_id`, `project_id`, `invoice_date`, `due_date`, `status`, `subtotal`, `vat_rate`, `vat_amount`, `total_amount`, `paid_amount`, `notes`, `created_by`, `created_at`, `updated_at`) VALUES
-(2, 'INV-2025-DEMO', 4, 1, NULL, '2025-09-11', '2025-10-11', 'draft', 2000.00, 0.1500, 300.00, 2300.00, 0.00, 'Demo invoice converted from QUO-2025-TEST', 1, '2025-09-11 10:40:33', '2025-09-11 10:40:33'),
-(3, 'INV-2025-001', 4, 1, 4, '2024-09-18', '2024-10-18', 'sent', 12500.00, 0.1500, 1875.00, 14375.00, 5000.00, 'Partial payment received. Balance due on completion.', 9, '2025-09-11 10:55:14', '2025-09-11 10:55:14'),
-(4, 'INV-2025-002', NULL, 3, 3, '2024-09-12', '2024-10-12', 'sent', 8900.00, 0.1500, 1335.00, 10235.00, 0.00, 'Database migration services as per signed agreement.', 10, '2025-09-11 10:55:15', '2025-09-11 10:55:15'),
-(5, 'INV-2025-003', 7, 7, 7, '2024-09-30', '2024-10-30', 'paid', 9500.00, 0.1500, 1425.00, 10925.00, 10925.00, 'Analytics dashboard development - converted from quotation.', 10, '2025-09-11 10:55:15', '2025-09-12 10:36:59'),
-(6, 'INV-2025-004', NULL, 2, 2, '2024-09-08', '2024-10-08', 'paid', 6800.00, 0.1500, 1020.00, 7820.00, 7820.00, 'Consultation and project planning phase completed.', 9, '2025-09-11 10:55:16', '2025-09-11 10:55:16'),
-(7, 'INV-2025-005', NULL, 5, 5, '2024-09-22', '2024-10-22', 'sent', 11250.00, 0.1500, 1687.50, 12937.50, 0.00, 'Security audit phase 1 - vulnerability assessment completed.', 10, '2025-09-11 10:55:16', '2025-09-11 10:55:16');
+(9, 'INV-2026-0233', 12, 12, NULL, '2026-02-27', '2026-03-29', 'paid', 5800.00, 0.0000, 0.00, 5800.00, 5800.00, 'Converted from quotation: QUO-2026-4363', 1, '2026-02-27 13:10:39', '2026-03-10 14:53:52'),
+(10, 'INV-2026-4488', NULL, 12, NULL, '2026-06-06', '2026-07-06', 'draft', 16.00, 0.1500, 2.40, 18.40, 0.00, 'klk', 1, '2026-06-06 11:44:46', '2026-06-06 11:44:46');
 
 -- --------------------------------------------------------
 
@@ -504,25 +570,9 @@ CREATE TABLE `invoice_items` (
 --
 
 INSERT INTO `invoice_items` (`id`, `invoice_id`, `description`, `quantity`, `unit_price`, `total_price`, `created_at`) VALUES
-(1, 2, 'Software Development - Phase 1', 1.00, 1500.00, 1500.00, '2025-09-11 10:40:34'),
-(2, 2, 'Testing & QA Services', 1.00, 500.00, 500.00, '2025-09-11 10:40:34'),
-(6, 2, 'Database Analysis', 20.00, 120.00, 2400.00, '2025-09-11 10:55:18'),
-(7, 2, 'Migration Planning', 15.00, 110.00, 1650.00, '2025-09-11 10:55:19'),
-(8, 2, 'Data Backup Services', 12.00, 105.00, 1260.00, '2025-09-11 10:55:19'),
-(9, 2, 'Initial Migration Phase', 28.00, 135.00, 3780.00, '2025-09-11 10:55:19'),
-(10, 3, 'Dashboard Architecture', 25.00, 130.00, 3250.00, '2025-09-11 10:55:20'),
-(11, 3, 'Frontend Development', 35.00, 120.00, 4200.00, '2025-09-11 10:55:20'),
-(12, 3, 'Data Integration', 20.00, 100.00, 2000.00, '2025-09-11 10:55:21'),
-(13, 4, 'Project Consultation', 16.00, 150.00, 2400.00, '2025-09-11 10:55:21'),
-(14, 4, 'Technical Specification', 20.00, 125.00, 2500.00, '2025-09-11 10:55:22'),
-(15, 4, 'Architecture Planning', 18.00, 100.00, 1800.00, '2025-09-11 10:55:22'),
-(16, 5, 'Security Assessment', 45.00, 140.00, 6300.00, '2025-09-11 10:55:23'),
-(17, 5, 'Vulnerability Testing', 30.00, 130.00, 3900.00, '2025-09-11 10:55:23'),
-(18, 5, 'Compliance Review', 15.00, 120.00, 1800.00, '2025-09-11 10:55:23'),
-(19, 6, 'Consulting Services', 4.00, 350.00, 1400.00, '2025-09-11 11:20:36'),
-(20, 6, 'Implementation Support', 6.00, 220.00, 1320.00, '2025-09-11 11:20:37'),
-(21, 7, 'Consulting Services', 4.00, 350.00, 1400.00, '2025-09-11 11:20:37'),
-(22, 7, 'Implementation Support', 6.00, 220.00, 1320.00, '2025-09-11 11:20:38');
+(3, 9, 'Prototype Development (Completed) (All features listed in Section A)', 1.00, 5500.00, 5500.00, '2026-02-27 13:10:39'),
+(4, 9, 'Monthly Cloud hosting & Support [Prototype]', 1.00, 300.00, 300.00, '2026-02-27 13:10:39'),
+(5, 10, 'mnn', 4.00, 4.00, 16.00, '2026-06-06 11:44:46');
 
 -- --------------------------------------------------------
 
@@ -601,11 +651,11 @@ CREATE TABLE `marketing_blog_posts` (
 --
 
 INSERT INTO `marketing_blog_posts` (`id`, `title`, `content`, `excerpt`, `featured_image`, `category`, `tags`, `status`, `publish_date`, `client_id`, `campaign_id`, `author_id`, `created_at`, `updated_at`) VALUES
-(1, '10 Digital Marketing Trends for 2025', 'The digital marketing landscape continues to evolve at breakneck speed. As we move into 2025, businesses must adapt to new technologies, changing consumer behaviors, and emerging platforms to stay competitive...', NULL, NULL, 'Digital Marketing', 'trends, marketing, 2025, AI', 'published', '2025-09-11', 1, 1, 6, '2025-09-11 13:25:26', '2025-09-12 07:36:20'),
-(2, 'Building Brand Authority Through Content Marketing', 'Content marketing remains one of the most effective ways to build brand authority and establish thought leadership in your industry...', NULL, NULL, 'Content Strategy', 'content marketing, brand authority', 'published', '2025-09-08', 2, 2, 7, '2025-09-11 13:25:26', '2025-09-12 07:36:29'),
-(3, 'Social Media Marketing Best Practices for Small Businesses', 'Social media marketing can be overwhelming for small businesses with limited resources. However, with the right strategy and focus, small businesses can compete effectively...', NULL, NULL, 'Social Media', 'social media, small business', 'published', '2025-09-04', 3, NULL, 6, '2025-09-11 13:25:27', '2025-09-12 07:38:07'),
-(4, 'Email Marketing Automation: A Complete Guide', 'Email marketing automation allows businesses to nurture leads and maintain customer relationships at scale...', '', '', 'technology', 'email marketing, automation', 'scheduled', '2025-09-06', 1, 3, 7, '2025-09-11 13:25:27', '2025-09-12 11:05:58'),
-(5, 'The Future of E-commerce: Trends to Watch', 'The e-commerce industry continues to evolve rapidly, driven by technological advances and changing consumer expectations...', NULL, NULL, 'E-commerce', 'ecommerce, future trends', 'published', '2025-09-09', 2, NULL, 5, '2025-09-11 13:25:27', '2025-09-12 07:37:54');
+(1, '10 Digital Marketing Trends for 2025', 'The digital marketing landscape continues to evolve at breakneck speed. As we move into 2025, businesses must adapt to new technologies, changing consumer behaviors, and emerging platforms to stay competitive...', NULL, NULL, 'Digital Marketing', 'trends, marketing, 2025, AI', 'published', '2025-09-11', NULL, 1, 6, '2025-09-11 13:25:26', '2025-09-12 07:36:20'),
+(2, 'Building Brand Authority Through Content Marketing', 'Content marketing remains one of the most effective ways to build brand authority and establish thought leadership in your industry...', NULL, NULL, 'Content Strategy', 'content marketing, brand authority', 'published', '2025-09-08', NULL, 2, 7, '2025-09-11 13:25:26', '2025-09-12 07:36:29'),
+(3, 'Social Media Marketing Best Practices for Small Businesses', 'Social media marketing can be overwhelming for small businesses with limited resources. However, with the right strategy and focus, small businesses can compete effectively...', NULL, NULL, 'Social Media', 'social media, small business', 'published', '2025-09-04', NULL, NULL, 6, '2025-09-11 13:25:27', '2025-09-12 07:38:07'),
+(4, 'Email Marketing Automation: A Complete Guide', 'Email marketing automation allows businesses to nurture leads and maintain customer relationships at scale...', '', '', 'technology', 'email marketing, automation', 'scheduled', '2025-09-06', NULL, 3, 7, '2025-09-11 13:25:27', '2025-09-12 11:05:58'),
+(5, 'The Future of E-commerce: Trends to Watch', 'The e-commerce industry continues to evolve rapidly, driven by technological advances and changing consumer expectations...', NULL, NULL, 'E-commerce', 'ecommerce, future trends', 'published', '2025-09-09', NULL, NULL, 5, '2025-09-11 13:25:27', '2025-09-12 07:37:54');
 
 -- --------------------------------------------------------
 
@@ -671,7 +721,8 @@ CREATE TABLE `money_flow` (
 --
 
 INSERT INTO `money_flow` (`id`, `transaction_type`, `category`, `amount`, `description`, `transaction_date`, `client_id`, `project_id`, `invoice_id`, `created_by`, `created_at`) VALUES
-(1, 'income', 'Payment', 10925.00, 'Payment for invoice INV-2025-003', '2025-09-12', 7, NULL, 5, 1, '2025-09-12 10:36:59');
+(2, 'income', 'Invoice', 5800.00, 'Invoice INV-2026-0233 (from quotation QUO-2026-4363)', '2026-02-27', 12, NULL, NULL, 1, '2026-02-27 13:10:39'),
+(3, 'income', 'Payment', 5800.00, 'Payment for invoice INV-2026-0233', '2026-03-10', 12, NULL, 9, 1, '2026-03-10 14:53:52');
 
 -- --------------------------------------------------------
 
@@ -727,14 +778,14 @@ CREATE TABLE `projects` (
 --
 
 INSERT INTO `projects` (`id`, `name`, `description`, `client_id`, `category`, `priority`, `progress`, `status`, `start_date`, `end_date`, `created_at`) VALUES
-(1, 'E-Commerce Website Redesign', 'Complete redesign of client e-commerce platform with modern UI/UX', 1, 'Web Dev', 'high', 75, 'in-progress', '2024-09-01', '2024-11-15', '2025-09-11 10:53:39'),
-(2, 'Mobile App Development', 'Native iOS and Android app for client business management', 2, 'Mobile Dev', 'high', 40, 'in-progress', '2024-08-15', '2024-12-01', '2025-09-11 10:53:39'),
-(3, 'Database Migration Project', 'Migrate legacy database to modern MySQL infrastructure', 3, 'Database', 'medium', 90, 'in-progress', '2024-07-01', '2024-10-30', '2025-09-11 10:53:40'),
-(4, 'API Integration System', 'Integrate third-party payment and shipping APIs', 4, 'Integration', 'medium', 60, 'in-progress', '2024-09-10', '2024-11-30', '2025-09-11 10:53:40'),
-(5, 'Security Audit & Compliance', 'Complete security review and GDPR compliance implementation', 5, 'Security', 'high', 25, 'in-progress', '2024-09-20', '2024-12-15', '2025-09-11 10:53:41'),
-(6, 'Cloud Infrastructure Setup', 'Migrate to AWS cloud infrastructure with auto-scaling', 6, 'DevOps', 'medium', 80, 'in-progress', '2024-08-01', '2024-10-15', '2025-09-11 10:53:41'),
-(7, 'Internal Dashboard Development', 'Custom analytics dashboard for business intelligence', 7, 'Web Dev', 'low', 15, 'pending', '2024-10-01', '2024-12-30', '2025-09-11 10:53:41'),
-(8, 'Legacy System Modernization', 'Upgrade old PHP system to modern framework', 8, 'Modernization', 'high', 5, 'planning', '2024-11-01', '2025-02-28', '2025-09-11 10:53:42');
+(1, 'E-Commerce Website Redesign', 'Complete redesign of client e-commerce platform with modern UI/UX', NULL, 'Web Dev', 'high', 75, 'in-progress', '2024-09-01', '2024-11-15', '2025-09-11 10:53:39'),
+(2, 'Mobile App Development', 'Native iOS and Android app for client business management', NULL, 'Mobile Dev', 'high', 40, 'in-progress', '2024-08-15', '2024-12-01', '2025-09-11 10:53:39'),
+(3, 'Database Migration Project', 'Migrate legacy database to modern MySQL infrastructure', NULL, 'Database', 'medium', 90, 'in-progress', '2024-07-01', '2024-10-30', '2025-09-11 10:53:40'),
+(4, 'API Integration System', 'Integrate third-party payment and shipping APIs', NULL, 'Integration', 'medium', 60, 'in-progress', '2024-09-10', '2024-11-30', '2025-09-11 10:53:40'),
+(5, 'Security Audit & Compliance', 'Complete security review and GDPR compliance implementation', NULL, 'Security', 'high', 25, 'in-progress', '2024-09-20', '2024-12-15', '2025-09-11 10:53:41'),
+(6, 'Cloud Infrastructure Setup', 'Migrate to AWS cloud infrastructure with auto-scaling', NULL, 'DevOps', 'medium', 89, 'in_progress', '2024-08-01', '2024-10-15', '2025-09-11 10:53:41'),
+(7, 'Internal Dashboard Development', 'Custom analytics dashboard for business intelligence', NULL, 'Web Dev', 'low', 15, 'pending', '2024-10-01', '2024-12-30', '2025-09-11 10:53:41'),
+(8, 'Legacy System Modernization', 'Upgrade old PHP system to modern framework', NULL, 'Modernization', 'high', 45, 'on_hold', '2024-11-01', '2025-02-28', '2025-09-11 10:53:42');
 
 -- --------------------------------------------------------
 
@@ -821,21 +872,6 @@ CREATE TABLE `project_revenues` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
---
--- Dumping data for table `project_revenues`
---
-
-INSERT INTO `project_revenues` (`id`, `project_id`, `client_id`, `revenue_type`, `amount`, `received_date`, `payment_method`, `reference_number`, `notes`, `created_by`, `created_at`) VALUES
-(1, 1, 1, 'milestone', 5000.00, '2024-09-10', 'bank_transfer', 'TXN-001-2024', 'First milestone payment for website redesign project', 9, '2025-09-11 10:58:00'),
-(2, 2, 2, 'initial_payment', 7500.00, '2024-09-15', 'credit_card', 'CC-002-2024', 'Initial payment for mobile app development', 9, '2025-09-11 10:58:00'),
-(3, 3, 3, 'final_payment', 8900.00, '2024-09-20', 'wire_transfer', 'WIRE-003-2024', 'Final payment for database migration completion', 10, '2025-09-11 10:58:01'),
-(4, 1, 1, 'milestone', 7500.00, '2024-09-25', 'bank_transfer', 'TXN-004-2024', 'Second milestone payment - frontend completion', 9, '2025-09-11 10:58:01'),
-(5, 4, 4, 'milestone', 6200.00, '2024-09-28', 'check', 'CHK-005-2024', 'API integration milestone payment', 10, '2025-09-11 10:58:01'),
-(6, 6, 6, 'initial_payment', 5500.00, '2024-10-01', 'bank_transfer', 'TXN-006-2024', 'Cloud infrastructure setup initial payment', 9, '2025-09-11 10:58:02'),
-(7, 2, 2, 'milestone', 9200.00, '2024-10-03', 'credit_card', 'CC-007-2024', 'Mobile app beta version completion', 10, '2025-09-11 10:58:02'),
-(8, 5, 5, 'milestone', 8800.00, '2024-10-05', 'wire_transfer', 'WIRE-008-2024', 'Security audit phase 1 completion', 9, '2025-09-11 10:58:03'),
-(9, 7, 7, 'initial_payment', 3500.00, '2024-10-08', 'bank_transfer', 'TXN-009-2024', 'Dashboard development kickoff payment', 10, '2025-09-11 10:58:03');
-
 -- --------------------------------------------------------
 
 --
@@ -861,13 +897,6 @@ CREATE TABLE `purchase_orders` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
---
--- Dumping data for table `purchase_orders`
---
-
-INSERT INTO `purchase_orders` (`id`, `po_number`, `supplier_name`, `supplier_email`, `supplier_phone`, `project_id`, `status`, `order_date`, `expected_delivery`, `subtotal`, `vat_rate`, `vat_amount`, `total_amount`, `notes`, `created_by`, `created_at`) VALUES
-(1, 'PO-2025-001', 'Office Supplies Ltd', NULL, NULL, NULL, 'approved', '2025-09-11', '2025-09-18', 1800.00, 0.1500, 270.00, 2070.00, 'Monthly office supplies and equipment for the team', 1, '2025-09-11 10:40:34');
-
 -- --------------------------------------------------------
 
 --
@@ -883,15 +912,6 @@ CREATE TABLE `purchase_order_items` (
   `total_price` decimal(10,2) NOT NULL DEFAULT 0.00,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Dumping data for table `purchase_order_items`
---
-
-INSERT INTO `purchase_order_items` (`id`, `purchase_order_id`, `description`, `quantity`, `unit_price`, `total_price`, `created_at`) VALUES
-(1, 1, 'Ergonomic Office Chairs', 6.00, 150.00, 900.00, '2025-09-11 10:40:34'),
-(2, 1, 'Standing Desk Converters', 4.00, 125.00, 500.00, '2025-09-11 10:40:34'),
-(3, 1, 'Monitor Arms (Dual)', 5.00, 80.00, 400.00, '2025-09-11 10:40:34');
 
 -- --------------------------------------------------------
 
@@ -923,14 +943,8 @@ CREATE TABLE `quotations` (
 --
 
 INSERT INTO `quotations` (`id`, `quotation_number`, `client_id`, `project_id`, `quotation_date`, `valid_until`, `status`, `subtotal`, `vat_rate`, `vat_amount`, `total_amount`, `notes`, `created_by`, `created_at`, `updated_at`, `converted_invoice_id`) VALUES
-(4, 'QUO-2025-TEST', 1, NULL, '2025-09-11', '2025-10-11', 'completed', 2000.00, 0.1500, 300.00, 2300.00, 'Test quotation for conversion demo', 1, '2025-09-11 10:40:33', '2025-09-11 10:40:34', 2),
-(5, 'QUO-2025-001', 1, 1, '2024-09-01', '2024-10-01', 'sent', 12500.00, 0.1500, 1875.00, 14375.00, 'Website redesign project including responsive design, SEO optimization, and content management system.', 9, '2025-09-11 10:55:04', '2025-09-11 10:55:04', NULL),
-(6, 'QUO-2025-002', 2, 2, '2024-09-05', '2024-10-05', 'draft', 18750.00, 0.1500, 2812.50, 21562.50, 'Mobile application development for iOS and Android platforms with backend API integration.', 9, '2025-09-11 10:55:05', '2025-09-11 10:55:05', NULL),
-(7, 'QUO-2025-003', 3, 3, '2024-09-10', '2024-10-10', 'sent', 8900.00, 0.1500, 1335.00, 10235.00, 'Database migration and optimization services including data backup and recovery procedures.', 10, '2025-09-11 10:55:05', '2025-09-11 10:55:05', NULL),
-(8, 'QUO-2025-004', 4, 4, '2024-09-15', '2024-10-15', 'accepted', 15200.00, 0.1500, 2280.00, 17480.00, 'API integration services for payment processing, shipping, and inventory management systems.', 9, '2025-09-11 10:55:06', '2025-09-11 10:55:06', NULL),
-(9, 'QUO-2025-005', 5, 5, '2024-09-20', '2024-10-20', 'draft', 22100.00, 0.1500, 3315.00, 25415.00, 'Comprehensive security audit and GDPR compliance implementation for enterprise systems.', 10, '2025-09-11 10:55:06', '2025-09-11 10:55:06', NULL),
-(10, 'QUO-2025-006', 6, 6, '2024-09-25', '2024-10-25', 'sent', 13800.00, 0.1500, 2070.00, 15870.00, 'Cloud infrastructure setup and migration to AWS with auto-scaling and monitoring.', 9, '2025-09-11 10:55:07', '2025-09-11 10:55:07', NULL),
-(11, 'QUO-2025-007', 7, 7, '2024-09-28', '2024-10-28', 'accepted', 9500.00, 0.1500, 1425.00, 10925.00, 'Custom analytics dashboard development with real-time reporting capabilities.', 10, '2025-09-11 10:55:07', '2025-09-11 10:55:07', NULL);
+(12, 'QUO-2026-4363', 12, NULL, '2026-02-24', '2026-03-29', 'completed', 5800.00, 0.0000, 0.00, 5800.00, 'NOTES :\r\nDeposit of 50% is required before the commencement of the project.\r\nThe remaining 50% must be paid at the final stage of the handover process.', 1, '2026-02-27 07:33:20', '2026-02-27 13:10:39', 9),
+(13, 'QUO-2026-7255', 13, NULL, '2026-06-06', '2026-07-06', 'draft', 15000.00, 0.0000, 0.00, 15000.00, '', 1, '2026-06-06 13:16:38', '2026-06-06 13:16:38', NULL);
 
 -- --------------------------------------------------------
 
@@ -953,27 +967,11 @@ CREATE TABLE `quotation_items` (
 --
 
 INSERT INTO `quotation_items` (`id`, `quotation_id`, `description`, `quantity`, `unit_price`, `total_price`, `created_at`) VALUES
-(1, 4, 'Software Development - Phase 1', 1.00, 1500.00, 1500.00, '2025-09-11 10:40:33'),
-(2, 4, 'Testing & QA Services', 1.00, 500.00, 500.00, '2025-09-11 10:40:33'),
-(14, 4, 'Payment Gateway Integration', 25.00, 140.00, 3500.00, '2025-09-11 10:55:13'),
-(15, 4, 'Shipping API Implementation', 20.00, 120.00, 2400.00, '2025-09-11 10:55:13'),
-(16, 4, 'Inventory Management System', 35.00, 135.00, 4725.00, '2025-09-11 10:55:14'),
-(17, 4, 'Testing & Quality Assurance', 18.00, 85.00, 1530.00, '2025-09-11 10:55:14'),
-(18, 5, 'Website Development Services', 1.00, 2500.00, 2500.00, '2025-09-11 11:20:29'),
-(19, 5, 'Database Setup & Configuration', 8.00, 125.00, 1000.00, '2025-09-11 11:20:30'),
-(20, 6, 'Website Development Services', 1.00, 2500.00, 2500.00, '2025-09-11 11:20:30'),
-(21, 6, 'Database Setup & Configuration', 8.00, 125.00, 1000.00, '2025-09-11 11:20:31'),
-(22, 7, 'Website Development Services', 1.00, 2500.00, 2500.00, '2025-09-11 11:20:31'),
-(23, 7, 'Database Setup & Configuration', 8.00, 125.00, 1000.00, '2025-09-11 11:20:32'),
-(24, 7, 'User Interface Design', 12.00, 95.00, 1140.00, '2025-09-11 11:20:32'),
-(25, 8, 'Website Development Services', 1.00, 2500.00, 2500.00, '2025-09-11 11:20:33'),
-(26, 8, 'Database Setup & Configuration', 8.00, 125.00, 1000.00, '2025-09-11 11:20:33'),
-(27, 9, 'Website Development Services', 1.00, 2500.00, 2500.00, '2025-09-11 11:20:34'),
-(28, 9, 'Database Setup & Configuration', 8.00, 125.00, 1000.00, '2025-09-11 11:20:34'),
-(29, 10, 'Website Development Services', 1.00, 2500.00, 2500.00, '2025-09-11 11:20:34'),
-(30, 10, 'Database Setup & Configuration', 8.00, 125.00, 1000.00, '2025-09-11 11:20:35'),
-(31, 11, 'Website Development Services', 1.00, 2500.00, 2500.00, '2025-09-11 11:20:35'),
-(32, 11, 'Database Setup & Configuration', 8.00, 125.00, 1000.00, '2025-09-11 11:20:36');
+(1, 12, 'Prototype Development (Completed) (All features listed in Section A)', 1.00, 5500.00, 5500.00, '2026-02-27 07:33:20'),
+(2, 12, 'Monthly Cloud hosting & Support [Prototype]', 1.00, 300.00, 300.00, '2026-02-27 07:33:20'),
+(3, 13, 'Basic Website', 1.00, 6000.00, 6000.00, '2026-06-06 13:16:38'),
+(4, 13, 'WhatsApp flow (Registration of spaza shops)', 1.00, 6000.00, 6000.00, '2026-06-06 13:16:38'),
+(5, 13, 'Database design', 1.00, 3000.00, 3000.00, '2026-06-06 13:16:38');
 
 -- --------------------------------------------------------
 
@@ -1010,7 +1008,7 @@ INSERT INTO `social_media_posts` (`id`, `campaign_id`, `client_id`, `platform`, 
 (8, 5, NULL, 'Instagram', 'Community spotlight! 🌟 Featuring amazing content from our followers. Tag us to be featured next!', NULL, '2024-09-23 10:00:00', 'scheduled', NULL, 5, '2025-09-11 10:54:19'),
 (9, 7, NULL, 'Facebook', 'Refer a friend and you both save! Our referral program is now live. Win-win for everyone! 🤝', NULL, '2024-09-25 08:30:00', 'scheduled', NULL, 6, '2025-09-11 10:54:19'),
 (10, 8, NULL, 'YouTube', 'New video alert! Learn the top 5 strategies for effective time management in our latest tutorial.', NULL, '2024-09-26 13:00:00', 'draft', NULL, 5, '2025-09-11 10:54:20'),
-(11, 8, 6, 'Instagram', 'Test Campaign', NULL, '2025-09-17 06:32:00', 'draft', NULL, NULL, '2025-09-12 06:33:10');
+(11, 8, NULL, 'Instagram', 'Test Campaign', NULL, '2025-09-17 06:32:00', 'draft', NULL, NULL, '2025-09-12 06:33:10');
 
 -- --------------------------------------------------------
 
@@ -1517,11 +1515,593 @@ INSERT INTO `user_activities` (`id`, `user_id`, `username`, `activity_type`, `de
 (423, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '16e838bbc8ce50fa6d780c1cda1c01f3', NULL, '2025-11-01 19:19:28'),
 (424, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '16e838bbc8ce50fa6d780c1cda1c01f3', NULL, '2025-11-01 19:19:29'),
 (425, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '16e838bbc8ce50fa6d780c1cda1c01f3', NULL, '2025-11-01 19:19:32'),
-(426, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '16e838bbc8ce50fa6d780c1cda1c01f3', NULL, '2025-11-01 19:19:34');
+(426, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '16e838bbc8ce50fa6d780c1cda1c01f3', NULL, '2025-11-01 19:19:34'),
+(427, 8, 'jane_hr', 'login', 'User \'jane_hr\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36', '0010f48c9fc991622301fe8d505ba380', NULL, '2025-11-01 19:50:34'),
+(428, 8, 'jane_hr', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36', '0010f48c9fc991622301fe8d505ba380', NULL, '2025-11-01 19:50:34'),
+(429, 8, 'jane_hr', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36', '0010f48c9fc991622301fe8d505ba380', NULL, '2025-11-01 19:50:49'),
+(430, 8, 'jane_hr', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36', '0010f48c9fc991622301fe8d505ba380', NULL, '2025-11-01 19:51:27'),
+(431, 8, 'jane_hr', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36', '0010f48c9fc991622301fe8d505ba380', NULL, '2025-11-01 19:51:30'),
+(432, 8, 'jane_hr', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36', '0010f48c9fc991622301fe8d505ba380', NULL, '2025-11-01 19:51:36'),
+(433, 8, 'jane_hr', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36', '0010f48c9fc991622301fe8d505ba380', NULL, '2025-11-01 19:51:39'),
+(434, 8, 'jane_hr', 'page_visit', 'Visited Business Insights page', '/departments/insights.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36', '0010f48c9fc991622301fe8d505ba380', NULL, '2025-11-01 19:51:39'),
+(435, 8, 'jane_hr', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36', '0010f48c9fc991622301fe8d505ba380', NULL, '2025-11-01 19:51:42'),
+(436, 8, 'jane_hr', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36', '0010f48c9fc991622301fe8d505ba380', NULL, '2025-11-01 19:51:48'),
+(437, 8, 'jane_hr', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36', '0010f48c9fc991622301fe8d505ba380', NULL, '2025-11-01 19:51:54'),
+(438, 8, 'jane_hr', 'login', 'User \'jane_hr\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '26a38201a92e0baaaa6e8fc5c6991c3d', NULL, '2025-11-02 19:06:39'),
+(439, 8, 'jane_hr', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '26a38201a92e0baaaa6e8fc5c6991c3d', NULL, '2025-11-02 19:06:39'),
+(440, 8, 'jane_hr', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '26a38201a92e0baaaa6e8fc5c6991c3d', NULL, '2025-11-02 19:06:46'),
+(441, 8, 'jane_hr', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '26a38201a92e0baaaa6e8fc5c6991c3d', NULL, '2025-11-02 19:06:53'),
+(442, 8, 'jane_hr', 'page_visit', 'Visited Business Insights page', '/departments/insights.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '26a38201a92e0baaaa6e8fc5c6991c3d', NULL, '2025-11-02 19:06:58'),
+(443, 8, 'jane_hr', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '26a38201a92e0baaaa6e8fc5c6991c3d', NULL, '2025-11-02 19:07:01'),
+(444, 8, 'jane_hr', 'logout', 'User \'jane_hr\' logged out', '/auth/logout.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '26a38201a92e0baaaa6e8fc5c6991c3d', NULL, '2025-11-02 19:07:04'),
+(445, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'b3f201e0b49a0adeb01a3b198764c9fc', NULL, '2025-11-02 19:07:09'),
+(446, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'b3f201e0b49a0adeb01a3b198764c9fc', NULL, '2025-11-02 19:07:09'),
+(447, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'b3f201e0b49a0adeb01a3b198764c9fc', NULL, '2025-11-02 19:07:12'),
+(448, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'b3f201e0b49a0adeb01a3b198764c9fc', NULL, '2025-11-02 19:07:27'),
+(449, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'b3f201e0b49a0adeb01a3b198764c9fc', NULL, '2025-11-02 19:07:28'),
+(450, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=leads', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'b3f201e0b49a0adeb01a3b198764c9fc', NULL, '2025-11-02 19:07:30'),
+(451, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=activities', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'b3f201e0b49a0adeb01a3b198764c9fc', NULL, '2025-11-02 19:07:31'),
+(452, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=tasks', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'b3f201e0b49a0adeb01a3b198764c9fc', NULL, '2025-11-02 19:07:31'),
+(453, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=targets', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'b3f201e0b49a0adeb01a3b198764c9fc', NULL, '2025-11-02 19:07:32'),
+(454, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=reports', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'b3f201e0b49a0adeb01a3b198764c9fc', NULL, '2025-11-02 19:07:33'),
+(455, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'b3f201e0b49a0adeb01a3b198764c9fc', NULL, '2025-11-02 19:07:35'),
+(456, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'b3f201e0b49a0adeb01a3b198764c9fc', NULL, '2025-11-02 19:07:37'),
+(457, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'b3f201e0b49a0adeb01a3b198764c9fc', NULL, '2025-11-02 19:07:38'),
+(458, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'b3f201e0b49a0adeb01a3b198764c9fc', NULL, '2025-11-02 19:07:39'),
+(459, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'b3f201e0b49a0adeb01a3b198764c9fc', NULL, '2025-11-02 19:07:41'),
+(460, 1, 'admin', 'page_visit', 'Visited Business Insights page', '/departments/insights.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'b3f201e0b49a0adeb01a3b198764c9fc', NULL, '2025-11-02 19:07:54'),
+(461, 1, 'admin', 'logout', 'User \'admin\' logged out', '/auth/logout.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'b3f201e0b49a0adeb01a3b198764c9fc', NULL, '2025-11-02 19:09:51'),
+(462, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '0db745da6db4ae12d1549f0134e90041', NULL, '2025-11-02 19:09:52'),
+(463, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '0db745da6db4ae12d1549f0134e90041', NULL, '2025-11-02 19:09:53'),
+(464, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '0db745da6db4ae12d1549f0134e90041', NULL, '2025-11-02 19:10:00'),
+(465, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '0db745da6db4ae12d1549f0134e90041', NULL, '2025-11-02 19:10:02'),
+(466, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '0db745da6db4ae12d1549f0134e90041', NULL, '2025-11-02 19:10:03'),
+(467, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '0db745da6db4ae12d1549f0134e90041', NULL, '2025-11-02 19:10:04'),
+(468, 1, 'admin', 'page_visit', 'Visited Business Insights page', '/departments/insights.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '0db745da6db4ae12d1549f0134e90041', NULL, '2025-11-02 19:10:05'),
+(469, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '0db745da6db4ae12d1549f0134e90041', NULL, '2025-11-02 19:10:07'),
+(470, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '0db745da6db4ae12d1549f0134e90041', NULL, '2025-11-02 19:10:25'),
+(471, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '0db745da6db4ae12d1549f0134e90041', NULL, '2025-11-02 19:10:38'),
+(472, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '0db745da6db4ae12d1549f0134e90041', NULL, '2025-11-02 19:17:18'),
+(473, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '0db745da6db4ae12d1549f0134e90041', NULL, '2025-11-02 19:17:19'),
+(474, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '0db745da6db4ae12d1549f0134e90041', NULL, '2025-11-02 19:17:21'),
+(475, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', '73586f1c80ea86ce9e0a0769e828ab18', NULL, '2025-11-02 19:18:33'),
+(476, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', '73586f1c80ea86ce9e0a0769e828ab18', NULL, '2025-11-02 19:18:33'),
+(477, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', '73586f1c80ea86ce9e0a0769e828ab18', NULL, '2025-11-02 19:18:41'),
+(478, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', '73586f1c80ea86ce9e0a0769e828ab18', NULL, '2025-11-02 19:18:45'),
+(479, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', '73586f1c80ea86ce9e0a0769e828ab18', NULL, '2025-11-02 19:18:46'),
+(480, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', '73586f1c80ea86ce9e0a0769e828ab18', NULL, '2025-11-02 19:18:48'),
+(481, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', '73586f1c80ea86ce9e0a0769e828ab18', NULL, '2025-11-02 19:18:50'),
+(482, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', '73586f1c80ea86ce9e0a0769e828ab18', NULL, '2025-11-02 19:18:51'),
+(483, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', '73586f1c80ea86ce9e0a0769e828ab18', NULL, '2025-11-02 19:18:53'),
+(484, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', '73586f1c80ea86ce9e0a0769e828ab18', NULL, '2025-11-02 19:19:56'),
+(485, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', '73586f1c80ea86ce9e0a0769e828ab18', NULL, '2025-11-02 19:20:52'),
+(486, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:29:17'),
+(487, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:29:17'),
+(488, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:29:21'),
+(489, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:29:23'),
+(490, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:29:24'),
+(491, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:29:26');
+INSERT INTO `user_activities` (`id`, `user_id`, `username`, `activity_type`, `description`, `page_url`, `resource_type`, `resource_id`, `ip_address`, `user_agent`, `session_id`, `additional_data`, `created_at`) VALUES
+(492, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:29:28'),
+(493, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:29:58'),
+(494, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:01'),
+(495, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:08'),
+(496, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:09'),
+(497, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:10'),
+(498, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:10'),
+(499, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:10'),
+(500, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:11'),
+(501, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:12'),
+(502, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:12'),
+(503, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:12'),
+(504, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:12'),
+(505, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:13'),
+(506, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:13'),
+(507, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:14'),
+(508, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:15'),
+(509, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:16'),
+(510, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:16'),
+(511, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:23'),
+(512, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:23'),
+(513, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:23'),
+(514, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:23'),
+(515, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:24'),
+(516, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:24'),
+(517, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:25'),
+(518, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:26'),
+(519, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:28'),
+(520, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:29'),
+(521, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:31'),
+(522, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:34'),
+(523, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:36'),
+(524, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:38'),
+(525, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:39'),
+(526, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:40'),
+(527, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:41'),
+(528, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:42'),
+(529, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:43'),
+(530, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:44'),
+(531, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:46'),
+(532, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:57'),
+(533, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:30:59'),
+(534, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:31:00'),
+(535, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:31:00'),
+(536, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:31:00'),
+(537, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:31:18'),
+(538, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:31:20'),
+(539, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:31:51'),
+(540, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:37:59'),
+(541, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:38:00'),
+(542, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:38:03'),
+(543, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0', 'f2732873126b2255a10e3e1a0a65f31a', NULL, '2025-11-02 19:38:04'),
+(544, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '7aa14db24553e58b4f78c171b6a0a155', NULL, '2025-11-02 19:44:48'),
+(545, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '7aa14db24553e58b4f78c171b6a0a155', NULL, '2025-11-02 19:44:48'),
+(546, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '7aa14db24553e58b4f78c171b6a0a155', NULL, '2025-11-02 19:44:53'),
+(547, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0', 'ea8605bc665ac7ecaa01d89e13f7c2e7', NULL, '2025-11-02 20:19:49'),
+(548, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0', 'ea8605bc665ac7ecaa01d89e13f7c2e7', NULL, '2025-11-02 20:19:49'),
+(549, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0', 'ea8605bc665ac7ecaa01d89e13f7c2e7', NULL, '2025-11-02 20:19:56'),
+(550, 1, 'admin', 'page_visit', 'Viewed project detail page (ID: 1)', '/departments/project_detail.php?id=1', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0', 'ea8605bc665ac7ecaa01d89e13f7c2e7', NULL, '2025-11-02 20:20:06'),
+(551, 1, 'admin', 'page_visit', 'Viewed project detail page (ID: 1)', '/departments/project_detail.php?id=1', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0', 'ea8605bc665ac7ecaa01d89e13f7c2e7', NULL, '2025-11-02 20:20:06'),
+(552, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0', 'ea8605bc665ac7ecaa01d89e13f7c2e7', NULL, '2025-11-02 20:20:49'),
+(553, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0', 'ea8605bc665ac7ecaa01d89e13f7c2e7', NULL, '2025-11-02 20:21:02'),
+(554, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0', 'ea8605bc665ac7ecaa01d89e13f7c2e7', NULL, '2025-11-02 20:21:03'),
+(555, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0', 'ea8605bc665ac7ecaa01d89e13f7c2e7', NULL, '2025-11-02 20:21:04'),
+(556, 1, 'admin', 'page_visit', 'Visited Business Insights page', '/departments/insights.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0', 'ea8605bc665ac7ecaa01d89e13f7c2e7', NULL, '2025-11-02 20:21:05'),
+(557, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0', 'ea8605bc665ac7ecaa01d89e13f7c2e7', NULL, '2025-11-02 20:21:13'),
+(558, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0', 'ea8605bc665ac7ecaa01d89e13f7c2e7', NULL, '2025-11-02 20:21:27'),
+(559, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0', 'ea8605bc665ac7ecaa01d89e13f7c2e7', NULL, '2025-11-02 20:21:27'),
+(560, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0', 'ea8605bc665ac7ecaa01d89e13f7c2e7', NULL, '2025-11-02 20:21:30'),
+(561, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0', 'a25b4c659056cde3010981c32b80c9e8', NULL, '2025-11-02 20:22:36'),
+(562, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0', 'a25b4c659056cde3010981c32b80c9e8', NULL, '2025-11-02 20:22:36'),
+(563, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0', 'a25b4c659056cde3010981c32b80c9e8', NULL, '2025-11-02 20:22:41'),
+(564, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0', 'ffbabbceaee0555ac7564419270a8ede', NULL, '2025-11-02 20:22:48'),
+(565, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.218.63', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0', 'ffbabbceaee0555ac7564419270a8ede', NULL, '2025-11-02 20:22:48'),
+(566, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '7aa14db24553e58b4f78c171b6a0a155', NULL, '2025-11-03 06:24:31'),
+(567, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '7aa14db24553e58b4f78c171b6a0a155', NULL, '2025-11-03 06:24:32'),
+(568, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '7aa14db24553e58b4f78c171b6a0a155', NULL, '2025-11-03 06:24:36'),
+(569, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '7aa14db24553e58b4f78c171b6a0a155', NULL, '2025-11-03 06:24:37'),
+(570, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '7aa14db24553e58b4f78c171b6a0a155', NULL, '2025-11-03 06:24:44'),
+(571, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '7aa14db24553e58b4f78c171b6a0a155', NULL, '2025-11-03 06:24:49'),
+(572, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '7aa14db24553e58b4f78c171b6a0a155', NULL, '2025-11-03 06:24:59'),
+(573, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '7aa14db24553e58b4f78c171b6a0a155', NULL, '2025-11-03 06:25:03'),
+(574, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '7aa14db24553e58b4f78c171b6a0a155', NULL, '2025-11-03 06:25:13'),
+(575, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'bd8bf08605c606b5899436a8df395a54', NULL, '2025-11-03 11:12:15'),
+(576, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'bd8bf08605c606b5899436a8df395a54', NULL, '2025-11-03 11:12:15'),
+(577, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'bd8bf08605c606b5899436a8df395a54', NULL, '2025-11-03 11:12:20'),
+(578, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=targets', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'bd8bf08605c606b5899436a8df395a54', NULL, '2025-11-03 11:12:26'),
+(579, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=reports', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'bd8bf08605c606b5899436a8df395a54', NULL, '2025-11-03 11:12:29'),
+(580, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=overview', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'bd8bf08605c606b5899436a8df395a54', NULL, '2025-11-03 11:12:45'),
+(581, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=leads', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'bd8bf08605c606b5899436a8df395a54', NULL, '2025-11-03 11:12:48'),
+(582, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=activities', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'bd8bf08605c606b5899436a8df395a54', NULL, '2025-11-03 11:12:49'),
+(583, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=tasks', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'bd8bf08605c606b5899436a8df395a54', NULL, '2025-11-03 11:12:51'),
+(584, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=activities', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'bd8bf08605c606b5899436a8df395a54', NULL, '2025-11-03 11:12:52'),
+(585, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=tasks', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'bd8bf08605c606b5899436a8df395a54', NULL, '2025-11-03 11:12:52'),
+(586, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=targets', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'bd8bf08605c606b5899436a8df395a54', NULL, '2025-11-03 11:12:53'),
+(587, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=reports', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'bd8bf08605c606b5899436a8df395a54', NULL, '2025-11-03 11:12:54'),
+(588, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=leads', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'bd8bf08605c606b5899436a8df395a54', NULL, '2025-11-03 11:12:55'),
+(589, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=overview', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'bd8bf08605c606b5899436a8df395a54', NULL, '2025-11-03 11:12:56'),
+(590, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'bd8bf08605c606b5899436a8df395a54', NULL, '2025-11-03 11:13:06'),
+(591, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'bd8bf08605c606b5899436a8df395a54', NULL, '2025-11-03 11:13:07'),
+(592, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'bd8bf08605c606b5899436a8df395a54', NULL, '2025-11-03 11:13:08'),
+(593, 1, 'admin', 'page_visit', 'Visited Business Insights page', '/departments/insights.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'bd8bf08605c606b5899436a8df395a54', NULL, '2025-11-03 11:13:09'),
+(594, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'bd8bf08605c606b5899436a8df395a54', NULL, '2025-11-03 11:13:11'),
+(595, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 'bd8bf08605c606b5899436a8df395a54', NULL, '2025-11-03 11:13:14'),
+(596, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 13:34:43'),
+(597, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 13:34:43'),
+(598, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 13:35:06'),
+(599, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=leads', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 13:35:09'),
+(600, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=activities', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 13:35:10'),
+(601, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=tasks', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 13:35:11'),
+(602, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=targets', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 13:35:12'),
+(603, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=reports', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 13:35:13'),
+(604, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=overview', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 13:35:19'),
+(605, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=leads', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 13:35:20'),
+(606, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=activities', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 13:35:22'),
+(607, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=tasks', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 13:35:24'),
+(608, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=targets', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 13:35:25'),
+(609, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=reports', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 13:35:26'),
+(610, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=tasks', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 14:07:50'),
+(611, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=reports', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 14:07:52'),
+(612, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=tasks', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 14:07:58'),
+(613, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=targets', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 14:08:02'),
+(614, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=reports', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 16:32:39'),
+(615, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=overview', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 16:32:40'),
+(616, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 16:32:41'),
+(617, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php?view=create', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 16:32:43'),
+(618, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php?view=projects', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 16:32:44'),
+(619, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php?view=create', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 16:32:45'),
+(620, 1, 'admin', 'page_visit', 'Visited Business Insights page', '/departments/insights.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 16:33:00'),
+(621, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 16:33:01'),
+(622, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 16:33:01'),
+(623, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 16:33:02'),
+(624, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 16:33:04'),
+(625, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 17:09:32'),
+(626, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-03 17:09:34'),
+(627, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?action=new_lead', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:09:08'),
+(628, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:09:11'),
+(629, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:13:38'),
+(630, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:13:40'),
+(631, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:15:20'),
+(632, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:15:21'),
+(633, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:15:26'),
+(634, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:15:30'),
+(635, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-posts', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:15:31'),
+(636, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=email-campaigns', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:15:32'),
+(637, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=blog-posts', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:15:32'),
+(638, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=campaigns', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:15:34'),
+(639, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=overview', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:15:35'),
+(640, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:15:37'),
+(641, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=overview', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:15:37'),
+(642, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=overview', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:16:26'),
+(643, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:16:40'),
+(644, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-posts', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:16:43'),
+(645, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=blog-posts', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:16:54'),
+(646, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=campaigns', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:16:55'),
+(647, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=blog-posts', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:16:56'),
+(648, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:16:57'),
+(649, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=overview', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:16:58'),
+(650, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:16:59'),
+(651, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:19:27'),
+(652, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=overview', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:19:29'),
+(653, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-posts', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:19:33'),
+(654, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=email-campaigns', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:19:34'),
+(655, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=blog-posts', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:19:35'),
+(656, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=campaigns', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:19:46'),
+(657, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=email-campaigns', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:19:56'),
+(658, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-posts', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:20:13'),
+(659, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=overview', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:20:31'),
+(660, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:20:43'),
+(661, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=10&year=2025', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:20:48'),
+(662, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=11&year=2025', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:20:49');
+INSERT INTO `user_activities` (`id`, `user_id`, `username`, `activity_type`, `description`, `page_url`, `resource_type`, `resource_id`, `ip_address`, `user_agent`, `session_id`, `additional_data`, `created_at`) VALUES
+(663, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=10&year=2025', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:20:51'),
+(664, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=09&year=2025', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:20:52'),
+(665, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=08&year=2025', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:20:59'),
+(666, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=09&year=2025', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:21:01'),
+(667, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=overview', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:21:04'),
+(668, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=overview', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:21:45'),
+(669, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=overview', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:21:47'),
+(670, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=overview', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:21:48'),
+(671, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:21:49'),
+(672, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:21:49'),
+(673, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:23:28'),
+(674, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:23:29'),
+(675, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:23:31'),
+(676, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=10&year=2025', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:23:33'),
+(677, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=09&year=2025', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:23:34'),
+(678, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=09&year=2025', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:24:23'),
+(679, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:24:25'),
+(680, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:24:26'),
+(681, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:24:27'),
+(682, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:25:20'),
+(683, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:25:22'),
+(684, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:25:23'),
+(685, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:26:15'),
+(686, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:26:16'),
+(687, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:26:18'),
+(688, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:26:21'),
+(689, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:26:55'),
+(690, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:27:30'),
+(691, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:27:31'),
+(692, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:27:32'),
+(693, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:27:32'),
+(694, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:27:33'),
+(695, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-posts', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:27:37'),
+(696, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=email-campaigns', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:27:43'),
+(697, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=blog-posts', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:27:44'),
+(698, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=campaigns', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 06:27:45'),
+(699, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 09:55:45'),
+(700, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 10:15:44'),
+(701, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=tasks', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 10:15:46'),
+(702, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=targets', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 10:15:47'),
+(703, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=tasks', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 10:15:49'),
+(704, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 10:15:59'),
+(705, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php?ajax=view_employee&id=4', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 10:17:07'),
+(706, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 10:17:15'),
+(707, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.128.164', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', '1eea9352baebe10ece7907b64e1315d5', NULL, '2025-11-04 21:14:40'),
+(708, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.116.217.139', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36', '7781be6b3ad56bdd95674998942cb343', NULL, '2025-11-05 15:21:46'),
+(709, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.116.217.139', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36', '7781be6b3ad56bdd95674998942cb343', NULL, '2025-11-05 15:21:46'),
+(710, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:40:19'),
+(711, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:40:19'),
+(712, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:40:30'),
+(713, 1, 'admin', 'page_visit', 'Viewed project detail page (ID: 8)', '/departments/project_detail.php?id=8', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:40:42'),
+(714, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:41:19'),
+(715, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:41:21'),
+(716, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-posts', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:41:25'),
+(717, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:41:29'),
+(718, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=overview', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:41:30'),
+(719, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:41:31'),
+(720, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:41:40'),
+(721, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=01&year=2026', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:41:43'),
+(722, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=12&year=2025', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:41:45'),
+(723, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=11&year=2025', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:41:46'),
+(724, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=10&year=2025', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:41:46'),
+(725, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=09&year=2025', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:41:47'),
+(726, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-posts', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:41:51'),
+(727, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=email-campaigns', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:41:56'),
+(728, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=blog-posts', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:41:57'),
+(729, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=campaigns', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:41:58'),
+(730, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=blog-posts', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:42:00'),
+(731, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=campaigns', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:42:11'),
+(732, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:42:37'),
+(733, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:42:59'),
+(734, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:43:21'),
+(735, 1, 'admin', 'page_visit', 'Visited Business Insights page', '/departments/insights.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:43:36'),
+(736, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-26 21:45:09'),
+(737, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-27 06:51:19'),
+(738, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-27 07:01:02'),
+(739, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-27 07:01:04'),
+(740, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-27 07:02:00'),
+(741, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-27 07:03:36'),
+(742, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-27 07:03:39'),
+(743, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-27 07:13:11'),
+(744, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php?ajax=view_quotation&id=10', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-27 07:13:36'),
+(745, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-27 07:21:43'),
+(746, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-27 07:23:08'),
+(747, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-27 07:30:31'),
+(748, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-27 07:32:02'),
+(749, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-27 07:32:04'),
+(750, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-27 07:33:20'),
+(751, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php?ajax=view_quotation&id=12', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-27 07:33:29'),
+(752, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php?ajax=view_quotation&id=12', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-27 07:33:34'),
+(753, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php?ajax=view_quotation&id=12', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-27 07:39:59'),
+(754, 1, 'admin', 'logout', 'User \'admin\' logged out', '/auth/logout.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '89863cb167bab332d20b4b550d48c759', NULL, '2026-02-27 07:43:36'),
+(755, 3, 'john_manager', 'login', 'User \'john_manager\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '861340575c0a43fff3a052bf628ece10', NULL, '2026-02-27 07:43:42'),
+(756, 3, 'john_manager', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '861340575c0a43fff3a052bf628ece10', NULL, '2026-02-27 07:43:42'),
+(757, 3, 'john_manager', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '861340575c0a43fff3a052bf628ece10', NULL, '2026-02-27 07:43:45'),
+(758, 3, 'john_manager', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '861340575c0a43fff3a052bf628ece10', NULL, '2026-02-27 07:43:47'),
+(759, 3, 'john_manager', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '861340575c0a43fff3a052bf628ece10', NULL, '2026-02-27 07:43:50'),
+(760, 3, 'john_manager', 'logout', 'User \'john_manager\' logged out', '/auth/logout.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '861340575c0a43fff3a052bf628ece10', NULL, '2026-02-27 07:43:53'),
+(761, 10, 'emma_finance', 'login', 'User \'emma_finance\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'd74012f561d446a264c5344f612ecd72', NULL, '2026-02-27 07:44:09'),
+(762, 10, 'emma_finance', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'd74012f561d446a264c5344f612ecd72', NULL, '2026-02-27 07:44:09'),
+(763, 10, 'emma_finance', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'd74012f561d446a264c5344f612ecd72', NULL, '2026-02-27 07:44:12'),
+(764, 10, 'emma_finance', 'page_visit', 'Visited Finance Department page', '/departments/finance.php?ajax=view_quotation&id=12', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'd74012f561d446a264c5344f612ecd72', NULL, '2026-02-27 07:44:18'),
+(765, 10, 'emma_finance', 'page_visit', 'Visited Finance Department page', '/departments/finance.php?ajax=view_quotation&id=12', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'd74012f561d446a264c5344f612ecd72', NULL, '2026-02-27 07:44:21'),
+(766, 10, 'emma_finance', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'd74012f561d446a264c5344f612ecd72', NULL, '2026-02-27 07:45:20'),
+(767, 10, 'emma_finance', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'd74012f561d446a264c5344f612ecd72', NULL, '2026-02-27 08:38:09'),
+(768, 10, 'emma_finance', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'd74012f561d446a264c5344f612ecd72', NULL, '2026-02-27 08:38:11'),
+(769, 10, 'emma_finance', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'd74012f561d446a264c5344f612ecd72', NULL, '2026-02-27 09:01:50'),
+(770, 10, 'emma_finance', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'd74012f561d446a264c5344f612ecd72', NULL, '2026-02-27 09:01:53'),
+(771, 10, 'emma_finance', 'page_visit', 'Visited Finance Department page', '/departments/finance.php?ajax=view_quotation&id=12', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'd74012f561d446a264c5344f612ecd72', NULL, '2026-02-27 09:02:01'),
+(772, 10, 'emma_finance', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'd74012f561d446a264c5344f612ecd72', NULL, '2026-02-27 09:05:49'),
+(773, 10, 'emma_finance', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'd74012f561d446a264c5344f612ecd72', NULL, '2026-02-27 09:05:54'),
+(774, 10, 'emma_finance', 'logout', 'User \'emma_finance\' logged out', '/auth/logout.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'd74012f561d446a264c5344f612ecd72', NULL, '2026-02-27 09:05:56'),
+(775, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2c092cb950ca8e9c48f0febaecfc2ac7', NULL, '2026-02-27 09:06:02'),
+(776, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2c092cb950ca8e9c48f0febaecfc2ac7', NULL, '2026-02-27 09:06:02'),
+(777, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2c092cb950ca8e9c48f0febaecfc2ac7', NULL, '2026-02-27 09:06:08'),
+(778, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2c092cb950ca8e9c48f0febaecfc2ac7', NULL, '2026-02-27 09:06:19'),
+(779, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2c092cb950ca8e9c48f0febaecfc2ac7', NULL, '2026-02-27 09:06:51'),
+(780, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2c092cb950ca8e9c48f0febaecfc2ac7', NULL, '2026-02-27 09:07:18'),
+(781, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2c092cb950ca8e9c48f0febaecfc2ac7', NULL, '2026-02-27 09:08:25'),
+(782, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php?action=new_client', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2c092cb950ca8e9c48f0febaecfc2ac7', NULL, '2026-02-27 09:08:32'),
+(783, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2c092cb950ca8e9c48f0febaecfc2ac7', NULL, '2026-02-27 09:08:35'),
+(784, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php?action=new_employee', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2c092cb950ca8e9c48f0febaecfc2ac7', NULL, '2026-02-27 09:08:37'),
+(785, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2c092cb950ca8e9c48f0febaecfc2ac7', NULL, '2026-02-27 10:29:14'),
+(786, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2c092cb950ca8e9c48f0febaecfc2ac7', NULL, '2026-02-27 10:29:25'),
+(787, 1, 'admin', 'logout', 'User \'admin\' logged out', '/auth/logout.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2c092cb950ca8e9c48f0febaecfc2ac7', NULL, '2026-02-27 10:29:32'),
+(788, 10, 'emma_finance', 'login', 'User \'emma_finance\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '411ed90a330443911cdaf0813c12b3e6', NULL, '2026-02-27 10:32:05'),
+(789, 10, 'emma_finance', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '411ed90a330443911cdaf0813c12b3e6', NULL, '2026-02-27 10:32:05'),
+(790, 10, 'emma_finance', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '411ed90a330443911cdaf0813c12b3e6', NULL, '2026-02-27 10:32:10'),
+(791, 10, 'emma_finance', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '411ed90a330443911cdaf0813c12b3e6', NULL, '2026-02-27 10:34:22'),
+(792, 10, 'emma_finance', 'page_visit', 'Visited Finance Department page', '/departments/finance.php?ajax=view_invoice&id=8', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '411ed90a330443911cdaf0813c12b3e6', NULL, '2026-02-27 10:35:26'),
+(793, 10, 'emma_finance', 'page_visit', 'Visited Finance Department page', '/departments/finance.php?ajax=view_invoice&id=8', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '411ed90a330443911cdaf0813c12b3e6', NULL, '2026-02-27 10:35:35'),
+(794, 10, 'emma_finance', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '411ed90a330443911cdaf0813c12b3e6', NULL, '2026-02-27 10:35:50'),
+(795, 10, 'emma_finance', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '411ed90a330443911cdaf0813c12b3e6', NULL, '2026-02-27 10:35:51'),
+(796, 10, 'emma_finance', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '411ed90a330443911cdaf0813c12b3e6', NULL, '2026-02-27 10:35:54'),
+(797, 10, 'emma_finance', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '411ed90a330443911cdaf0813c12b3e6', NULL, '2026-02-27 10:35:55'),
+(798, 10, 'emma_finance', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '411ed90a330443911cdaf0813c12b3e6', NULL, '2026-02-27 10:35:56'),
+(799, 10, 'emma_finance', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '411ed90a330443911cdaf0813c12b3e6', NULL, '2026-02-27 10:35:57'),
+(800, 10, 'emma_finance', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '411ed90a330443911cdaf0813c12b3e6', NULL, '2026-02-27 10:36:00'),
+(801, 10, 'emma_finance', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '411ed90a330443911cdaf0813c12b3e6', NULL, '2026-02-27 10:36:03'),
+(802, 10, 'emma_finance', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '411ed90a330443911cdaf0813c12b3e6', NULL, '2026-02-27 10:37:44'),
+(803, 10, 'emma_finance', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '411ed90a330443911cdaf0813c12b3e6', NULL, '2026-02-27 10:40:26'),
+(804, 10, 'emma_finance', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '411ed90a330443911cdaf0813c12b3e6', NULL, '2026-02-27 10:46:18'),
+(805, 10, 'emma_finance', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '411ed90a330443911cdaf0813c12b3e6', NULL, '2026-02-27 10:46:18'),
+(806, 10, 'emma_finance', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '411ed90a330443911cdaf0813c12b3e6', NULL, '2026-02-27 10:46:20'),
+(807, 10, 'emma_finance', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '411ed90a330443911cdaf0813c12b3e6', NULL, '2026-02-27 10:46:21'),
+(808, 10, 'emma_finance', 'logout', 'User \'emma_finance\' logged out', '/auth/logout.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '411ed90a330443911cdaf0813c12b3e6', NULL, '2026-02-27 10:46:30'),
+(809, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'bceaee699b07789db45d9687ed7061c6', NULL, '2026-02-27 10:46:36'),
+(810, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'bceaee699b07789db45d9687ed7061c6', NULL, '2026-02-27 10:46:36'),
+(811, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'bceaee699b07789db45d9687ed7061c6', NULL, '2026-02-27 10:46:39'),
+(812, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'bceaee699b07789db45d9687ed7061c6', NULL, '2026-02-27 10:46:41'),
+(813, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'bceaee699b07789db45d9687ed7061c6', NULL, '2026-02-27 10:46:42'),
+(814, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'bceaee699b07789db45d9687ed7061c6', NULL, '2026-02-27 10:46:44'),
+(815, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=activities', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'bceaee699b07789db45d9687ed7061c6', NULL, '2026-02-27 10:46:46'),
+(816, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'bceaee699b07789db45d9687ed7061c6', NULL, '2026-02-27 10:46:50'),
+(817, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'bceaee699b07789db45d9687ed7061c6', NULL, '2026-02-27 10:46:52'),
+(818, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'bceaee699b07789db45d9687ed7061c6', NULL, '2026-02-27 13:10:29'),
+(819, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'bceaee699b07789db45d9687ed7061c6', NULL, '2026-02-27 13:10:39'),
+(820, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php?ajax=view_invoice&id=8', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'bceaee699b07789db45d9687ed7061c6', NULL, '2026-02-27 13:10:57'),
+(821, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php?ajax=view_invoice&id=9', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'bceaee699b07789db45d9687ed7061c6', NULL, '2026-02-27 13:11:26'),
+(822, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'bceaee699b07789db45d9687ed7061c6', NULL, '2026-02-27 13:12:19'),
+(823, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php?ajax=view_invoice&id=9', NULL, NULL, '41.56.151.205', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'bceaee699b07789db45d9687ed7061c6', NULL, '2026-02-27 13:12:25');
+INSERT INTO `user_activities` (`id`, `user_id`, `username`, `activity_type`, `description`, `page_url`, `resource_type`, `resource_id`, `ip_address`, `user_agent`, `session_id`, `additional_data`, `created_at`) VALUES
+(824, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 14:53:40'),
+(825, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 14:53:40'),
+(826, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 14:53:45'),
+(827, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 14:53:52'),
+(828, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php?ajax=view_invoice&id=9', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 14:54:07'),
+(829, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 14:57:09'),
+(830, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 14:57:15'),
+(831, 1, 'admin', 'page_visit', 'Viewed project detail page (ID: 5)', '/departments/project_detail.php?id=5', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 14:57:18'),
+(832, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 14:57:31'),
+(833, 1, 'admin', 'page_visit', 'Viewed project detail page (ID: 8)', '/departments/project_detail.php?id=8', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 14:57:39'),
+(834, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 14:57:58'),
+(835, 1, 'admin', 'page_visit', 'Viewed project detail page (ID: 6)', '/departments/project_detail.php?id=6', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 14:58:03'),
+(836, 1, 'admin', 'page_visit', 'Viewed project detail page (ID: 6)', '/departments/project_detail.php?id=6', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 14:58:18'),
+(837, 1, 'admin', 'page_visit', 'Viewed project detail page (ID: 6)', '/departments/project_detail.php?id=6', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 14:58:26'),
+(838, 1, 'admin', 'page_visit', 'Viewed project detail page (ID: 6)', '/departments/project_detail.php?id=6', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 14:58:26'),
+(839, 1, 'admin', 'page_visit', 'Viewed project detail page (ID: 6)', '/departments/project_detail.php?id=6', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 14:58:29'),
+(840, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 14:58:48'),
+(841, 1, 'admin', 'page_visit', 'Viewed project detail page (ID: 5)', '/departments/project_detail.php?id=5', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 14:59:46'),
+(842, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:00:06'),
+(843, 1, 'admin', 'page_visit', 'Viewed project detail page (ID: 8)', '/departments/project_detail.php?id=8', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:00:10'),
+(844, 1, 'admin', 'page_visit', 'Viewed project detail page (ID: 8)', '/departments/project_detail.php?id=8', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:00:22'),
+(845, 1, 'admin', 'page_visit', 'Viewed project detail page (ID: 8)', '/departments/project_detail.php?id=8', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:00:22'),
+(846, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:00:26'),
+(847, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:01:31'),
+(848, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-posts', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:02:06'),
+(849, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=campaigns', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:02:17'),
+(850, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=overview', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:02:22'),
+(851, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=email-campaigns', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:02:24'),
+(852, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=blog-posts', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:02:27'),
+(853, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=campaigns', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:02:28'),
+(854, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=overview', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:02:29'),
+(855, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:02:31'),
+(856, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=02&year=2026', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:02:34'),
+(857, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=01&year=2026', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:02:35'),
+(858, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=12&year=2025', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:02:35'),
+(859, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=11&year=2025', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:02:36'),
+(860, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=10&year=2025', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:02:37'),
+(861, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=09&year=2025', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:02:37'),
+(862, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=08&year=2025', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:02:38'),
+(863, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar&month=09&year=2025', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:02:39'),
+(864, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:02:46'),
+(865, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-10 15:02:47'),
+(866, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-11 12:02:50'),
+(867, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-11 12:02:53'),
+(868, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-12 19:46:29'),
+(869, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.187.33', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'c2236463696dd1024ad342d94aebf7f1', NULL, '2026-03-13 21:50:26'),
+(870, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.189.160', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '9a5f72636a6342af81118aa78b877522', NULL, '2026-03-16 09:50:57'),
+(871, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.189.160', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '9a5f72636a6342af81118aa78b877522', NULL, '2026-03-16 09:50:57'),
+(872, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.189.160', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '9a5f72636a6342af81118aa78b877522', NULL, '2026-03-16 09:51:08'),
+(873, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.189.160', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '9a5f72636a6342af81118aa78b877522', NULL, '2026-03-16 09:51:10'),
+(874, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.189.160', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '9a5f72636a6342af81118aa78b877522', NULL, '2026-03-16 09:55:36'),
+(875, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.189.160', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '9a5f72636a6342af81118aa78b877522', NULL, '2026-03-16 09:55:41'),
+(876, 1, 'admin', 'logout', 'User \'admin\' logged out', '/auth/logout.php', NULL, NULL, '41.56.189.160', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '9a5f72636a6342af81118aa78b877522', NULL, '2026-03-16 09:55:46'),
+(877, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.189.160', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'ffe907346fd84ecb79df1d8be07e3613', NULL, '2026-03-16 10:07:08'),
+(878, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.189.160', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'ffe907346fd84ecb79df1d8be07e3613', NULL, '2026-03-16 10:07:08'),
+(879, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.189.160', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'ffe907346fd84ecb79df1d8be07e3613', NULL, '2026-03-16 10:07:15'),
+(880, 1, 'admin', 'page_visit', 'Viewed project detail page (ID: 8)', '/departments/project_detail.php?id=8', NULL, NULL, '41.56.189.160', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'ffe907346fd84ecb79df1d8be07e3613', NULL, '2026-03-16 10:07:23'),
+(881, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.189.160', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'ffe907346fd84ecb79df1d8be07e3613', NULL, '2026-03-16 10:07:43'),
+(882, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.189.160', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'ffe907346fd84ecb79df1d8be07e3613', NULL, '2026-03-16 10:07:44'),
+(883, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php?action=new_project', NULL, NULL, '41.56.189.160', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'ffe907346fd84ecb79df1d8be07e3613', NULL, '2026-03-16 10:07:56'),
+(884, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.189.160', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', 'ffe907346fd84ecb79df1d8be07e3613', NULL, '2026-03-16 10:08:07'),
+(885, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', 'a06578007103136555169f44e940f765', NULL, '2026-05-18 16:26:52'),
+(886, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', 'a06578007103136555169f44e940f765', NULL, '2026-05-18 16:26:52'),
+(887, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', 'a06578007103136555169f44e940f765', NULL, '2026-05-18 16:27:09'),
+(888, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', 'a06578007103136555169f44e940f765', NULL, '2026-05-18 16:27:12'),
+(889, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', 'a06578007103136555169f44e940f765', NULL, '2026-05-18 16:27:18'),
+(890, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', 'a06578007103136555169f44e940f765', NULL, '2026-05-18 16:27:53'),
+(891, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:20:40'),
+(892, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:20:41'),
+(893, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:23:20'),
+(894, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=leads', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:23:24'),
+(895, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=activities', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:23:28'),
+(896, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=tasks', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:23:31'),
+(897, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=targets', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:23:33'),
+(898, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=reports', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:23:38'),
+(899, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=targets', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:23:40'),
+(900, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=leads', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:23:48'),
+(901, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=reports', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:23:58'),
+(902, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=overview', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:24:03'),
+(903, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:24:04'),
+(904, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:27:16'),
+(905, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php?ajax=view_employee&id=6', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:27:22'),
+(906, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php?ajax=view_employee&id=6', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:27:26'),
+(907, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php?ajax=get_department_managers&dept=IT', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:27:26'),
+(908, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php?ajax=view_employee&id=1', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:27:30'),
+(909, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:32:20'),
+(910, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:32:23'),
+(911, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=leads', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:32:26'),
+(912, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:32:58'),
+(913, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=blog-posts', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:36:47'),
+(914, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:37:11'),
+(915, 1, 'admin', 'page_visit', 'Visited Business Insights page', '/departments/insights.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:37:26'),
+(916, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:37:38'),
+(917, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 10:59:12'),
+(918, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 11:00:02'),
+(919, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 11:05:19'),
+(920, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 11:06:01'),
+(921, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 11:07:16'),
+(922, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=leads', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-19 11:07:18'),
+(923, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=activities', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-21 06:45:01'),
+(924, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=tasks', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-21 06:45:04'),
+(925, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=targets', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-21 06:45:05'),
+(926, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=reports', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-21 06:45:06'),
+(927, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=leads', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-21 06:45:08'),
+(928, 1, 'admin', 'page_visit', 'Visited Bd page', '/departments/bd.php?view=overview', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-21 06:45:09'),
+(929, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-21 06:45:12'),
+(930, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-21 06:45:15'),
+(931, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-21 06:45:18'),
+(932, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-posts', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-21 06:45:18'),
+(933, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=email-campaigns', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-21 06:45:19'),
+(934, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=blog-posts', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-21 06:45:20'),
+(935, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=campaigns', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-21 06:45:21'),
+(936, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-21 06:45:22'),
+(937, 1, 'admin', 'page_visit', 'Viewed project detail page (ID: 6)', '/departments/project_detail.php?id=6', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-21 06:45:30'),
+(938, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-21 06:46:09'),
+(939, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.204.253', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '9a1b738778c0e329cff7faa4138124db', NULL, '2026-05-21 06:46:14'),
+(940, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2f38485d05ef1ef2d394c8a7212950eb', NULL, '2026-06-06 11:40:45'),
+(941, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2f38485d05ef1ef2d394c8a7212950eb', NULL, '2026-06-06 11:40:45'),
+(942, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2f38485d05ef1ef2d394c8a7212950eb', NULL, '2026-06-06 11:40:57'),
+(943, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php?ajax=view_quotation&id=12', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2f38485d05ef1ef2d394c8a7212950eb', NULL, '2026-06-06 11:41:04'),
+(944, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0', '84d991b4de6b8e340b2655d9a7f9c1c2', NULL, '2026-06-06 11:43:53'),
+(945, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0', '84d991b4de6b8e340b2655d9a7f9c1c2', NULL, '2026-06-06 11:43:53'),
+(946, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0', '84d991b4de6b8e340b2655d9a7f9c1c2', NULL, '2026-06-06 11:44:08'),
+(947, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0', '84d991b4de6b8e340b2655d9a7f9c1c2', NULL, '2026-06-06 11:44:46'),
+(948, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2f38485d05ef1ef2d394c8a7212950eb', NULL, '2026-06-06 11:49:07'),
+(949, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2f38485d05ef1ef2d394c8a7212950eb', NULL, '2026-06-06 11:49:09'),
+(950, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2f38485d05ef1ef2d394c8a7212950eb', NULL, '2026-06-06 12:05:35'),
+(951, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2f38485d05ef1ef2d394c8a7212950eb', NULL, '2026-06-06 12:08:00'),
+(952, 1, 'admin', 'page_visit', 'Viewed clients management page', '/departments/clients.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2f38485d05ef1ef2d394c8a7212950eb', NULL, '2026-06-06 12:08:01'),
+(953, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2f38485d05ef1ef2d394c8a7212950eb', NULL, '2026-06-06 12:08:06'),
+(954, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2f38485d05ef1ef2d394c8a7212950eb', NULL, '2026-06-06 13:14:46'),
+(955, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2f38485d05ef1ef2d394c8a7212950eb', NULL, '2026-06-06 13:16:38'),
+(956, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php?ajax=view_invoice&id=10', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2f38485d05ef1ef2d394c8a7212950eb', NULL, '2026-06-06 13:24:18'),
+(957, 1, 'admin', 'page_visit', 'Visited Finance Department page', '/departments/finance.php?ajax=view_invoice&id=9', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2f38485d05ef1ef2d394c8a7212950eb', NULL, '2026-06-06 13:24:31'),
+(958, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2f38485d05ef1ef2d394c8a7212950eb', NULL, '2026-06-06 13:25:36'),
+(959, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php?ajax=view_employee&id=1', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2f38485d05ef1ef2d394c8a7212950eb', NULL, '2026-06-06 13:25:51'),
+(960, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php?ajax=view_employee&id=1', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2f38485d05ef1ef2d394c8a7212950eb', NULL, '2026-06-06 13:25:54'),
+(961, 1, 'admin', 'page_visit', 'Visited HR Department page', '/departments/hr.php?ajax=get_department_managers&dept=IT', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2f38485d05ef1ef2d394c8a7212950eb', NULL, '2026-06-06 13:25:54'),
+(962, 1, 'admin', 'page_visit', 'Visited Business Insights page', '/departments/insights.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2f38485d05ef1ef2d394c8a7212950eb', NULL, '2026-06-06 13:48:03'),
+(963, 1, 'admin', 'page_visit', 'Visited It page', '/departments/it.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2f38485d05ef1ef2d394c8a7212950eb', NULL, '2026-06-06 13:48:15'),
+(964, 1, 'admin', 'page_visit', 'Viewed project detail page (ID: 7)', '/departments/project_detail.php?id=7', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2f38485d05ef1ef2d394c8a7212950eb', NULL, '2026-06-06 13:48:29'),
+(965, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36', 'ac77c75c59225f6cdb7a0da99d4c0e1b', NULL, '2026-06-07 17:23:53'),
+(966, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36', 'ac77c75c59225f6cdb7a0da99d4c0e1b', NULL, '2026-06-07 17:23:53'),
+(967, 1, 'admin', 'login', 'User \'admin\' logged in successfully', '/auth/login.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0', '9702cbefb9eb26813275fd6c90a1ea5f', NULL, '2026-06-08 14:43:19'),
+(968, 1, 'admin', 'page_visit', 'User accessed main dashboard', '/dashboard.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0', '9702cbefb9eb26813275fd6c90a1ea5f', NULL, '2026-06-08 14:43:19'),
+(969, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0', '9702cbefb9eb26813275fd6c90a1ea5f', NULL, '2026-06-08 14:43:50'),
+(970, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-calendar', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0', '9702cbefb9eb26813275fd6c90a1ea5f', NULL, '2026-06-08 14:44:00'),
+(971, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-posts', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0', '9702cbefb9eb26813275fd6c90a1ea5f', NULL, '2026-06-08 14:44:01'),
+(972, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=blog-posts', NULL, NULL, '41.56.203.221', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0', '9702cbefb9eb26813275fd6c90a1ea5f', NULL, '2026-06-08 14:44:04'),
+(973, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=social-posts', NULL, NULL, '105.12.1.168', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0', '9702cbefb9eb26813275fd6c90a1ea5f', NULL, '2026-06-08 15:16:37'),
+(974, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=blog-posts', NULL, NULL, '105.12.1.168', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0', '9702cbefb9eb26813275fd6c90a1ea5f', NULL, '2026-06-08 15:16:38'),
+(975, 1, 'admin', 'page_visit', 'Visited Marketing Department page', '/departments/marketing.php?view=blog-posts', NULL, NULL, '105.12.1.168', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0', '9702cbefb9eb26813275fd6c90a1ea5f', NULL, '2026-06-08 15:17:16');
 
 --
 -- Indexes for dumped tables
 --
+
+--
+-- Indexes for table `bd_activities`
+--
+ALTER TABLE `bd_activities`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `lead_id` (`lead_id`),
+  ADD KEY `created_by` (`created_by`);
+
+--
+-- Indexes for table `bd_leads`
+--
+ALTER TABLE `bd_leads`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `created_by` (`created_by`);
+
+--
+-- Indexes for table `bd_targets`
+--
+ALTER TABLE `bd_targets`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `bd_tasks`
+--
+ALTER TABLE `bd_tasks`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `assigned_to` (`assigned_to`),
+  ADD KEY `related_lead_id` (`related_lead_id`),
+  ADD KEY `created_by` (`created_by`);
 
 --
 -- Indexes for table `calendar_events`
@@ -1811,6 +2391,30 @@ ALTER TABLE `user_activities`
 --
 
 --
+-- AUTO_INCREMENT for table `bd_activities`
+--
+ALTER TABLE `bd_activities`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `bd_leads`
+--
+ALTER TABLE `bd_leads`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `bd_targets`
+--
+ALTER TABLE `bd_targets`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `bd_tasks`
+--
+ALTER TABLE `bd_tasks`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `calendar_events`
 --
 ALTER TABLE `calendar_events`
@@ -1838,7 +2442,7 @@ ALTER TABLE `candidate_work_experience`
 -- AUTO_INCREMENT for table `clients`
 --
 ALTER TABLE `clients`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
 
 --
 -- AUTO_INCREMENT for table `client_contacts`
@@ -1856,7 +2460,7 @@ ALTER TABLE `client_meetings`
 -- AUTO_INCREMENT for table `consultation_requests`
 --
 ALTER TABLE `consultation_requests`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT for table `custom_reports`
@@ -1904,13 +2508,13 @@ ALTER TABLE `hr_leave_requests`
 -- AUTO_INCREMENT for table `invoices`
 --
 ALTER TABLE `invoices`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT for table `invoice_items`
 --
 ALTER TABLE `invoice_items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `job_postings`
@@ -1940,7 +2544,7 @@ ALTER TABLE `marketing_campaigns`
 -- AUTO_INCREMENT for table `money_flow`
 --
 ALTER TABLE `money_flow`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `performance_reviews`
@@ -1970,7 +2574,7 @@ ALTER TABLE `project_comments`
 -- AUTO_INCREMENT for table `project_revenues`
 --
 ALTER TABLE `project_revenues`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `purchase_orders`
@@ -1982,19 +2586,19 @@ ALTER TABLE `purchase_orders`
 -- AUTO_INCREMENT for table `purchase_order_items`
 --
 ALTER TABLE `purchase_order_items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `quotations`
 --
 ALTER TABLE `quotations`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
 
 --
 -- AUTO_INCREMENT for table `quotation_items`
 --
 ALTER TABLE `quotation_items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=33;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `social_media_posts`
@@ -2018,11 +2622,32 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `user_activities`
 --
 ALTER TABLE `user_activities`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=427;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=976;
 
 --
 -- Constraints for dumped tables
 --
+
+--
+-- Constraints for table `bd_activities`
+--
+ALTER TABLE `bd_activities`
+  ADD CONSTRAINT `bd_activities_ibfk_1` FOREIGN KEY (`lead_id`) REFERENCES `bd_leads` (`id`),
+  ADD CONSTRAINT `bd_activities_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`);
+
+--
+-- Constraints for table `bd_leads`
+--
+ALTER TABLE `bd_leads`
+  ADD CONSTRAINT `bd_leads_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`);
+
+--
+-- Constraints for table `bd_tasks`
+--
+ALTER TABLE `bd_tasks`
+  ADD CONSTRAINT `bd_tasks_ibfk_1` FOREIGN KEY (`assigned_to`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `bd_tasks_ibfk_2` FOREIGN KEY (`related_lead_id`) REFERENCES `bd_leads` (`id`),
+  ADD CONSTRAINT `bd_tasks_ibfk_3` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`);
 
 --
 -- Constraints for table `candidates`
