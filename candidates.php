@@ -1,254 +1,246 @@
-﻿<?php
+<?php
+require_once 'config/session.php';
 require_once 'config/database.php';
+require_once 'config/security.php';
+require_once 'includes/functions.php';
 
-// Initialize database connection
+if (!isset($_SESSION['user_id'])) { header("Location: auth/login.php"); exit(); }
+if (!in_array($_SESSION['role'], ['admin','manager']) && $_SESSION['department'] !== 'HR') {
+    header("Location: dashboard.php"); exit();
+}
+
 $database = new Database();
-$db = $database->getConnection();
+$db       = $database->getConnection();
+$asset_base = '';
+$nav_base   = 'departments/';
 
-// Simple HTML escape function
-function escape($text) {
-    return htmlspecialchars($text ?? '', ENT_QUOTES, 'UTF-8');
+$success = ''; $error = '';
+
+// Update candidate status
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
+    if (!Security::validateCSRFToken($_POST['csrf_token'] ?? '')) {
+        $error = 'Invalid request.';
+    } else {
+        $id     = (int)($_POST['candidate_id'] ?? 0);
+        $status = Security::sanitizeInput($_POST['status'] ?? '');
+        $allowed = ['pending','applied','screening','review','interview_scheduled','offer_made','rejected'];
+        if ($id && in_array($status, $allowed)) {
+            $db->prepare("UPDATE candidates SET status=? WHERE id=?")->execute([$status, $id]);
+            $success = 'Candidate status updated.';
+            Utils::logActivity($db, 'update', "Candidate #$id status changed to $status");
+        }
+    }
 }
 
-// Simple date format function
-function formatDate($date) {
-    return date('M j, Y', strtotime($date));
-}
+// Filters
+$f_status = Security::sanitizeInput($_GET['status'] ?? '');
+$f_job    = (int)($_GET['job_id'] ?? 0);
+$f_search = Security::sanitizeInput($_GET['search'] ?? '');
 
-// Get all candidates with job information
-$candidates = $db->query("SELECT c.*, jp.title as job_title, jp.department as job_department
-                         FROM candidates c 
-                         JOIN job_postings jp ON c.job_posting_id = jp.id 
-                         ORDER BY c.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+$where = []; $params = [];
+if ($f_status) { $where[] = 'c.status = ?'; $params[] = $f_status; }
+if ($f_job)    { $where[] = 'c.job_posting_id = ?'; $params[] = $f_job; }
+if ($f_search) {
+    $where[] = "(c.first_name LIKE ? OR c.last_name LIKE ? OR c.email LIKE ?)";
+    $params[] = "%$f_search%"; $params[] = "%$f_search%"; $params[] = "%$f_search%";
+}
+$sql = "SELECT c.*, jp.title AS job_title, jp.department AS job_dept
+        FROM candidates c JOIN job_postings jp ON c.job_posting_id = jp.id"
+     . ($where ? ' WHERE '.implode(' AND ', $where) : '')
+     . " ORDER BY c.created_at DESC";
+
+$stmt = $db->prepare($sql); $stmt->execute($params);
+$candidates = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// KPIs
+$kpis = $db->query("SELECT
+    COUNT(*) AS total,
+    SUM(status IN ('pending','applied')) AS new_apps,
+    SUM(status='interview_scheduled') AS interviews,
+    SUM(status='offer_made') AS offers,
+    SUM(status='rejected') AS rejected
+    FROM candidates")->fetch(PDO::FETCH_ASSOC);
+
+// Job postings for filter
+$jobs_list = $db->query("SELECT id, title FROM job_postings ORDER BY title")->fetchAll(PDO::FETCH_ASSOC);
+
+$status_labels = [
+    'pending'             => ['Pending',            '#94a3b8', '#f1f5f9'],
+    'applied'             => ['Applied',             '#3b82f6', '#eff6ff'],
+    'screening'           => ['Screening',           '#f59e0b', '#fffbeb'],
+    'review'              => ['In Review',           '#8b5cf6', '#f5f3ff'],
+    'interview_scheduled' => ['Interview Scheduled', '#0ea5e9', '#f0f9ff'],
+    'offer_made'          => ['Offer Made',          '#10b981', '#ecfdf5'],
+    'rejected'            => ['Rejected',            '#ef4444', '#fef2f2'],
+];
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Candidate Applications - Business Management</title>
+    <title>Candidates — KConsulting Hub</title>
     <link rel="icon" type="image/png" href="img/KConsultingLogo1.png">
     <link rel="stylesheet" href="css/main.css">
     <style>
-        .candidate-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-        .candidate-card {
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 12px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        .candidate-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            border-bottom: 2px solid #f0f0f0;
-            padding-bottom: 1rem;
-        }
-        .candidate-name {
-            color: #333;
-            margin: 0;
-            font-size: 1.4rem;
-            font-weight: 600;
-        }
-        .candidate-meta {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-        .meta-item {
-            display: flex;
-            align-items: center;
-            font-size: 0.95rem;
-        }
-        .meta-label {
-            font-weight: 600;
-            color: #555;
-            margin-right: 0.5rem;
-        }
-        .status-badge {
-            padding: 0.4rem 1rem;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-        .status-applied { background: #e3f2fd; color: #1565c0; }
-        .status-review { background: #fff3e0; color: #ef6c00; }
-        .status-interview_scheduled { background: #f3e5f5; color: #7b1fa2; }
-        .status-offer_made { background: #e8f5e8; color: #2e7d2e; }
-        .status-rejected { background: #ffebee; color: #c62828; }
-        .status-pending { background: #f5f5f5; color: #616161; }
-        .status-screening { background: #fff8e1; color: #f57c00; }
-        
-        .cover-letter {
-            background: #f8f9fa;
-            padding: 1.5rem;
-            border-radius: 8px;
-            margin-top: 1.5rem;
-            border-left: 4px solid #667eea;
-        }
-        .section-title {
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 0.75rem;
-        }
-        .stats-bar {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-        .stat-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 1.5rem;
-            border-radius: 12px;
-            text-align: center;
-        }
-        .stat-number {
-            font-size: 2rem;
-            font-weight: bold;
-            margin-bottom: 0.5rem;
-        }
-        .stat-label {
-            font-size: 0.9rem;
-            opacity: 0.9;
-        }
-        .header-section {
-            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #ec4899 100%);
-            color: white;
-            padding: 2rem;
-            border-radius: 16px;
-            margin-bottom: 2rem;
-            text-align: center;
-        }
-        .header-title {
-            font-size: 2.5rem;
-            margin: 0 0 1rem 0;
-            font-weight: 700;
-        }
-        .breadcrumb {
-            margin-bottom: 2rem;
-        }
-        .breadcrumb a {
-            color: #666;
-            text-decoration: none;
-            margin-right: 0.5rem;
-        }
-        .breadcrumb a:hover {
-            color: #333;
-        }
+        .ca-hero { background: linear-gradient(135deg,#0f172a 0%,#1e293b 100%); color:#fff; padding:28px 32px 24px; }
+        .ca-hero h1 { font-size:1.5rem; font-weight:800; margin:0 0 4px; }
+        .ca-hero p  { font-size:.87rem; color:rgba(255,255,255,.6); margin:0; }
+
+        .ca-wrap { max-width:1300px; margin:0 auto; padding:24px 28px; }
+
+        /* KPIs */
+        .ca-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:14px; margin-bottom:24px; }
+        .ca-kpi  { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:16px 18px; }
+        .ca-kpi-num { font-size:1.6rem; font-weight:800; color:#0f172a; }
+        .ca-kpi-lbl { font-size:.78rem; color:#64748b; margin-top:2px; }
+
+        /* Filter bar */
+        .ca-bar { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:14px 18px; margin-bottom:20px; display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; }
+        .ca-bar input, .ca-bar select { padding:7px 10px; border:1.5px solid #d1d5db; border-radius:7px; font-size:.85rem; color:#374151; }
+        .ca-bar input:focus, .ca-bar select:focus { outline:none; border-color:#0f172a; }
+        .ca-bar button { padding:7px 16px; border:none; border-radius:7px; cursor:pointer; font-size:.85rem; font-weight:600; }
+        .ca-btn-filter { background:#0f172a; color:#fff; }
+        .ca-btn-reset  { background:#f1f5f9; color:#374151; }
+
+        /* Alert */
+        .ca-alert { border-radius:8px; padding:10px 14px; font-size:.85rem; margin-bottom:16px; }
+        .ca-alert-ok  { background:#f0fdf4; border:1px solid #bbf7d0; color:#059669; }
+        .ca-alert-err { background:#fef2f2; border:1px solid #fecaca; color:#dc2626; }
+
+        /* Table */
+        .ca-table-wrap { background:#fff; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; }
+        .ca-table-hdr  { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #f1f5f9; }
+        .ca-table-hdr strong { font-size:.9rem; color:#0f172a; }
+        table.ca-tbl { width:100%; border-collapse:collapse; }
+        .ca-tbl th { background:#f8fafc; font-size:.78rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.4px; padding:10px 14px; text-align:left; border-bottom:1px solid #e2e8f0; }
+        .ca-tbl td { padding:11px 14px; font-size:.86rem; color:#374151; border-bottom:1px solid #f8fafc; vertical-align:middle; }
+        .ca-tbl tr:last-child td { border-bottom:none; }
+        .ca-tbl tr:hover td { background:#fafafa; }
+
+        .ca-badge { display:inline-block; padding:3px 10px; border-radius:12px; font-size:.76rem; font-weight:700; }
+
+        /* Status dropdown form */
+        .ca-status-form select { padding:4px 8px; border:1.5px solid #d1d5db; border-radius:6px; font-size:.8rem; color:#374151; cursor:pointer; }
+        .ca-status-form select:focus { outline:none; border-color:#0f172a; }
+        .ca-status-form button { display:none; }
+
+        .ca-empty { text-align:center; padding:48px 24px; color:#94a3b8; font-size:.9rem; }
     </style>
 </head>
 <body>
-    <div class="candidate-container">
-        <!-- Header Section -->
-        <div class="header-section">
-            <h1 class="header-title">👥 Candidate Applications</h1>
-            <p style="font-size: 1.1rem; margin: 0; opacity: 0.9;">All job applications and candidate profiles</p>
+<?php
+$username   = $_SESSION['username'];
+$role       = $_SESSION['role'];
+$department = $_SESSION['department'];
+$user_id    = $_SESSION['user_id'];
+include 'includes/header.php';
+?>
+<div class="main-layout">
+    <?php include 'includes/sidebar.php'; ?>
+    <div class="main-content" style="padding:0;">
+
+        <div class="ca-hero">
+            <h1>Candidate Applications</h1>
+            <p>HR &rsaquo; Recruitment &rsaquo; Candidates &nbsp;&mdash;&nbsp; <?= count($candidates) ?> result<?= count($candidates) !== 1 ? 's' : '' ?></p>
         </div>
 
-        <!-- Breadcrumb -->
-        <div class="breadcrumb">
-            <a href="dashboard.php">← Back to Dashboard</a> | <a href="departments/hr.php">HR Department</a> | <a href="job_postings.php">Job Postings</a>
-        </div>
+        <div class="ca-wrap">
+            <?php if ($success): ?><div class="ca-alert ca-alert-ok">✅ <?= Security::escapeHTML($success) ?></div><?php endif; ?>
+            <?php if ($error):   ?><div class="ca-alert ca-alert-err">⚠️ <?= Security::escapeHTML($error) ?></div><?php endif; ?>
 
-        <!-- Statistics -->
-        <div class="stats-bar">
-            <div class="stat-card">
-                <div class="stat-number"><?php echo count($candidates); ?></div>
-                <div class="stat-label">Total Candidates</div>
+            <!-- KPIs -->
+            <div class="ca-kpis">
+                <div class="ca-kpi"><div class="ca-kpi-num"><?= $kpis['total'] ?></div><div class="ca-kpi-lbl">Total</div></div>
+                <div class="ca-kpi"><div class="ca-kpi-num" style="color:#3b82f6"><?= $kpis['new_apps'] ?></div><div class="ca-kpi-lbl">New Applications</div></div>
+                <div class="ca-kpi"><div class="ca-kpi-num" style="color:#0ea5e9"><?= $kpis['interviews'] ?></div><div class="ca-kpi-lbl">Interviews</div></div>
+                <div class="ca-kpi"><div class="ca-kpi-num" style="color:#10b981"><?= $kpis['offers'] ?></div><div class="ca-kpi-lbl">Offers Made</div></div>
+                <div class="ca-kpi"><div class="ca-kpi-num" style="color:#ef4444"><?= $kpis['rejected'] ?></div><div class="ca-kpi-lbl">Rejected</div></div>
             </div>
-            <div class="stat-card">
-                <div class="stat-number"><?php echo count(array_filter($candidates, function($c) { return $c['status'] === 'applied'; })); ?></div>
-                <div class="stat-label">New Applications</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number"><?php echo count(array_filter($candidates, function($c) { return $c['status'] === 'interview_scheduled'; })); ?></div>
-                <div class="stat-label">Interviews Scheduled</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number"><?php echo count(array_unique(array_column($candidates, 'job_department'))); ?></div>
-                <div class="stat-label">Departments</div>
-            </div>
-        </div>
 
-        <!-- Candidates List -->
-        <?php if (empty($candidates)): ?>
-            <div style="text-align: center; padding: 3rem; background: #f9f9f9; border-radius: 12px;">
-                <h3>No candidate applications yet</h3>
-                <p>Applications will appear here as they are submitted.</p>
-            </div>
-        <?php else: ?>
-            <?php foreach ($candidates as $candidate): ?>
-                <div class="candidate-card">
-                    <div class="candidate-header">
-                        <div>
-                            <h2 class="candidate-name">
-                                <?php echo escape($candidate['first_name'] . ' ' . $candidate['last_name']); ?>
-                            </h2>
-                            <div style="color: #666; font-size: 1rem;">
-                                Applied for: <strong><?php echo escape($candidate['job_title']); ?></strong> (<?php echo escape($candidate['job_department']); ?>)
-                            </div>
-                        </div>
-                        <span class="status-badge status-<?php echo $candidate['status']; ?>">
-                            <?php echo ucwords(str_replace('_', ' ', $candidate['status'])); ?>
-                        </span>
-                    </div>
+            <!-- Filter bar -->
+            <form method="GET" class="ca-bar">
+                <input type="text" name="search" placeholder="Search name / email…" value="<?= Security::escapeHTML($f_search) ?>">
+                <select name="job_id">
+                    <option value="">All Positions</option>
+                    <?php foreach ($jobs_list as $j): ?>
+                    <option value="<?= $j['id'] ?>" <?= $f_job === (int)$j['id'] ? 'selected' : '' ?>><?= Security::escapeHTML($j['title']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <select name="status">
+                    <option value="">All Statuses</option>
+                    <?php foreach ($status_labels as $k => [$lbl]): ?>
+                    <option value="<?= $k ?>" <?= $f_status === $k ? 'selected' : '' ?>><?= $lbl ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <button type="submit" class="ca-btn-filter">Filter</button>
+                <a href="candidates.php" class="ca-btn-reset" style="text-decoration:none;padding:7px 16px;border-radius:7px;font-size:.85rem;font-weight:600;">Reset</a>
+            </form>
 
-                    <div class="candidate-meta">
-                        <div class="meta-item">
-                            <span class="meta-label">📧 Email:</span>
-                            <?php echo escape($candidate['email']); ?>
-                        </div>
-                        <div class="meta-item">
-                            <span class="meta-label">📱 Phone:</span>
-                            <?php echo escape($candidate['phone'] ?? 'Not provided'); ?>
-                        </div>
-                        <div class="meta-item">
-                            <span class="meta-label">🎓 Experience:</span>
-                            <?php echo $candidate['years_experience'] ? $candidate['years_experience'] . ' years' : 'Not specified'; ?>
-                        </div>
-                        <div class="meta-item">
-                            <span class="meta-label">💰 Salary Expectation:</span>
-                            <?php echo $candidate['salary_expectation'] ? 'R' . number_format($candidate['salary_expectation']) : 'Not specified'; ?>
-                        </div>
-                        <div class="meta-item">
-                            <span class="meta-label">📅 Applied:</span>
-                            <?php echo formatDate($candidate['created_at']); ?>
-                        </div>
-                        <div class="meta-item">
-                            <span class="meta-label">🌍 Location:</span>
-                            <?php echo escape($candidate['preferred_location'] ?? 'Not specified'); ?>
-                        </div>
-                    </div>
-
-                    <?php if ($candidate['cover_letter']): ?>
-                        <div class="cover-letter">
-                            <div class="section-title">✍️ Cover Letter</div>
-                            <div style="line-height: 1.6; font-style: italic; white-space: pre-wrap;">
-                                <?php echo escape($candidate['cover_letter']); ?>
-                            </div>
-                        </div>
-                    <?php endif; ?>
+            <!-- Table -->
+            <div class="ca-table-wrap">
+                <div class="ca-table-hdr">
+                    <strong><?= count($candidates) ?> candidate<?= count($candidates) !== 1 ? 's' : '' ?></strong>
+                    <a href="departments/hr.php?tab=recruitment" style="font-size:.82rem;color:#64748b;text-decoration:none;">← HR Recruitment Tab</a>
                 </div>
-            <?php endforeach; ?>
-        <?php endif; ?>
+                <?php if (empty($candidates)): ?>
+                    <div class="ca-empty">No candidates match your filters.</div>
+                <?php else: ?>
+                <table class="ca-tbl">
+                    <thead>
+                        <tr>
+                            <th>Candidate</th>
+                            <th>Position</th>
+                            <th>Contact</th>
+                            <th>Experience</th>
+                            <th>Applied</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($candidates as $c): ?>
+                        <?php [$lbl, $color, $bg] = $status_labels[$c['status']] ?? ['Unknown','#94a3b8','#f1f5f9']; ?>
+                        <tr>
+                            <td>
+                                <div style="font-weight:700;color:#0f172a;"><?= Security::escapeHTML($c['first_name'].' '.$c['last_name']) ?></div>
+                                <?php if ($c['preferred_location']): ?>
+                                <div style="font-size:.78rem;color:#94a3b8;"><?= Security::escapeHTML($c['preferred_location']) ?></div>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <div style="font-weight:600;"><?= Security::escapeHTML($c['job_title']) ?></div>
+                                <div style="font-size:.78rem;color:#94a3b8;"><?= Security::escapeHTML($c['job_dept']) ?></div>
+                            </td>
+                            <td>
+                                <div><?= Security::escapeHTML($c['email']) ?></div>
+                                <?php if ($c['phone']): ?>
+                                <div style="font-size:.78rem;color:#94a3b8;"><?= Security::escapeHTML($c['phone']) ?></div>
+                                <?php endif; ?>
+                            </td>
+                            <td><?= $c['years_experience'] ? $c['years_experience'].' yrs' : '—' ?></td>
+                            <td style="font-size:.8rem;color:#64748b;"><?= date('d M Y', strtotime($c['created_at'])) ?></td>
+                            <td>
+                                <form method="POST" class="ca-status-form" onchange="this.submit()">
+                                    <?= Security::getCSRFTokenField() ?>
+                                    <input type="hidden" name="candidate_id" value="<?= $c['id'] ?>">
+                                    <input type="hidden" name="update_status" value="1">
+                                    <select name="status" style="background:<?= $bg ?>;color:<?= $color ?>;border-color:<?= $color ?>30;font-weight:700;">
+                                        <?php foreach ($status_labels as $k => [$sl]): ?>
+                                        <option value="<?= $k ?>" <?= $c['status'] === $k ? 'selected' : '' ?>><?= $sl ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <button type="submit">Save</button>
+                                </form>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <?php endif; ?>
+            </div>
 
-        <!-- Footer Actions -->
-        <div style="text-align: center; margin-top: 3rem;">
-            <a href="job_postings.php" class="btn" style="margin: 0 1rem;">💼 View Job Postings</a>
-            <a href="apply.php" class="btn" style="margin: 0 1rem;">📝 Submit New Application</a>
         </div>
     </div>
+</div>
 </body>
 </html>

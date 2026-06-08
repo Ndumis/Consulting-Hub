@@ -12,6 +12,8 @@ $_tab = match($_cur) {
     'bd.php'        => 'bd',
     'finance.php'   => 'finance',
     'hr.php'        => 'hr',
+    'job_postings.php' => 'job_postings',
+    'candidates.php'   => 'candidates',
     'clients.php', 'client_detail.php'     => 'clients',
     'insights.php'  => 'insights',
     'reports.php'   => 'reports',
@@ -40,7 +42,9 @@ function _nav($href, $icon, $label, $active) {
         <?= _nav($_nb . 'marketing.php', '📈', 'Marketing',            $_tab === 'marketing') ?>
         <?= _nav($_nb . 'bd.php',        '🎯', 'Business Development', $_tab === 'bd')        ?>
         <?= _nav($_nb . 'finance.php',   '💰', 'Finance',              $_tab === 'finance')   ?>
-        <?= _nav($_nb . 'hr.php',        '👥', 'HR',                   $_tab === 'hr')        ?>
+        <?= _nav($_nb . 'hr.php',           '👥', 'HR',            $_tab === 'hr')           ?>
+        <?= _nav($_ab . 'job_postings.php', '💼', 'Job Postings', $_tab === 'job_postings') ?>
+        <?= _nav($_ab . 'candidates.php',   '📨', 'Candidates',   $_tab === 'candidates')   ?>
 
         <div class="nav-divider"></div>
         <div class="nav-section-label">Management</div>
