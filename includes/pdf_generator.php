@@ -25,6 +25,14 @@ class EnterprisePDFGenerator {
         $vat_amount = $document['vat_amount'];
         $total_amount = $document['total_amount'];
         $vat_percentage = ($document['vat_rate'] * 100);
+
+        // Embed logo as base64 so it works in both browser preview and wkhtmltopdf
+        $logo_img_tag = '';
+        $logo_path = __DIR__ . '/../img/KConsultingLogo.png';
+        if (file_exists($logo_path)) {
+            $logo_b64 = base64_encode(file_get_contents($logo_path));
+            $logo_img_tag = '<img src="data:image/png;base64,' . $logo_b64 . '" alt="KConsulting" style="height:60px;width:auto;display:block;margin:0 auto 8px;">';
+        }
         
         // Generate professional PDF content
         $html = '
@@ -77,15 +85,15 @@ class EnterprisePDFGenerator {
         
         $html .= '
             <div class="header">
+                ' . $logo_img_tag . '
                 <h1>' . $doc_type . '</h1>
                 <h2>' . Security::escapeHTML($doc_number) . '</h2>
             </div>
-            
+
             <div class="company-info">
-                <h3>KConsulting Firm</h3>
-                <!--<p>Professional Business Solutions<br>-->
+                <strong>KConsulting Firm</strong><br>
                 South Africa • Phone: +27 64 519 0549<br>
-                Email: info@thekconsult.co.za.co.za</p>
+                Email: info@thekconsult.co.za
             </div>
             
             <div class="document-info">
@@ -198,7 +206,7 @@ class EnterprisePDFGenerator {
         $html .= '
             <div class="footer">
                 <p><strong>Thank you for your business!</strong></p>
-                <p>Generated on ' . date('d M Y H:i') . ' • KConsulting Firm</p>
+                <p>Generated on ' . date('d M Y H:i') . ' • KConsulting Firm • info@thekconsult.co.za</p>
                 <!--<p style="font-size: 8pt;">This is a system-generated document</p>-->
             </div>
         </body>

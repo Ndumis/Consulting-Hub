@@ -1,7 +1,7 @@
 <div class="header">
     <div class="logo-section">
         <button class="menu-toggle" onclick="toggleSidebar()" aria-label="Toggle menu">☰</button>
-        <div class="logo-placeholder">KC FIRM</div>
+        <img src="../img/KConsultingLogo.png" alt="KConsulting" class="logo-img">
         <h2>Business Management System</h2>
     </div>
     <div class="notifications-section">

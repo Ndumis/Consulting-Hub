@@ -25,13 +25,12 @@ body {
     align-items: center;
 }
 
-.logo-placeholder {
-    background: #333;
-    color: white;
-    padding: 0.5rem 1rem;
-    border-radius: 6px;
+.logo-img {
+    height: 42px;
+    width: auto;
     margin-right: 1rem;
-    border: 2px dashed #666;
+    object-fit: contain;
+    display: block;
 }
 
 .notifications-section {

@@ -156,7 +156,7 @@ foreach ($all_comments as $comment) {
 <body>
     <div class="header">
         <div class="logo-section">
-            <div class="logo-placeholder">LOGO</div>
+            <img src="../img/KConsultingLogo.png" alt="KConsulting" class="logo-img">
             <h1>Business Management System</h1>
         </div>
         <div class="user-info">

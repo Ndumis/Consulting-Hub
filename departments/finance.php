@@ -649,13 +649,45 @@ if ($_POST && isset($_POST['create_purchase_order'])) {
 if ($_POST && isset($_POST['update_po_status'])) {
     Security::checkCSRFToken();
     Security::requireWriteAccess('Finance');
-    
+
     $po_id = (int)$_POST['po_id'];
     $status = Security::sanitizeInput($_POST['status']);
-    
+
     $query = "UPDATE purchase_orders SET status = ? WHERE id = ?";
     $stmt = $db->prepare($query);
     $stmt->execute([$status, $po_id]);
+}
+
+// Handle quotation status update
+if ($_POST && isset($_POST['update_quotation_status'])) {
+    Security::checkCSRFToken();
+    Security::requireWriteAccess('Finance');
+
+    $quotation_id = (int)$_POST['quotation_id'];
+    $allowed = ['draft', 'sent', 'accepted', 'rejected'];
+    $status = Security::sanitizeInput($_POST['status']);
+    if (in_array($status, $allowed)) {
+        $query = "UPDATE quotations SET status = ?, updated_at = NOW() WHERE id = ?";
+        $stmt = $db->prepare($query);
+        $stmt->execute([$status, $quotation_id]);
+        $success_message = "Quotation status updated to " . ucfirst($status) . ".";
+    }
+}
+
+// Handle invoice status update
+if ($_POST && isset($_POST['update_invoice_status'])) {
+    Security::checkCSRFToken();
+    Security::requireWriteAccess('Finance');
+
+    $invoice_id = (int)$_POST['invoice_id'];
+    $allowed = ['pending', 'overdue', 'cancelled'];
+    $status = Security::sanitizeInput($_POST['status']);
+    if (in_array($status, $allowed)) {
+        $query = "UPDATE invoices SET status = ?, updated_at = NOW() WHERE id = ?";
+        $stmt = $db->prepare($query);
+        $stmt->execute([$status, $invoice_id]);
+        $success_message = "Invoice status updated to " . ucfirst($status) . ".";
+    }
 }
 
 // Handle new project revenue recording
@@ -1575,20 +1607,30 @@ if (!isset($expenses)) {
                                 <td><?php echo Security::escapeHTML($quotation['created_by_name'] ?? 'N/A'); ?></td>
                                 <td class="action-buttons">
                                     <button class="btn btn-small" onclick="viewQuotation(<?php echo $quotation['id']; ?>)" title="View Details">👁️ View</button>
+                                    <?php /* PDF always visible regardless of status */ ?>
+                                    <button class="btn btn-small btn-primary" onclick="printQuotationPDF(<?php echo $quotation['id']; ?>)" title="Download PDF">📄 PDF</button>
+
                                     <?php if ($quotation['status'] === 'completed'): ?>
-                                        <button class="btn btn-small btn-primary" onclick="printQuotationPDF(<?php echo $quotation['id']; ?>)" title="Download PDF">📄 PDF</button>
                                         <?php if ($quotation['converted_invoice_id']): ?>
                                             <button class="btn btn-small btn-info" onclick="viewInvoice(<?php echo $quotation['converted_invoice_id']; ?>)" title="View Created Invoice">📋 View Invoice</button>
                                             <a href="finance_pdf.php?type=invoice&id=<?php echo $quotation['converted_invoice_id']; ?>" target="_blank" class="btn btn-small btn-success" title="Download Invoice PDF">📄 Invoice PDF</a>
                                         <?php endif; ?>
                                         <span class="text-success" style="font-size: 0.8em;">✅ Completed</span>
+
                                     <?php elseif ($quotation['status'] === 'accepted'): ?>
+                                        <?php /* Accepted = locked — no status change, just convert */ ?>
                                         <button class="btn btn-small btn-secondary" onclick="editQuotation(<?php echo $quotation['id']; ?>)" title="Edit Quotation">✏️ Edit</button>
-                                        <button class="btn btn-small btn-primary" onclick="printQuotationPDF(<?php echo $quotation['id']; ?>)" title="Download PDF">📄 PDF</button>
                                         <button class="btn btn-small btn-success" onclick="convertToInvoice(<?php echo $quotation['id']; ?>)">🔄 Convert to Invoice</button>
+
                                     <?php else: ?>
                                         <button class="btn btn-small btn-secondary" onclick="editQuotation(<?php echo $quotation['id']; ?>)" title="Edit Quotation">✏️ Edit</button>
-                                        <button class="btn btn-small btn-primary" onclick="printQuotationPDF(<?php echo $quotation['id']; ?>)" title="Download PDF" disabled>📄 PDF</button>
+                                        <select onchange="updateQuotationStatus(<?php echo $quotation['id']; ?>, this.value)" class="btn btn-small" title="Update Status" style="cursor:pointer;">
+                                            <option value="">🔄 Status</option>
+                                            <option value="draft"    <?php echo $quotation['status']==='draft'    ?'selected':''; ?>>Draft</option>
+                                            <option value="sent"     <?php echo $quotation['status']==='sent'     ?'selected':''; ?>>Sent</option>
+                                            <option value="accepted" <?php echo $quotation['status']==='accepted' ?'selected':''; ?>>Accepted</option>
+                                            <option value="rejected" <?php echo $quotation['status']==='rejected' ?'selected':''; ?>>Rejected</option>
+                                        </select>
                                     <?php endif; ?>
                                 </td>
                             </tr>
@@ -1631,15 +1673,17 @@ if (!isset($expenses)) {
                                 <td class="action-buttons">
                                     <button class="btn btn-small" onclick="viewInvoice(<?php echo $invoice['id']; ?>)" title="View Details">👁️ View</button>
                                     <button class="btn btn-small btn-secondary" onclick="editInvoice(<?php echo $invoice['id']; ?>)" title="Edit Invoice">✏️ Edit</button>
-                                    <?php if ($invoice['status'] !== 'draft'): ?>
-                                        <button class="btn btn-small btn-primary" onclick="printInvoicePDF(<?php echo $invoice['id']; ?>)" title="Download PDF">📄 PDF</button>
-                                    <?php else: ?>
-                                        <button class="btn btn-small btn-primary" onclick="printInvoicePDF(<?php echo $invoice['id']; ?>)" title="Download PDF" disabled>📄 PDF</button>
-                                    <?php endif; ?>
-                                    <?php if ($invoice['status'] !== 'paid'): ?>
-                                        <button class="btn btn-small btn-success" onclick="recordPayment(<?php echo $invoice['id']; ?>, <?php echo $invoice['total_amount'] - $invoice['paid_amount']; ?>)">💳 Record Payment</button>
-                                    <?php else: ?>
+                                    <button class="btn btn-small btn-primary" onclick="printInvoicePDF(<?php echo $invoice['id']; ?>)" title="Download PDF">📄 PDF</button>
+                                    <?php if ($invoice['status'] === 'paid'): ?>
                                         <button class="btn btn-small btn-info" disabled>✅ Paid</button>
+                                    <?php else: ?>
+                                        <button class="btn btn-small btn-success" onclick="recordPayment(<?php echo $invoice['id']; ?>, <?php echo $invoice['total_amount'] - $invoice['paid_amount']; ?>)">💳 Record Payment</button>
+                                        <select onchange="updateInvoiceStatus(<?php echo $invoice['id']; ?>, this.value)" class="btn btn-small" title="Update Status" style="cursor:pointer;">
+                                            <option value="">🔄 Status</option>
+                                            <option value="pending" <?php echo $invoice['status']==='pending'?'selected':''; ?>>Pending</option>
+                                            <option value="overdue" <?php echo $invoice['status']==='overdue'?'selected':''; ?>>Overdue</option>
+                                            <option value="cancelled" <?php echo $invoice['status']==='cancelled'?'selected':''; ?>>Cancelled</option>
+                                        </select>
                                     <?php endif; ?>
                                 </td>
                             </tr>
@@ -2526,6 +2570,7 @@ if (!isset($expenses)) {
         }
         
         function updatePOStatus(poId, newStatus) {
+            if (!newStatus) return;
             if (confirm('Update Purchase Order #' + poId + ' status to: ' + newStatus + '?')) {
                 const form = document.createElement('form');
                 form.method = 'POST';
@@ -2533,6 +2578,38 @@ if (!isset($expenses)) {
                     <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
                     <input type="hidden" name="update_po_status" value="1">
                     <input type="hidden" name="po_id" value="${poId}">
+                    <input type="hidden" name="status" value="${newStatus}">
+                `;
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+
+        function updateQuotationStatus(quotationId, newStatus) {
+            if (!newStatus) return;
+            if (confirm('Update Quotation #' + quotationId + ' status to: ' + newStatus + '?')) {
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.innerHTML = `
+                    <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
+                    <input type="hidden" name="update_quotation_status" value="1">
+                    <input type="hidden" name="quotation_id" value="${quotationId}">
+                    <input type="hidden" name="status" value="${newStatus}">
+                `;
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+
+        function updateInvoiceStatus(invoiceId, newStatus) {
+            if (!newStatus) return;
+            if (confirm('Update Invoice #' + invoiceId + ' status to: ' + newStatus + '?')) {
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.innerHTML = `
+                    <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
+                    <input type="hidden" name="update_invoice_status" value="1">
+                    <input type="hidden" name="invoice_id" value="${invoiceId}">
                     <input type="hidden" name="status" value="${newStatus}">
                 `;
                 document.body.appendChild(form);

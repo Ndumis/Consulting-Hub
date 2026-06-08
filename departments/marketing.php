@@ -17,6 +17,21 @@
     $database = new Database();
     $db = $database->getConnection();
 
+    // Auto-migrate blog_posts: add columns introduced in the 2026-06-08 migration
+    // if they don't exist yet so the page works before a manual DB migration is run.
+    try {
+        $col_check = $db->query("SHOW COLUMNS FROM `blog_posts` LIKE 'client_id'");
+        if ($col_check->rowCount() === 0) {
+            $db->exec("ALTER TABLE `blog_posts`
+                ADD COLUMN `client_id`   INT          DEFAULT NULL,
+                ADD COLUMN `campaign_id` INT          DEFAULT NULL,
+                ADD COLUMN `author_id`   INT          DEFAULT NULL,
+                ADD COLUMN `updated_at`  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
+        }
+    } catch (Exception $e) {
+        error_log("blog_posts auto-migration error: " . $e->getMessage());
+    }
+
     // Get user info
     $user_id = $_SESSION['user_id'];
     $username = $_SESSION['username'];
@@ -186,10 +201,23 @@
         $featured_image = Security::sanitizeInput($_POST['featured_image'] ?? '');
         $excerpt = Security::sanitizeInput($_POST['excerpt'] ?? '');
         
-        $query = "INSERT INTO marketing_blog_posts (client_id, campaign_id, title, content, author_id, category, tags, publish_date, status, featured_image, excerpt) 
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        // Resolve author name from user id
+        $author_name = $_SESSION['username'];
+        if ($author_id && $author_id !== (int)$_SESSION['user_id']) {
+            $a_stmt = $db->prepare("SELECT username FROM users WHERE id = ?");
+            $a_stmt->execute([$author_id]);
+            $a_row = $a_stmt->fetch(PDO::FETCH_ASSOC);
+            if ($a_row) $author_name = $a_row['username'];
+        }
+
+        // Generate a unique URL slug from the title
+        $slug = strtolower(preg_replace('/[^A-Za-z0-9]+/', '-', trim($title)));
+        $slug = trim($slug, '-') . '-' . substr(md5(uniqid()), 0, 6);
+
+        $query = "INSERT INTO blog_posts (client_id, campaign_id, slug, title, content, author, author_id, category, tags, published_at, status, featured_image, excerpt)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $db->prepare($query);
-        $stmt->execute([$client_id, $campaign_id, $title, $content, $author_id, $category, $tags, $publish_date, $status, $featured_image, $excerpt]);
+        $stmt->execute([$client_id, $campaign_id, $slug, $title, $content, $author_name, $author_id, $category, $tags, $publish_date, $status, $featured_image, $excerpt]);
     }
 
     // Handle blog post updates
@@ -207,7 +235,7 @@
         $featured_image = Security::sanitizeInput($_POST['featured_image'] ?? '');
         $excerpt = Security::sanitizeInput($_POST['excerpt'] ?? '');
         
-        $query = "UPDATE marketing_blog_posts SET title = ?, content = ?, category = ?, tags = ?, publish_date = ?, status = ?, featured_image = ?, excerpt = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
+        $query = "UPDATE blog_posts SET title = ?, content = ?, category = ?, tags = ?, published_at = ?, status = ?, featured_image = ?, excerpt = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
         $stmt = $db->prepare($query);
         $stmt->execute([$title, $content, $category, $tags, $publish_date, $status, $featured_image, $excerpt, $post_id]);
     }
@@ -220,7 +248,7 @@
         $post_id = (int)$_POST['post_id'];
         
         // Soft delete by changing status to 'deleted'
-        $query = "UPDATE marketing_blog_posts SET status = 'deleted', updated_at = CURRENT_TIMESTAMP WHERE id = ?";
+        $query = "UPDATE blog_posts SET status = 'deleted', updated_at = CURRENT_TIMESTAMP WHERE id = ?";
         $stmt = $db->prepare($query);
         $stmt->execute([$post_id]);
     }
@@ -287,12 +315,13 @@
     }
 
     // Get blog posts with client and campaign info (exclude deleted posts)
-    $query = "SELECT bp.*, c.name as client_name, c.company as client_company, mc.campaign_name 
-              FROM marketing_blog_posts bp 
-              LEFT JOIN clients c ON bp.client_id = c.id 
-              LEFT JOIN marketing_campaigns mc ON bp.campaign_id = mc.id 
+    $query = "SELECT bp.*, c.name as client_name, c.company as client_company, mc.campaign_name,
+                     DATE(bp.published_at) as publish_date
+              FROM blog_posts bp
+              LEFT JOIN clients c ON bp.client_id = c.id
+              LEFT JOIN marketing_campaigns mc ON bp.campaign_id = mc.id
               WHERE bp.status != 'deleted'
-              ORDER BY bp.publish_date DESC, bp.created_at DESC";
+              ORDER BY bp.published_at DESC, bp.created_at DESC";
     $stmt = $db->prepare($query);
     $stmt->execute();
     $blog_posts = $stmt->fetchAll(PDO::FETCH_ASSOC);

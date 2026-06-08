@@ -28,16 +28,16 @@ switch ($type) {
     case 'quotation':
         // Get quotation data
         $query = "SELECT q.*, c.name as client_name, c.email as client_email, u.username as created_by_name
-                  FROM quotations q 
-                  LEFT JOIN clients c ON q.client_id = c.id 
+                  FROM quotations q
+                  LEFT JOIN clients c ON q.client_id = c.id
                   LEFT JOIN users u ON q.created_by = u.id
-                  WHERE q.id = ? AND q.status = 'accepted'";
+                  WHERE q.id = ?";
         $stmt = $db->prepare($query);
         $stmt->execute([$id]);
         $quotation = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         if (!$quotation) {
-            die('Quotation not found or not accepted');
+            die('Quotation not found');
         }
         
         // Get quotation items
@@ -53,16 +53,16 @@ switch ($type) {
     case 'invoice':
         // Get invoice data
         $query = "SELECT i.*, c.name as client_name, c.email as client_email, u.username as created_by_name
-                  FROM invoices i 
-                  LEFT JOIN clients c ON i.client_id = c.id 
+                  FROM invoices i
+                  LEFT JOIN clients c ON i.client_id = c.id
                   LEFT JOIN users u ON i.created_by = u.id
-                  WHERE i.id = ? AND i.status != 'draft'";
+                  WHERE i.id = ?";
         $stmt = $db->prepare($query);
         $stmt->execute([$id]);
         $invoice = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         if (!$invoice) {
-            die('Invoice not found or still in draft status');
+            die('Invoice not found');
         }
         
         // Get invoice items

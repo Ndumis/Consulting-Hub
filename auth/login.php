@@ -64,7 +64,7 @@ if ($_POST) {
 <body>
     <div class="login-container">
         <div class="logo-placeholder">
-            <h1>Your Company Logo</h1>
+            <img src="../img/KConsultingLogo.png" alt="KConsulting" style="max-width: 220px; height: auto; display: block; margin: 0 auto 0.75rem;">
             <p>Business Management System</p>
         </div>
         

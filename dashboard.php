@@ -277,12 +277,13 @@ try {
 // Get recent blog posts for dashboard
 $recent_blog_posts = [];
 try {
-    $query = "SELECT bp.*, c.name as client_name, mc.campaign_name 
-              FROM marketing_blog_posts bp 
-              LEFT JOIN clients c ON bp.client_id = c.id 
-              LEFT JOIN marketing_campaigns mc ON bp.campaign_id = mc.id 
-              WHERE bp.status = 'published' AND bp.status != 'deleted' AND bp.publish_date <= CURRENT_TIMESTAMP
-              ORDER BY bp.publish_date DESC 
+    $query = "SELECT bp.*, c.name as client_name, mc.campaign_name,
+                     DATE(bp.published_at) as publish_date
+              FROM blog_posts bp
+              LEFT JOIN clients c ON bp.client_id = c.id
+              LEFT JOIN marketing_campaigns mc ON bp.campaign_id = mc.id
+              WHERE bp.status = 'published' AND bp.published_at <= NOW()
+              ORDER BY bp.published_at DESC
               LIMIT 3";
     $stmt = $db->prepare($query);
     $stmt->execute();
@@ -459,7 +460,7 @@ $monthly_trends = [
     <div class="header">
         <div class="logo-section">
             <button class="menu-toggle" onclick="toggleSidebar()" aria-label="Toggle menu">☰</button>
-            <div class="logo-placeholder">KC FIRM</div>
+            <img src="img/KConsultingLogo.png" alt="KConsulting" class="logo-img">
             <h2>Business Management System</h2>
         </div>
         <div class="notifications-section">
