@@ -16,6 +16,7 @@ $_tab = match($_cur) {
     'insights.php'  => 'insights',
     'reports.php'   => 'reports',
     'dashboard.php' => 'dashboard',
+    'profile.php'   => 'profile',
     default         => '',
 };
 $_role_s = $_SESSION['role'] ?? '';
@@ -31,7 +32,8 @@ function _nav($href, $icon, $label, $active) {
 <aside class="app-sidebar" id="sidebar">
     <nav class="sidebar-nav">
         <div class="nav-section-label">Main</div>
-        <?= _nav($_ab . 'dashboard.php', '📊', 'Dashboard', $_tab === 'dashboard') ?>
+        <?= _nav($_ab . 'dashboard.php', '📊', 'Dashboard',  $_tab === 'dashboard') ?>
+        <?= _nav($_ab . 'profile.php',   '👤', 'My Profile', $_tab === 'profile')  ?>
 
         <div class="nav-section-label">Departments</div>
         <?= _nav($_nb . 'projects.php',  '📋', 'Projects',              $_tab === 'projects')  ?>

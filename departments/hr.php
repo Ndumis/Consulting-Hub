@@ -11,2535 +11,1421 @@ require_once '../includes/functions.php';
 require_once '../includes/file_upload.php';
 require_once '../includes/page_tracker.php';
 
-// Check department access
 Security::requireDepartmentAccess('HR');
 
 $database = new Database();
 $db = $database->getConnection();
 
-// Get user info
-$user_id = $_SESSION['user_id'];
-$username = $_SESSION['username'];
-$role = $_SESSION['role'];
-$department = $_SESSION['department'];
-$email = $_SESSION['email'];
+$sess_user_id = $_SESSION['user_id'];
+$sess_role    = $_SESSION['role'];
 
-// Tables exist in MySQL database
-
-// Handle AJAX get department managers request
+// ── AJAX: department managers ────────────────────────────────────────────────
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'get_department_managers') {
-    $department = Security::sanitizeInput($_GET['dept'] ?? '');
-    
-    $query = "SELECT id, first_name, last_name FROM hr_employees WHERE department = ? AND status = 'active' AND id != ? ORDER BY first_name, last_name";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$department, $_GET['exclude_id'] ?? 0]);
-    $managers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
+    $dept = Security::sanitizeInput($_GET['dept'] ?? '');
+    $stmt = $db->prepare("SELECT id, first_name, last_name FROM hr_employees WHERE department=? AND status='active' AND id!=? ORDER BY first_name, last_name");
+    $stmt->execute([$dept, $_GET['exclude_id'] ?? 0]);
     header('Content-Type: application/json');
-    echo json_encode(['success' => true, 'managers' => $managers]);
+    echo json_encode(['success' => true, 'managers' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     exit();
 }
 
-// Handle AJAX employee view request
+// ── AJAX: view employee ──────────────────────────────────────────────────────
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'view_employee') {
-    $employee_id = (int)$_GET['id'];
-    
-    $query = "SELECT e.*, m.first_name as manager_first_name, m.last_name as manager_last_name,
-              CONCAT(m.first_name, ' ', m.last_name) as manager_name
-              FROM hr_employees e 
-              LEFT JOIN hr_employees m ON e.manager_id = m.id 
-              WHERE e.id = ?";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$employee_id]);
-    $employee = $stmt->fetch(PDO::FETCH_ASSOC);
-    
+    $eid = (int)$_GET['id'];
+    $stmt = $db->prepare("SELECT e.*, CONCAT(m.first_name,' ',m.last_name) AS manager_name
+                          FROM hr_employees e LEFT JOIN hr_employees m ON e.manager_id=m.id WHERE e.id=?");
+    $stmt->execute([$eid]);
+    $emp = $stmt->fetch(PDO::FETCH_ASSOC);
     header('Content-Type: application/json');
-    if ($employee) {
-        echo json_encode(['success' => true, 'employee' => $employee]);
-    } else {
-        echo json_encode(['success' => false]);
-    }
+    echo json_encode($emp ? ['success' => true, 'employee' => $emp] : ['success' => false]);
     exit();
 }
 
-// Handle employee update
+// ── Update employee ──────────────────────────────────────────────────────────
 if ($_POST && isset($_POST['update_employee'])) {
     Security::checkCSRFToken();
     Security::requireWriteAccess('HR');
-    
-    $id = (int)$_POST['employee_id'];
-    $first_name = Security::sanitizeInput($_POST['first_name']);
-    $last_name = Security::sanitizeInput($_POST['last_name']);
-    $email = Security::sanitizeInput($_POST['email']);
-    $phone = Security::sanitizeInput($_POST['phone']);
-    $position = Security::sanitizeInput($_POST['position']);
-    $department = Security::sanitizeInput($_POST['department']);
-    $role = Security::sanitizeInput($_POST['role']);
-    $salary = floatval($_POST['salary']);
-    $status = Security::sanitizeInput($_POST['status']);
-    $manager_id = !empty($_POST['manager_id']) ? (int)$_POST['manager_id'] : null;
-    
-    // Validate status
-    $valid_statuses = ['active', 'inactive', 'terminated'];
-    if (!in_array($status, $valid_statuses)) {
-        $status = 'active'; // Default to active if invalid
-    }
-    
-    // Validate manager_id (prevent self-reference)
-    if ($manager_id === $id) {
-        $manager_id = null;
-    }
-    
-    // Check if manager exists
+    $id          = (int)$_POST['employee_id'];
+    $first_name  = Security::sanitizeInput($_POST['first_name']);
+    $last_name   = Security::sanitizeInput($_POST['last_name']);
+    $email       = Security::sanitizeInput($_POST['email']);
+    $phone       = Security::sanitizeInput($_POST['phone']);
+    $position    = Security::sanitizeInput($_POST['position']);
+    $department  = Security::sanitizeInput($_POST['department']);
+    $role        = Security::sanitizeInput($_POST['role']);
+    $salary      = floatval($_POST['salary']);
+    $status      = Security::sanitizeInput($_POST['status']);
+    $manager_id  = !empty($_POST['manager_id']) ? (int)$_POST['manager_id'] : null;
+    $user_id_lnk = !empty($_POST['user_id_link']) ? (int)$_POST['user_id_link'] : null;
+
+    if (!in_array($status, ['active','inactive','terminated'])) $status = 'active';
+    if ($manager_id === $id) $manager_id = null;
     if ($manager_id) {
-        $manager_check = $db->prepare("SELECT id FROM hr_employees WHERE id = ?");
-        $manager_check->execute([$manager_id]);
-        if (!$manager_check->fetch()) {
-            $manager_id = null; // Manager doesn't exist
-        }
+        $chk = $db->prepare("SELECT id FROM hr_employees WHERE id=?");
+        $chk->execute([$manager_id]);
+        if (!$chk->fetch()) $manager_id = null;
     }
-    
-    $query = "UPDATE hr_employees SET first_name = ?, last_name = ?, email = ?, phone = ?, position = ?, department = ?, role = ?, salary = ?, status = ?, manager_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$first_name, $last_name, $email, $phone, $position, $department, $role, $salary, $status, $manager_id, $id]);
-    
-    // Log employee update activity
+    // Validate user_id_lnk — must not already be used by another employee
+    if ($user_id_lnk) {
+        $chk = $db->prepare("SELECT id FROM hr_employees WHERE user_id=? AND id!=?");
+        $chk->execute([$user_id_lnk, $id]);
+        if ($chk->fetch()) $user_id_lnk = null;
+    }
+
+    $stmt = $db->prepare("UPDATE hr_employees SET first_name=?,last_name=?,email=?,phone=?,position=?,department=?,role=?,salary=?,status=?,manager_id=?,user_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=?");
+    $stmt->execute([$first_name,$last_name,$email,$phone,$position,$department,$role,$salary,$status,$manager_id,$user_id_lnk,$id]);
     try {
         require_once '../includes/ActivityLogger.php';
-        $logger = new ActivityLogger($db);
-        $logger->logEdit('employee', $id, "Updated employee: {$first_name} {$last_name}", [
-            'position' => $position,
-            'department' => $department,
-            'status' => $status
-        ]);
-    } catch (Exception $e) {
-        error_log("Activity logging failed: " . $e->getMessage());
-    }
+        (new ActivityLogger($db))->logEdit('employee',$id,"Updated employee: {$first_name} {$last_name}",['status'=>$status]);
+    } catch(Exception $e) { error_log($e->getMessage()); }
+    $success_message = "Employee updated.";
 }
 
-// Handle employee creation
+// ── Create employee (auto-creates linked user account) ───────────────────────
 if ($_POST && isset($_POST['create_employee'])) {
     Security::checkCSRFToken();
     Security::requireWriteAccess('HR');
-    
-    $employee_id = 'EMP-' . str_pad(rand(1000, 9999), 4, '0', STR_PAD_LEFT);
-    $first_name = Security::sanitizeInput($_POST['first_name']);
-    $last_name = Security::sanitizeInput($_POST['last_name']);
-    $email = Security::sanitizeInput($_POST['email']);
-    $phone = Security::sanitizeInput($_POST['phone']);
-    $position = Security::sanitizeInput($_POST['position']);
-    $department = Security::sanitizeInput($_POST['department']);
-    $role = Security::sanitizeInput($_POST['role']);
-    $hire_date = Security::sanitizeInput($_POST['hire_date']);
-    $salary = floatval($_POST['salary']);
-    $manager_id = !empty($_POST['manager_id']) ? (int)$_POST['manager_id'] : null;
-    
-    $query = "INSERT INTO hr_employees (employee_id, first_name, last_name, email, phone, position, department, role, hire_date, salary, manager_id, status) 
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$employee_id, $first_name, $last_name, $email, $phone, $position, $department, $role, $hire_date, $salary, $manager_id, 'active']);
-    
-    $new_employee_db_id = $db->lastInsertId();
-    
-    // Log employee creation activity
+
+    $employee_id = 'EMP-'.str_pad(rand(1000,9999),4,'0',STR_PAD_LEFT);
+    $first_name  = Security::sanitizeInput($_POST['first_name']);
+    $last_name   = Security::sanitizeInput($_POST['last_name']);
+    $email       = Security::sanitizeInput($_POST['email']);
+    $phone       = Security::sanitizeInput($_POST['phone']);
+    $position    = Security::sanitizeInput($_POST['position']);
+    $department  = Security::sanitizeInput($_POST['department']);
+    $role        = Security::sanitizeInput($_POST['role']);
+    $hire_date   = Security::sanitizeInput($_POST['hire_date']);
+    $salary      = floatval($_POST['salary']);
+    $manager_id  = !empty($_POST['manager_id']) ? (int)$_POST['manager_id'] : null;
+
     try {
-        require_once '../includes/ActivityLogger.php';
-        $logger = new ActivityLogger($db);
-        $logger->logCreate('employee', $new_employee_db_id, "Created new employee: {$first_name} {$last_name}", [
-            'employee_id' => $employee_id,
-            'position' => $position,
-            'department' => $department,
-            'hire_date' => $hire_date
-        ]);
-    } catch (Exception $e) {
-        error_log("Activity logging failed: " . $e->getMessage());
+        $db->beginTransaction();
+
+        // Generate unique username: firstname_lastname, append number if taken
+        $base_username = strtolower(preg_replace('/[^a-z0-9]/i', '', $first_name).'_'.preg_replace('/[^a-z0-9]/i', '', $last_name));
+        $username = $base_username;
+        $suffix   = 2;
+        while (true) {
+            $chk = $db->prepare("SELECT id FROM users WHERE username=?");
+            $chk->execute([$username]);
+            if (!$chk->fetch()) break;
+            $username = $base_username.$suffix++;
+        }
+
+        // Temporary password: Welcome + last 4 of employee_id (e.g. Welcome1234!)
+        $tmp_suffix   = substr($employee_id, -4);
+        $tmp_password = 'Welcome'.$tmp_suffix.'!';
+        $hashed       = password_hash($tmp_password, PASSWORD_BCRYPT);
+
+        // Map HR department name to users.department enum
+        $dept_map = ['IT'=>'IT','Marketing'=>'Marketing','Finance'=>'Finance','HR'=>'HR','Business Development'=>'IT'];
+        $user_dept = $dept_map[$department] ?? 'IT';
+        $user_role = in_array($role, ['admin','manager','employee']) ? $role : 'employee';
+
+        // Create user account
+        $stmt = $db->prepare("INSERT INTO users (username,email,password,role,department) VALUES (?,?,?,?,?)");
+        $stmt->execute([$username, $email, $hashed, $user_role, $user_dept]);
+        $new_user_id = $db->lastInsertId();
+
+        // Create employee record, linked to the new user
+        $stmt = $db->prepare("INSERT INTO hr_employees (employee_id,first_name,last_name,email,phone,position,department,role,hire_date,salary,manager_id,user_id,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'active')");
+        $stmt->execute([$employee_id,$first_name,$last_name,$email,$phone,$position,$department,$role,$hire_date,$salary,$manager_id,$new_user_id]);
+        $new_id = $db->lastInsertId();
+
+        $db->commit();
+
+        try {
+            require_once '../includes/ActivityLogger.php';
+            (new ActivityLogger($db))->logCreate('employee',$new_id,"Created employee: {$first_name} {$last_name}",['employee_id'=>$employee_id,'username'=>$username]);
+        } catch(Exception $e) { error_log($e->getMessage()); }
+
+        $success_message = "Employee <strong>{$first_name} {$last_name}</strong> created. Portal account: <code>{$username}</code> / Temp password: <code>{$tmp_password}</code> — share with employee and ask them to update via My Profile.";
+
+    } catch(Exception $e) {
+        $db->rollBack();
+        $error_message = "Failed to create employee: ".$e->getMessage();
     }
 }
 
-// Handle leave request
+// ── Create leave request (HR-initiated) ─────────────────────────────────────
 if ($_POST && isset($_POST['create_leave_request'])) {
     Security::checkCSRFToken();
-    
-    $employee_id = (int)$_POST['employee_id'];
+    $emp_id     = (int)$_POST['employee_id'];
     $leave_type = Security::sanitizeInput($_POST['leave_type']);
     $start_date = Security::sanitizeInput($_POST['start_date']);
-    $end_date = Security::sanitizeInput($_POST['end_date']);
-    $reason = Security::sanitizeInput($_POST['reason']);
-    
-    // Calculate days requested
-    $start = new DateTime($start_date);
-    $end = new DateTime($end_date);
-    $days_requested = $start->diff($end)->days + 1;
-    
-    $query = "INSERT INTO hr_leave_requests (employee_id, leave_type, start_date, end_date, days_requested, reason) 
-              VALUES (?, ?, ?, ?, ?, ?)";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$employee_id, $leave_type, $start_date, $end_date, $days_requested, $reason]);
-    
-    $leave_request_id = $db->lastInsertId();
-    
-    // Log leave request creation activity
-    try {
-        require_once '../includes/ActivityLogger.php';
-        $logger = new ActivityLogger($db);
-        $logger->logCreate('leave_request', $leave_request_id, "Created {$leave_type} leave request for {$days_requested} days", [
-            'employee_id' => $employee_id,
-            'leave_type' => $leave_type,
-            'start_date' => $start_date,
-            'end_date' => $end_date,
-            'days_requested' => $days_requested
-        ]);
-    } catch (Exception $e) {
-        error_log("Activity logging failed: " . $e->getMessage());
-    }
+    $end_date   = Security::sanitizeInput($_POST['end_date']);
+    $reason     = Security::sanitizeInput($_POST['reason']);
+    $days       = (new DateTime($start_date))->diff(new DateTime($end_date))->days + 1;
+    $stmt = $db->prepare("INSERT INTO hr_leave_requests (employee_id,leave_type,start_date,end_date,days_requested,reason) VALUES (?,?,?,?,?,?)");
+    $stmt->execute([$emp_id,$leave_type,$start_date,$end_date,$days,$reason]);
+    $success_message = "Leave request created.";
 }
 
-// Handle leave approval/rejection
+// ── Update leave status ──────────────────────────────────────────────────────
 if ($_POST && isset($_POST['update_leave_status'])) {
     Security::checkCSRFToken();
     Security::requireWriteAccess('HR');
-    
     $leave_id = (int)$_POST['leave_id'];
-    $status = Security::sanitizeInput($_POST['status']);
-    
-    $query = "UPDATE hr_leave_requests SET status = ?, approved_by = ? WHERE id = ?";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$status, $_SESSION['user_id'], $leave_id]);
-    
-    // Log leave request status update activity
-    try {
-        require_once '../includes/ActivityLogger.php';
-        $logger = new ActivityLogger($db);
-        $action = ucfirst($status);
-        $logger->logEdit('leave_request', $leave_id, "{$action} leave request", [
-            'new_status' => $status,
-            'approved_by' => $_SESSION['user_id']
-        ]);
-    } catch (Exception $e) {
-        error_log("Activity logging failed: " . $e->getMessage());
-    }
+    $status   = Security::sanitizeInput($_POST['status']);
+    if (!in_array($status, ['approved','rejected','cancelled'])) $status = 'pending';
+    $stmt = $db->prepare("UPDATE hr_leave_requests SET status=?,approved_by=? WHERE id=?");
+    $stmt->execute([$status,$sess_user_id,$leave_id]);
+    $success_message = "Leave request ".ucfirst($status).".";
 }
 
-// Handle performance review creation
+// ── Create performance review ────────────────────────────────────────────────
 if ($_POST && isset($_POST['create_performance_review'])) {
     Security::checkCSRFToken();
     Security::requireWriteAccess('HR');
-    
-    $employee_id = (int)$_POST['employee_id'];
+    $emp_id      = (int)$_POST['employee_id'];
     $reviewer_id = (int)$_POST['reviewer_id'];
-    $review_period = Security::sanitizeInput($_POST['review_period']);
-    $overall_rating = (int)$_POST['overall_rating'];
-    $goals_achievement = Security::sanitizeInput($_POST['goals_achievement']);
-    $strengths = Security::sanitizeInput($_POST['strengths']);
-    $areas_for_improvement = Security::sanitizeInput($_POST['areas_for_improvement']);
-    $comments = Security::sanitizeInput($_POST['comments']);
-    
-    $query = "INSERT INTO performance_reviews (employee_id, reviewer_id, review_period, start_date, end_date, overall_rating, goals_achievement, strengths, areas_for_improvement, comments) 
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    $stmt = $db->prepare($query);
-    $start_date = Security::sanitizeInput($_POST['start_date']);
-    $end_date = Security::sanitizeInput($_POST['end_date']);
-    $stmt->execute([$employee_id, $reviewer_id, $review_period, $start_date, $end_date, $overall_rating, $goals_achievement, $strengths, $areas_for_improvement, $comments]);
-    
-    $review_id = $db->lastInsertId();
-    
-    // Log performance review creation activity
+    $start_date  = Security::sanitizeInput($_POST['start_date']);
+    $end_date    = Security::sanitizeInput($_POST['end_date']);
+    $rating      = max(1, min(5, (int)$_POST['overall_rating']));
+    $goals       = Security::sanitizeInput($_POST['goals_achievement']);
+    $strengths   = Security::sanitizeInput($_POST['strengths']);
+    $improvements= Security::sanitizeInput($_POST['areas_for_improvement']);
+    $comments    = Security::sanitizeInput($_POST['comments']);
+    $stmt = $db->prepare("INSERT INTO performance_reviews (employee_id,reviewer_id,review_period_start,review_period_end,overall_rating,goals_achievement,strengths,areas_for_improvement,comments,status) VALUES (?,?,?,?,?,?,?,?,?,'published')");
+    $stmt->execute([$emp_id,$reviewer_id,$start_date,$end_date,$rating,$goals,$strengths,$improvements,$comments]);
     try {
         require_once '../includes/ActivityLogger.php';
-        $logger = new ActivityLogger($db);
-        $logger->logCreate('performance_review', $review_id, "Created performance review for employee ID {$employee_id}", [
-            'employee_id' => $employee_id,
-            'reviewer_id' => $reviewer_id,
-            'review_period' => $review_period,
-            'overall_rating' => $overall_rating
-        ]);
-    } catch (Exception $e) {
-        error_log("Activity logging failed: " . $e->getMessage());
-    }
+        (new ActivityLogger($db))->logCreate('performance_review',$db->lastInsertId(),"Created review for employee #{$emp_id}",['rating'=>$rating]);
+    } catch(Exception $e) { error_log($e->getMessage()); }
+    $success_message = "Performance review saved.";
 }
 
-// Handle job posting update
+// ── Update job posting ───────────────────────────────────────────────────────
 if ($_POST && isset($_POST['update_job_posting'])) {
     Security::checkCSRFToken();
     Security::requireWriteAccess('HR');
-    
-    $job_id = (int)$_POST['job_id'];
-    $title = Security::sanitizeInput($_POST['title']);
-    $department = Security::sanitizeInput($_POST['department']);
+    $job_id      = (int)$_POST['job_id'];
+    $title       = Security::sanitizeInput($_POST['title']);
+    $department  = Security::sanitizeInput($_POST['department']);
     $description = Security::sanitizeInput($_POST['description']);
-    $requirements = Security::sanitizeInput($_POST['requirements']);
-    $salary_range = Security::sanitizeInput($_POST['salary_range']);
-    $status = Security::sanitizeInput($_POST['status']);
-    
-    // Validate department against allowed values
-    $allowed_departments = ['IT', 'Marketing', 'Finance', 'HR', 'Sales'];
-    if (!in_array($department, $allowed_departments)) {
-        $department = 'IT'; // Default to IT if invalid
-    }
-    
-    // Validate status against allowed values
-    $allowed_statuses = ['active', 'closed', 'draft'];
-    if (!in_array($status, $allowed_statuses)) {
-        $status = 'active'; // Default to active if invalid
-    }
-    
-    $query = "UPDATE job_postings SET title = ?, department = ?, description = ?, requirements = ?, salary_range = ?, status = ? WHERE id = ?";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$title, $department, $description, $requirements, $salary_range, $status, $job_id]);
-    
-    // Log job posting update activity
-    try {
-        require_once '../includes/ActivityLogger.php';
-        $logger = new ActivityLogger($db);
-        $logger->logEdit('job_posting', $job_id, "Updated job posting: {$title}", [
-            'previous_status' => $_POST['original_status'] ?? 'unknown',
-            'new_status' => $status,
-            'department' => $department
-        ]);
-    } catch (Exception $e) {
-        error_log("Activity logging failed: " . $e->getMessage());
-    }
-    
-    $success_message = "Job posting updated successfully!";
+    $requirements= Security::sanitizeInput($_POST['requirements']);
+    $salary_range= Security::sanitizeInput($_POST['salary_range']);
+    $status      = Security::sanitizeInput($_POST['status']);
+    $allowed_depts = ['IT','Marketing','Finance','HR','Business Development'];
+    if (!in_array($department, $allowed_depts)) $department = 'IT';
+    if (!in_array($status, ['active','closed','draft'])) $status = 'active';
+    $stmt = $db->prepare("UPDATE job_postings SET title=?,department=?,description=?,requirements=?,salary_range=?,status=? WHERE id=?");
+    $stmt->execute([$title,$department,$description,$requirements,$salary_range,$status,$job_id]);
+    $success_message = "Job posting updated.";
 }
 
-// Handle job posting deletion
+// ── Delete job posting ───────────────────────────────────────────────────────
 if ($_POST && isset($_POST['delete_job_posting'])) {
     Security::checkCSRFToken();
     Security::requireWriteAccess('HR');
-    
     $job_id = (int)$_POST['job_id'];
-    
-    // Delete related candidates first
-    $db->prepare("DELETE FROM candidates WHERE job_posting_id = ?")->execute([$job_id]);
-    
-    // Get job posting details before deletion for logging
-    $job_stmt = $db->prepare("SELECT title, department FROM job_postings WHERE id = ?");
-    $job_stmt->execute([$job_id]);
-    $job_details = $job_stmt->fetch(PDO::FETCH_ASSOC);
-    
-    // Delete the job posting
-    $db->prepare("DELETE FROM job_postings WHERE id = ?")->execute([$job_id]);
-    
-    // Log job posting deletion activity
-    try {
-        require_once '../includes/ActivityLogger.php';
-        $logger = new ActivityLogger($db);
-        $job_title = $job_details['title'] ?? 'Unknown Job';
-        $job_dept = $job_details['department'] ?? 'Unknown Department';
-        $logger->logDelete('job_posting', $job_id, "Deleted job posting: {$job_title}", [
-            'title' => $job_title,
-            'department' => $job_dept,
-            'candidates_affected' => 'All related candidates were also removed'
-        ]);
-    } catch (Exception $e) {
-        error_log("Activity logging failed: " . $e->getMessage());
-    }
-    
-    $success_message = "Job posting deleted successfully!";
+    $db->prepare("DELETE FROM candidates WHERE job_posting_id=?")->execute([$job_id]);
+    $db->prepare("DELETE FROM job_postings WHERE id=?")->execute([$job_id]);
+    $success_message = "Job posting deleted.";
 }
 
-// Handle job posting creation
+// ── Create job posting ───────────────────────────────────────────────────────
 if ($_POST && isset($_POST['create_job_posting'])) {
     Security::checkCSRFToken();
     Security::requireWriteAccess('HR');
-    
-    $title = Security::sanitizeInput($_POST['title']);
-    $department = Security::sanitizeInput($_POST['department']);
+    $title       = Security::sanitizeInput($_POST['title']);
+    $department  = Security::sanitizeInput($_POST['department']);
     $description = Security::sanitizeInput($_POST['description']);
-    $requirements = Security::sanitizeInput($_POST['requirements']);
-    $salary_range = Security::sanitizeInput($_POST['salary_range']);
-    
-    // Validate department against allowed values
-    $allowed_departments = ['IT', 'Marketing', 'Finance', 'HR', 'Sales'];
-    if (!in_array($department, $allowed_departments)) {
-        $department = 'IT'; // Default to IT if invalid
-    }
-    
-    $query = "INSERT INTO job_postings (title, department, description, requirements, salary_range, posted_by, status) 
-              VALUES (?, ?, ?, ?, ?, ?, 'active')";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$title, $department, $description, $requirements, $salary_range, $_SESSION['user_id']]);
-    
-    $job_id = $db->lastInsertId();
-    
-    // Log job posting creation activity
-    try {
-        require_once '../includes/ActivityLogger.php';
-        $logger = new ActivityLogger($db);
-        $logger->logCreate('job_posting', $job_id, "Created new job posting: {$title}", [
-            'department' => $department,
-            'salary_range' => $salary_range,
-            'status' => 'active'
-        ]);
-    } catch (Exception $e) {
-        error_log("Activity logging failed: " . $e->getMessage());
-    }
+    $requirements= Security::sanitizeInput($_POST['requirements']);
+    $salary_range= Security::sanitizeInput($_POST['salary_range']);
+    $allowed_depts = ['IT','Marketing','Finance','HR','Business Development'];
+    if (!in_array($department, $allowed_depts)) $department = 'IT';
+    $stmt = $db->prepare("INSERT INTO job_postings (title,department,description,requirements,salary_range,posted_by,status) VALUES (?,?,?,?,?,?,'active')");
+    $stmt->execute([$title,$department,$description,$requirements,$salary_range,$sess_user_id]);
+    $success_message = "Job posting created.";
 }
 
-// Handle comprehensive candidate application
+// ── Add candidate ────────────────────────────────────────────────────────────
 if ($_POST && isset($_POST['create_candidate'])) {
     Security::checkCSRFToken();
-    
     try {
         $db->beginTransaction();
-        
-        // Basic candidate information
         $job_posting_id = (int)$_POST['job_posting_id'];
-        $first_name = Security::sanitizeInput($_POST['first_name']);
-        $last_name = Security::sanitizeInput($_POST['last_name']);
-        $email = Security::sanitizeInput($_POST['email']);
-        $phone = Security::sanitizeInput($_POST['phone']);
-        $cover_letter = Security::sanitizeInput($_POST['cover_letter']);
-        
-        // Enhanced candidate fields
-        $salary_expectation = !empty($_POST['salary_expectation']) ? floatval($_POST['salary_expectation']) : null;
-        $availability_date = !empty($_POST['availability_date']) ? Security::sanitizeInput($_POST['availability_date']) : null;
-        $preferred_location = Security::sanitizeInput($_POST['preferred_location']);
-        $willing_to_relocate = isset($_POST['willing_to_relocate']) ? 't' : 'f';
-        $work_authorization = Security::sanitizeInput($_POST['work_authorization']);
-        $linkedin_profile = Security::sanitizeInput($_POST['linkedin_profile']);
-        $portfolio_website = Security::sanitizeInput($_POST['portfolio_website']);
-        $years_experience = !empty($_POST['years_experience']) ? (int)$_POST['years_experience'] : null;
-        
-        // Insert candidate and get ID
-        $query = "INSERT INTO candidates (job_posting_id, first_name, last_name, email, phone, cover_letter, 
-                  salary_expectation, availability_date, preferred_location, willing_to_relocate, 
-                  work_authorization, linkedin_profile, portfolio_website, years_experience, status) 
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending') RETURNING id";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$job_posting_id, $first_name, $last_name, $email, $phone, $cover_letter,
-                       $salary_expectation, $availability_date, $preferred_location, $willing_to_relocate,
-                       $work_authorization, $linkedin_profile, $portfolio_website, $years_experience]);
-        
-        $candidate_id = $stmt->fetchColumn();
-        
-        // Handle CV file upload
-        $resume_filename = null;
+        $first_name     = Security::sanitizeInput($_POST['first_name']);
+        $last_name      = Security::sanitizeInput($_POST['last_name']);
+        $email          = Security::sanitizeInput($_POST['email']);
+        $phone          = Security::sanitizeInput($_POST['phone']);
+        $cover_letter   = Security::sanitizeInput($_POST['cover_letter']);
+
+        $stmt = $db->prepare("INSERT INTO candidates (job_posting_id,first_name,last_name,email,phone,cover_letter,status) VALUES (?,?,?,?,?,?,'pending')");
+        $stmt->execute([$job_posting_id,$first_name,$last_name,$email,$phone,$cover_letter]);
+        $candidate_id = $db->lastInsertId();
+
         if (isset($_FILES['resume_file']) && $_FILES['resume_file']['error'] === UPLOAD_ERR_OK) {
-            $upload_result = FileUpload::uploadFile($_FILES['resume_file'], $candidate_id);
-            if ($upload_result['success']) {
-                $resume_filename = $upload_result['filename'];
-                // Update candidate with resume filename
-                $stmt = $db->prepare("UPDATE candidates SET resume_file = ? WHERE id = ?");
-                $stmt->execute([$resume_filename, $candidate_id]);
+            $upload = FileUpload::uploadFile($_FILES['resume_file'], $candidate_id);
+            if ($upload['success']) {
+                $db->prepare("UPDATE candidates SET resume_file=? WHERE id=?")->execute([$upload['filename'],$candidate_id]);
             } else {
-                throw new Exception('File upload failed: ' . implode(', ', $upload_result['errors']));
+                throw new Exception('Upload failed: '.implode(', ',$upload['errors']));
             }
         }
-        
-        // Handle work experience entries
+
         if (isset($_POST['work_experience']) && is_array($_POST['work_experience'])) {
-            foreach ($_POST['work_experience'] as $experience) {
-                if (!empty($experience['company_name']) && !empty($experience['position_title'])) {
-                    $stmt = $db->prepare("INSERT INTO candidate_work_experience 
-                                         (candidate_id, company_name, position_title, start_date, end_date, is_current, responsibilities, achievements) 
-                                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-                    $stmt->execute([
-                        $candidate_id,
-                        Security::sanitizeInput($experience['company_name']),
-                        Security::sanitizeInput($experience['position_title']),
-                        Security::sanitizeInput($experience['start_date']),
-                        isset($experience['is_current']) ? null : (!empty($experience['end_date']) ? Security::sanitizeInput($experience['end_date']) : null),
-                        isset($experience['is_current']) ? 't' : 'f',
-                        Security::sanitizeInput($experience['responsibilities']),
-                        Security::sanitizeInput($experience['achievements'])
-                    ]);
+            foreach ($_POST['work_experience'] as $we) {
+                if (!empty($we['company_name']) && !empty($we['position_title'])) {
+                    $stmt = $db->prepare("INSERT INTO candidate_work_experience (candidate_id,company_name,position_title,start_date,end_date,is_current,responsibilities,achievements) VALUES (?,?,?,?,?,?,?,?)");
+                    $is_cur = isset($we['is_current']) ? 't' : 'f';
+                    $stmt->execute([$candidate_id,Security::sanitizeInput($we['company_name']),Security::sanitizeInput($we['position_title']),
+                        Security::sanitizeInput($we['start_date']),($is_cur==='t'?null:Security::sanitizeInput($we['end_date']??'')),
+                        $is_cur,Security::sanitizeInput($we['responsibilities']??''),Security::sanitizeInput($we['achievements']??'')]);
                 }
             }
         }
-        
-        // Handle education entries
+
         if (isset($_POST['education']) && is_array($_POST['education'])) {
-            foreach ($_POST['education'] as $education) {
-                if (!empty($education['institution_name']) && !empty($education['degree_type'])) {
-                    $stmt = $db->prepare("INSERT INTO candidate_education 
-                                         (candidate_id, institution_name, degree_type, field_of_study, start_year, end_year, is_current, gpa, honors, description) 
-                                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                    $stmt->execute([
-                        $candidate_id,
-                        Security::sanitizeInput($education['institution_name']),
-                        Security::sanitizeInput($education['degree_type']),
-                        Security::sanitizeInput($education['field_of_study']),
-                        !empty($education['start_year']) ? (int)$education['start_year'] : null,
-                        isset($education['is_current']) ? null : (!empty($education['end_year']) ? (int)$education['end_year'] : null),
-                        isset($education['is_current']) ? 't' : 'f',
-                        !empty($education['gpa']) ? floatval($education['gpa']) : null,
-                        Security::sanitizeInput($education['honors'] ?? ''),
-                        Security::sanitizeInput($education['description'] ?? '')
-                    ]);
+            foreach ($_POST['education'] as $ed) {
+                if (!empty($ed['institution_name']) && !empty($ed['degree_type'])) {
+                    $stmt = $db->prepare("INSERT INTO candidate_education (candidate_id,institution_name,degree_type,field_of_study,start_year,end_year,is_current,gpa,honors,description) VALUES (?,?,?,?,?,?,?,?,?,?)");
+                    $is_cur = isset($ed['is_current']) ? 't' : 'f';
+                    $stmt->execute([$candidate_id,Security::sanitizeInput($ed['institution_name']),Security::sanitizeInput($ed['degree_type']),
+                        Security::sanitizeInput($ed['field_of_study']??''),
+                        !empty($ed['start_year'])?(int)$ed['start_year']:null,
+                        ($is_cur==='t'?null:(!empty($ed['end_year'])?(int)$ed['end_year']:null)),
+                        $is_cur,!empty($ed['gpa'])?floatval($ed['gpa']):null,
+                        Security::sanitizeInput($ed['honors']??''),Security::sanitizeInput($ed['description']??'')]);
                 }
             }
         }
-        
-        // Log candidate creation activity
-        try {
-            require_once '../includes/ActivityLogger.php';
-            $logger = new ActivityLogger($db);
-            $job_posting_query = $db->prepare("SELECT title, department FROM job_postings WHERE id = ?");
-            $job_posting_query->execute([$job_posting_id]);
-            $job_posting = $job_posting_query->fetch(PDO::FETCH_ASSOC);
-            
-            $logger->logCreate('candidate', $candidate_id, "New candidate application: {$first_name} {$last_name} for {$job_posting['title']}", [
-                'candidate_id' => $candidate_id,
-                'job_posting_id' => $job_posting_id,
-                'job_title' => $job_posting['title'],
-                'department' => $job_posting['department'],
-                'email' => $email,
-                'phone' => $phone,
-                'years_experience' => $years_experience,
-                'has_resume' => !empty($resume_filename)
-            ]);
-        } catch (Exception $e) {
-            error_log("Activity logging failed: " . $e->getMessage());
-        }
-        
+
         $db->commit();
-        $success_message = "Candidate application submitted successfully!";
-        
-    } catch (Exception $e) {
+        $success_message = "Candidate application submitted.";
+    } catch(Exception $e) {
         $db->rollBack();
-        $error_message = "Error submitting application: " . $e->getMessage();
+        $error_message = "Error: ".$e->getMessage();
     }
 }
 
-// Get data for display
-$employees = $db->query("SELECT e.*, m.first_name as manager_first_name, m.last_name as manager_last_name 
-                        FROM hr_employees e 
-                        LEFT JOIN hr_employees m ON e.manager_id = m.id 
-                        ORDER BY e.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+// ── Fetch data ───────────────────────────────────────────────────────────────
+$employees = $db->query("SELECT e.*, CONCAT(m.first_name,' ',m.last_name) AS manager_name
+                         FROM hr_employees e LEFT JOIN hr_employees m ON e.manager_id=m.id
+                         ORDER BY e.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
 
-$leave_requests = $db->query("SELECT lr.*, e.first_name, e.last_name, e.employee_id 
-                             FROM hr_leave_requests lr 
-                             JOIN hr_employees e ON lr.employee_id = e.id 
-                             ORDER BY lr.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+$leave_requests = $db->query("SELECT lr.*, e.first_name, e.last_name, e.employee_id AS emp_code
+                              FROM hr_leave_requests lr
+                              JOIN hr_employees e ON lr.employee_id=e.id
+                              ORDER BY lr.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
 
-$performance_reviews = $db->query("SELECT pr.*, e.first_name, e.last_name, r.first_name as reviewer_first_name, r.last_name as reviewer_last_name 
-                                  FROM performance_reviews pr 
-                                  JOIN hr_employees e ON pr.employee_id = e.id 
-                                  LEFT JOIN hr_employees r ON pr.reviewer_id = r.id 
-                                  ORDER BY pr.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+// FIXED: join users table for reviewer, not hr_employees
+$performance_reviews = $db->query("SELECT pr.*, e.first_name, e.last_name, u.username AS reviewer_name
+                                   FROM performance_reviews pr
+                                   JOIN hr_employees e ON pr.employee_id=e.id
+                                   LEFT JOIN users u ON pr.reviewer_id=u.id
+                                   ORDER BY pr.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch job postings and candidates with debugging
 try {
-    $job_postings = $db->query("SELECT jp.*, u.username as posted_by_name 
-                               FROM job_postings jp 
-                               LEFT JOIN users u ON jp.posted_by = u.id 
-                               ORDER BY jp.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
-    
-    $candidates = $db->query("SELECT c.*, jp.title as job_title, jp.department as job_department
-                             FROM candidates c 
-                             JOIN job_postings jp ON c.job_posting_id = jp.id 
-                             ORDER BY c.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    // Initialize empty arrays if there's an error
-    $job_postings = [];
-    $candidates = [];
-    error_log("HR Department - Database query error: " . $e->getMessage());
+    $job_postings = $db->query("SELECT jp.*, u.username AS posted_by_name
+                                FROM job_postings jp LEFT JOIN users u ON jp.posted_by=u.id
+                                ORDER BY jp.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+    $candidates   = $db->query("SELECT c.*, jp.title AS job_title, jp.department AS job_department
+                                FROM candidates c JOIN job_postings jp ON c.job_posting_id=jp.id
+                                ORDER BY c.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+} catch(PDOException $e) {
+    $job_postings = []; $candidates = [];
+    error_log($e->getMessage());
 }
 
-// Fetch work experience and education for each candidate (using prepared statements)
-foreach ($candidates as &$candidate) {
-    $work_exp_stmt = $db->prepare("SELECT * FROM candidate_work_experience WHERE candidate_id = ? ORDER BY start_date DESC");
-    $work_exp_stmt->execute([$candidate['id']]);
-    $candidate['work_experience'] = $work_exp_stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    $education_stmt = $db->prepare("SELECT * FROM candidate_education WHERE candidate_id = ? ORDER BY start_year DESC");
-    $education_stmt->execute([$candidate['id']]);
-    $candidate['education'] = $education_stmt->fetchAll(PDO::FETCH_ASSOC);
+// Unlinked users (for employee ↔ user linking dropdown)
+$linked_user_ids = array_filter(array_column($employees,'user_id'));
+$unlinked_users  = $db->query("SELECT id, username, email, role FROM users ORDER BY username")->fetchAll(PDO::FETCH_ASSOC);
+
+// Write access
+$can_write = in_array($sess_role, ['admin','manager']);
+
+// Stats
+$total_emp    = count($employees);
+$active_emp   = count(array_filter($employees, fn($e)=>$e['status']==='active'));
+$pending_lv   = count(array_filter($leave_requests, fn($l)=>$l['status']==='pending'));
+$open_jobs    = count(array_filter($job_postings, fn($j)=>$j['status']==='active'));
+$new_candidates = count(array_filter($candidates, fn($c)=>$c['status']==='pending'));
+
+// Dept breakdown
+$dept_counts = [];
+foreach ($employees as $e) {
+    $d = $e['department'] ?: 'Other';
+    $dept_counts[$d] = ($dept_counts[$d] ?? 0) + 1;
 }
+arsort($dept_counts);
+
+$csrf = Security::generateCSRFToken();
+$asset_base = '../';
+$nav_base   = '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HR Department - Business Management</title>
+    <title>HR Department - KConsulting Hub</title>
     <link rel="stylesheet" href="../css/main.css">
     <style>
-        /* HR Statistics */
+        :root {
+            --hr:      #7c3aed;
+            --hr-dk:   #6d28d9;
+            --hr-vi:   #4c1d95;
+            --hr-rose: #e11d48;
+            --hr-grad: linear-gradient(135deg, #4c1d95 0%, #7c3aed 100%);
+        }
+
+        /* ── Hero ── */
+        .hr-hero {
+            background: var(--hr-grad);
+            border-radius: 16px; padding: 28px 32px;
+            display: flex; align-items: center; gap: 20px;
+            margin-bottom: 20px; flex-wrap: wrap;
+        }
+        .hr-hero-icon { font-size: 2.8rem; }
+        .hr-hero-info { flex: 1; min-width: 180px; }
+        .hr-hero-info h1 { color: #fff; font-size: 1.6rem; font-weight: 800; margin: 0 0 4px; }
+        .hr-hero-info p  { color: rgba(255,255,255,.75); font-size: .87rem; margin: 0; }
+        .hr-hero-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-left: auto; }
+        .hr-hero-btn {
+            background: rgba(255,255,255,.15); color: #fff;
+            border: 1px solid rgba(255,255,255,.3); border-radius: 8px;
+            padding: 8px 16px; font-size: .83rem; font-weight: 600; cursor: pointer;
+            transition: background .2s; text-decoration: none;
+        }
+        .hr-hero-btn:hover { background: rgba(255,255,255,.28); }
+        .hr-hero-btn.rose  { background: rgba(225,29,72,.7); border-color: transparent; }
+        .hr-hero-btn.rose:hover { background: #be123c; }
+
+        /* ── Stats bar ── */
         .hr-stats {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px; margin-bottom: 20px;
+        }
+        @media(max-width:900px){ .hr-stats{ grid-template-columns: repeat(3,1fr); } }
+        @media(max-width:600px){ .hr-stats{ grid-template-columns: 1fr 1fr; } }
+        .hr-stat {
+            background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+            padding: 16px 18px; box-shadow: 0 1px 4px rgba(0,0,0,.05);
+        }
+        .hr-stat .num { font-size: 1.75rem; font-weight: 800; color: #111827; display: block; }
+        .hr-stat .lbl { font-size: .72rem; text-transform: uppercase; letter-spacing: .5px; color: #9ca3af; font-weight: 600; }
+        .hr-stat .num.violet  { color: var(--hr); }
+        .hr-stat .num.green   { color: #059669; }
+        .hr-stat .num.amber   { color: #d97706; }
+        .hr-stat .num.rose    { color: var(--hr-rose); }
+        .hr-stat .num.blue    { color: #2563eb; }
+
+        /* ── Flash ── */
+        .hr-flash { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: .87rem; font-weight: 500; }
+        .hr-flash.success { background: #d1fae5; color: #065f46; border-left: 4px solid #059669; }
+        .hr-flash.error   { background: #fee2e2; color: #991b1b; border-left: 4px solid #dc2626; }
+
+        /* ── Tab nav ── */
+        .hr-tabs {
+            display: flex; gap: 0; background: #fff;
+            border: 1px solid #e5e7eb; border-radius: 10px;
+            padding: 4px; margin-bottom: 20px; overflow-x: auto;
+        }
+        .hr-tab {
+            flex: none; padding: 9px 20px; border: none; background: transparent;
+            border-radius: 7px; cursor: pointer; font-size: .87rem; font-weight: 600;
+            color: #6b7280; transition: all .2s; white-space: nowrap;
+        }
+        .hr-tab:hover { background: #f3f4f6; color: #111827; }
+        .hr-tab.active { background: var(--hr); color: #fff; }
+
+        /* ── Controls row ── */
+        .hr-controls {
+            display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;
+        }
+        .hr-search {
+            flex: 1; min-width: 180px; padding: 8px 12px;
+            border: 1px solid #d1d5db; border-radius: 8px; font-size: .87rem;
+        }
+        .hr-search:focus { outline: none; border-color: var(--hr); box-shadow: 0 0 0 3px rgba(124,58,237,.1); }
+        .hr-filter {
+            padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px;
+            font-size: .85rem; background: #fff; color: #374151;
+        }
+        .hr-count { font-size: .8rem; color: #9ca3af; margin-left: auto; }
+
+        /* ── Table ── */
+        .hr-table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: 0 1px 4px rgba(0,0,0,.05); }
+        .hr-table { width: 100%; border-collapse: collapse; background: #fff; font-size: .86rem; }
+        .hr-table th { background: var(--hr); color: #fff; padding: 11px 14px; text-align: left; font-size: .75rem; text-transform: uppercase; letter-spacing: .5px; font-weight: 700; white-space: nowrap; }
+        .hr-table td { padding: 11px 14px; border-bottom: 1px solid #f3f4f6; color: #374151; vertical-align: middle; }
+        .hr-table tr:last-child td { border-bottom: none; }
+        .hr-table tr:hover td { background: #faf5ff; }
+        .hr-no-results { text-align: center; padding: 32px; color: #9ca3af; font-size: .88rem; display: none; }
+
+        /* ── Badges ── */
+        .hbadge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: .72rem; font-weight: 700; text-transform: capitalize; }
+        .hbadge-active     { background: #d1fae5; color: #065f46; }
+        .hbadge-inactive   { background: #fef3c7; color: #92400e; }
+        .hbadge-terminated { background: #fee2e2; color: #991b1b; }
+        .hbadge-pending    { background: #fef3c7; color: #92400e; }
+        .hbadge-approved   { background: #d1fae5; color: #065f46; }
+        .hbadge-rejected   { background: #fee2e2; color: #991b1b; }
+        .hbadge-cancelled  { background: #f3f4f6; color: #6b7280; }
+        .hbadge-open, .hbadge-active-job { background: #ede9fe; color: #5b21b6; }
+        .hbadge-closed     { background: #f3f4f6; color: #6b7280; }
+        .hbadge-draft      { background: #fef9c3; color: #713f12; }
+        .hbadge-hired      { background: #d1fae5; color: #065f46; }
+        .hbadge-interview  { background: #dbeafe; color: #1e40af; }
+        .hbadge-rejected-c { background: #fee2e2; color: #991b1b; }
+
+        /* ── Buttons ── */
+        .hr-btn {
+            padding: 6px 14px; border: none; border-radius: 7px;
+            font-size: .8rem; font-weight: 600; cursor: pointer; transition: all .2s;
+            text-decoration: none; display: inline-block;
+        }
+        .hr-btn-violet { background: var(--hr); color: #fff; }
+        .hr-btn-violet:hover { background: var(--hr-dk); }
+        .hr-btn-rose   { background: var(--hr-rose); color: #fff; }
+        .hr-btn-rose:hover { background: #be123c; }
+        .hr-btn-green  { background: #059669; color: #fff; }
+        .hr-btn-green:hover { background: #047857; }
+        .hr-btn-amber  { background: #d97706; color: #fff; }
+        .hr-btn-amber:hover { background: #b45309; }
+        .hr-btn-gray   { background: #f3f4f6; color: #374151; }
+        .hr-btn-gray:hover { background: #e5e7eb; }
+
+        /* ── Avatar initials ── */
+        .hr-avatar {
+            width: 34px; height: 34px; border-radius: 50%;
+            background: var(--hr-grad); color: #fff;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: .75rem; font-weight: 700; flex-shrink: 0;
+        }
+        .emp-name-cell { display: flex; align-items: center; gap: 10px; }
+
+        /* ── Stars ── */
+        .hr-stars { color: #f59e0b; font-size: .9rem; letter-spacing: 1px; }
+
+        /* ── Modal ── */
+        .hr-modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,.55); z-index: 1000;
+            align-items: center; justify-content: center;
+        }
+        .hr-modal-overlay.open { display: flex; }
+        .hr-modal {
+            background: #fff; border-radius: 16px;
+            width: min(680px,95vw); max-height: 90vh;
+            overflow-y: auto; padding: 28px; position: relative;
+            box-shadow: 0 20px 60px rgba(0,0,0,.3);
+        }
+        .hr-modal h2 { font-size: 1.1rem; font-weight: 700; color: #111827; margin: 0 0 20px; }
+        .hr-modal-close {
+            position: absolute; top: 16px; right: 16px;
+            background: #f3f4f6; border: none; border-radius: 50%;
+            width: 30px; height: 30px; cursor: pointer; font-size: 1rem;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .hr-modal-close:hover { background: #e5e7eb; }
+
+        /* ── Inline form grid ── */
+        .hr-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .hr-form-grid .full { grid-column: 1/-1; }
+        @media(max-width:600px){ .hr-form-grid{ grid-template-columns: 1fr; } }
+        .hr-field label { display: block; font-size: .78rem; font-weight: 600; color: #374151; margin-bottom: 4px; }
+        .hr-field input, .hr-field select, .hr-field textarea {
+            width: 100%; padding: 8px 11px; border: 1px solid #d1d5db; border-radius: 7px;
+            font-size: .87rem; color: #111827;
+        }
+        .hr-field textarea { height: 70px; resize: vertical; }
+        .hr-field input:focus, .hr-field select:focus, .hr-field textarea:focus {
+            outline: none; border-color: var(--hr); box-shadow: 0 0 0 3px rgba(124,58,237,.1);
         }
 
-        /* Employee Cards Grid */
-        .employees-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-            gap: 1.5rem;
-            margin-top: 2rem;
+        /* ── Card wrapper (Overview) ── */
+        .hr-card {
+            background: #fff; border: 1px solid #e5e7eb; border-radius: 14px;
+            padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.05); margin-bottom: 16px;
         }
+        .hr-card h3 { font-size: .95rem; font-weight: 700; color: #111827; margin: 0 0 14px; }
 
-        .employee-card {
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            transition: transform 0.2s, box-shadow 0.2s;
+        /* ── Dept grid ── */
+        .dept-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(140px,1fr)); gap: 10px; }
+        .dept-chip {
+            background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 10px;
+            padding: 12px; text-align: center;
         }
+        .dept-chip .dc-num { font-size: 1.5rem; font-weight: 800; color: var(--hr); }
+        .dept-chip .dc-lbl { font-size: .75rem; color: #6b7280; margin-top: 3px; }
 
-        .employee-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        /* ── Linked badge ── */
+        .linked-badge { display: inline-flex; align-items: center; gap: 4px; font-size: .72rem; font-weight: 600; }
+        .linked-badge.yes { color: #059669; }
+        .linked-badge.no  { color: #9ca3af; }
+
+        /* ── Tab content visibility ── */
+        .hr-tab-content { display: none; }
+        .hr-tab-content.active { display: block; }
+
+        /* ── Collapsible form section ── */
+        .hr-collapsible { margin-bottom: 16px; }
+        .hr-collapsible-header {
+            background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 10px;
+            padding: 12px 16px; cursor: pointer; display: flex; align-items: center;
+            justify-content: space-between; font-weight: 600; color: var(--hr-dk); font-size: .9rem;
         }
-
-        .employee-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 1rem;
-        }
-
-        .employee-title h4 {
-            margin: 0 0 0.5rem 0;
-            color: #2c3e50;
-        }
-
-        .employee-company {
-            margin: 0;
-            color: #7f8c8d;
-            font-size: 0.9rem;
-        }
-
-        .employee-info {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 0.75rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .employee-detail {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .employee-icon {
-            color: #3498db;
-        }
-
-        .employee-value {
-            font-size: 0.9rem;
-        }
-
-        .employee-actions {
-            display: flex;
-            gap: 0.75rem;
-            border-top: 1px solid #ecf0f1;
-            padding-top: 1rem;
-        }
-
-        /* Form Styles */
-        .form-container {
-            background: white;
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-            margin-bottom: 2rem;
-        }
-
-        .form-grid-2col {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 1.5rem;
-        }
-
-        .form-group-full {
-            grid-column: 1 / -1;
-        }
-
-        .form-label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: 600;
-            color: #2c3e50;
-        }
-
-        .form-input, .form-select, .form-textarea {
-            width: 100%;
-            padding: 0.75rem;
-            border: 2px solid #ecf0f1;
-            border-radius: 8px;
-            font-size: 1rem;
-            transition: border-color 0.3s;
-        }
-
-        .form-input:focus, .form-select:focus, .form-textarea:focus {
-            outline: none;
-            border-color: #3498db;
-        }
-
-        .form-textarea {
-            resize: vertical;
-            min-height: 100px;
-        }
-
-        .form-title {
-            margin-top: 0;
-            color: #2c3e50;
-            border-bottom: 2px solid #ecf0f1;
-            padding-bottom: 1rem;
-        }
-
-        .form-actions {
-            text-align: center;
-            margin-top: 1rem;
-        }
-
-        /* Button Styles */
-        .btn-primary {
-            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-            color: white;
-            border: none;
-            padding: 1rem 2rem;
-            border-radius: 8px;
-            font-size: 1.1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-1px);
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-        }
-
-        .btn-danger {
-            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
-        }
-
-        .btn-warning {
-            background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
-        }
-
-        .btn-small {
-            padding: 0.5rem 1rem;
-            text-decoration: none;
-            border-radius: 6px;
-            font-size: 0.85rem;
-            border: none;
-            cursor: pointer;
-            text-align: center;
-        }
-
-        .btn-view {
-            background: #3498db;
-            color: white;
-        }
-
-        .btn-edit {
-            background: #27ae60;
-            color: white;
-        }
-
-        /* Status and Priority Badges */
-        .status-badge, .priority-badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        .status-active { background: #d4edda; color: #155724; }
-        .status-inactive { background: #f8d7da; color: #721c24; }
-        .status-terminated { background: #e2e3e5; color: #383d41; }
-        .status-pending { background: #fff3cd; color: #856404; }
-        .status-approved { background: #d4edda; color: #155724; }
-        .status-rejected { background: #f8d7da; color: #721c24; }
-
-        .priority-low { background: #d4edda; color: #155724; }
-        .priority-medium { background: #fff3cd; color: #856404; }
-        .priority-high { background: #ffeaa7; color: #e17055; }
-        .priority-urgent { background: #f8d7da; color: #721c24; }
-
-        /* Tab Navigation */
-        .tab-nav {
-            display: flex;
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 0.5rem;
-            margin-bottom: 2rem;
-            gap: 0.5rem;
-        }
-
-        .tab-btn {
-            flex: 1;
-            padding: 1rem 1.5rem;
-            background: transparent;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 500;
-            color: #666;
-            transition: all 0.3s ease;
-        }
-
-        .tab-btn:hover {
-            background: #e9ecef;
-            color: #333;
-        }
-
-        .tab-btn.active {
-            background: #007bff;
-            color: white;
-            font-weight: 600;
-        }
-
-        .tab-content {
-            display: none;
-            animation: fadeIn 0.3s ease-in-out;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Card Styles */
-        .card {
-            background: white;
-            border: 1px solid #ecf0f1;
-            border-radius: 12px;
-            padding: 1.5rem;
-            margin-bottom: 1rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-
-        /* Candidate Form Styles */
-        .candidate-form {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-        }
-
-        .form-section {
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 6px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .form-section-title {
-            font-size: 1.2rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
-            color: #333;
-            border-bottom: 2px solid #007bff;
-            padding-bottom: 0.5rem;
-        }
-
-        .dynamic-section {
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            background: #fafafa;
-            position: relative;
-        }
-
-        .remove-btn {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: #dc3545;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 25px;
-            height: 25px;
-            cursor: pointer;
-            font-size: 12px;
-        }
-
-        .add-btn {
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.9rem;
-        }
-
-        /* File Upload */
-        .file-upload-area {
-            border: 2px dashed #ccc;
-            border-radius: 6px;
-            padding: 2rem;
-            text-align: center;
-            background: #fafafa;
-            transition: border-color 0.3s;
-            cursor: pointer;
-        }
-
-        .file-upload-area:hover {
-            border-color: #007bff;
-        }
-
-        .file-info {
-            font-size: 0.9rem;
-            color: #666;
-            margin-top: 0.5rem;
-        }
-
-        /* Candidate Display */
-        .candidate-card {
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .candidate-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-
-        .candidate-details {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1rem;
-        }
-
-        .experience-item, .education-item {
-            background: #f8f9fa;
-            border-left: 3px solid #007bff;
-            padding: 1rem;
-            margin-bottom: 0.5rem;
-        }
-
-        /* Job Actions */
-        .job-actions {
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .edit-form {
-            animation: slideDown 0.3s ease-out;
-            margin-top: 2rem;
-            background: #f8f9fa;
-            padding: 1.5rem;
-            border-radius: 8px;
-            border: 2px solid #007bff;
-        }
-
-        @keyframes slideDown {
-            from {
-                opacity: 0;
-                max-height: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                max-height: 500px;
-                transform: translateY(0);
-            }
-        }
-
-        /* Modal Styles */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-        }
-
-        .modal-content {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            max-width: 600px;
-            width: 90%;
-            max-height: 90%;
-            overflow-y: auto;
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 2px solid #ecf0f1;
-        }
-
-        .close-btn {
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: #7f8c8d;
-        }
-
-        .close-btn:hover {
-            color: #34495e;
-        }
-
-        /* Section Headers */
-        .section-header h2 {
-            margin-bottom: 0.5rem;
-            color: #2c3e50;
-        }
-
-        .section-subtitle {
-            color: #7f8c8d;
-            margin-top: 0.5rem;
-        }
-
-        .text-center {
-            text-align: center;
-        }
+        .hr-collapsible-body { display: none; padding: 18px; border: 1px solid #e9d5ff; border-top: none; border-radius: 0 0 10px 10px; background: #fff; }
+        .hr-collapsible-body.open { display: block; }
     </style>
 </head>
 <body>
     <?php include '../includes/header.php'; ?>
-
     <?php include '../includes/sidebar.php'; ?>
-    
+
     <div class="main-content">
-        <h1>👥 HR Department</h1>
-        <!-- HR Statistics -->
+
+        <?php if (!empty($success_message)): ?>
+        <div class="hr-flash success"><?php echo $success_message; ?></div>
+        <?php endif; ?>
+        <?php if (!empty($error_message)): ?>
+        <div class="hr-flash error"><?php echo Security::escapeHTML($error_message); ?></div>
+        <?php endif; ?>
+
+        <!-- Hero -->
+        <div class="hr-hero">
+            <div class="hr-hero-icon">👥</div>
+            <div class="hr-hero-info">
+                <h1>HR Department</h1>
+                <p>People management, leave, performance &amp; recruitment</p>
+            </div>
+            <?php if ($can_write): ?>
+            <div class="hr-hero-actions">
+                <button class="hr-hero-btn" onclick="openHeroForm('addEmp')">+ Add Employee</button>
+                <button class="hr-hero-btn" onclick="switchTab('leave');toggleCollapsible('leaveForm')">+ Leave Request</button>
+                <button class="hr-hero-btn" onclick="switchTab('recruitment');toggleCollapsible('jobForm')">+ Job Posting</button>
+                <button class="hr-hero-btn rose" onclick="switchTab('performance');toggleCollapsible('reviewForm')">+ Review</button>
+            </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- Stats bar -->
         <div class="hr-stats">
-            <div class="stat-card">
-                <div class="stat-number"><?php echo count($employees); ?></div>
-                <div class="stat-label">Total Employees</div>
+            <div class="hr-stat">
+                <span class="num violet"><?php echo $total_emp; ?></span>
+                <span class="lbl">Total Employees</span>
             </div>
-            <div class="stat-card">
-                <div class="stat-number"><?php echo count(array_filter($leave_requests, function($lr) { return $lr['status'] === 'pending'; })); ?></div>
-                <div class="stat-label">Pending Leave Requests</div>
+            <div class="hr-stat">
+                <span class="num green"><?php echo $active_emp; ?></span>
+                <span class="lbl">Active</span>
             </div>
-            <div class="stat-card">
-                <div class="stat-number"><?php echo count($job_postings); ?></div>
-                <div class="stat-label">Active Job Postings</div>
+            <div class="hr-stat">
+                <span class="num amber"><?php echo $pending_lv; ?></span>
+                <span class="lbl">Pending Leave</span>
             </div>
-            <div class="stat-card">
-                <div class="stat-number"><?php echo count($candidates); ?></div>
-                <div class="stat-label">Total Candidates</div>
+            <div class="hr-stat">
+                <span class="num blue"><?php echo $open_jobs; ?></span>
+                <span class="lbl">Open Positions</span>
+            </div>
+            <div class="hr-stat">
+                <span class="num rose"><?php echo $new_candidates; ?></span>
+                <span class="lbl">New Candidates</span>
             </div>
         </div>
 
-         <!-- Tab Navigation -->
-        <div class="tab-nav">
-            <button class="tab-btn active" onclick="showTab('employees')">Employees</button>
-            <button class="tab-btn" onclick="showTab('leave')">Leave Management</button>
-            <button class="tab-btn" onclick="showTab('performance')">Performance Reviews</button>
-            <button class="tab-btn" onclick="showTab('recruitment')">Recruitment</button>
+        <!-- Tab nav -->
+        <div class="hr-tabs">
+            <button class="hr-tab active" onclick="switchTab('overview')">📊 Overview</button>
+            <button class="hr-tab" onclick="switchTab('employees')">👤 Employees (<?php echo $total_emp; ?>)</button>
+            <button class="hr-tab" onclick="switchTab('leave')">📅 Leave (<?php echo count($leave_requests); ?>)</button>
+            <button class="hr-tab" onclick="switchTab('performance')">⭐ Reviews (<?php echo count($performance_reviews); ?>)</button>
+            <button class="hr-tab" onclick="switchTab('recruitment')">📋 Recruitment (<?php echo count($job_postings); ?>)</button>
         </div>
-        
-        <!-- Employees Tab -->
-        <div id="employees" class="tab-content active">
-            <div class="section">
-                <div class="section-header">
-                    <h2>Employee Management</h2>
-                </div>
-                <div class="section-content">
-                    <div class="form-container">
-                        <h3 class="form-title">Add New Employee</h3>
-                        <form method="POST" class="form-grid form-grid-2col">
-                            <?php echo Security::getCSRFTokenField(); ?>
-                            
-                            <div class="form-group">
-                                <label class="form-label">First Name *</label>
-                                <input type="text" name="first_name" class="form-input" required>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Last Name *</label>
-                                <input type="text" name="last_name" class="form-input" required>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Email *</label>
-                                <input type="email" name="email" class="form-input" required>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Phone</label>
-                                <input type="tel" name="phone" class="form-input">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Position *</label>
-                                <input type="text" name="position" class="form-input" required>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Department *</label>
-                                <select name="department" class="form-select" required>
-                                    <option value="">Select Department</option>
-                                    <option value="IT">IT</option>
-                                    <option value="Marketing">Marketing</option>
-                                    <option value="Finance">Finance</option>
-                                    <option value="HR">HR</option>
-                                    <option value="Sales">Sales</option>
-                                </select>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Hire Date *</label>
-                                <input type="date" name="hire_date" class="form-input" required>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Salary</label>
-                                <input type="number" name="salary" step="0.01" class="form-input">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Role *</label>
-                                <select name="role" class="form-select" required>
-                                    <option value="">Select Role</option>
-                                    <optgroup label="IT Department">
-                                        <option value="Senior Developer">Senior Developer</option>
-                                        <option value="Full Stack Developer">Full Stack Developer</option>
-                                        <option value="Frontend Developer">Frontend Developer</option>
-                                        <option value="Backend Developer">Backend Developer</option>
-                                        <option value="UI/UX Designer">UI/UX Designer</option>
-                                        <option value="DevOps Engineer">DevOps Engineer</option>
-                                        <option value="QA Tester">QA Tester</option>
-                                        <option value="IT Project Manager">IT Project Manager</option>
-                                        <option value="System Administrator">System Administrator</option>
-                                        <option value="IT Support Specialist">IT Support Specialist</option>
-                                    </optgroup>
-                                    <!-- Other role groups remain the same -->
-                                </select>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Manager</label>
-                                <select name="manager_id" class="form-select">
-                                    <option value="">No Manager</option>
-                                    <?php foreach ($employees as $emp): ?>
-                                        <option value="<?php echo $emp['id']; ?>"><?php echo Security::escapeHTML($emp['first_name'] . ' ' . $emp['last_name']); ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            
-                            <div class="form-group form-group-full form-actions">
-                                <button type="submit" name="create_employee" class="btn-primary btn-success">
-                                    ➕ Add Employee
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                    
-                    <h3>Current Employees</h3>
-                    <div class="employees-grid">
-                        <?php foreach ($employees as $employee): ?>
-                            <div class="employee-card">
-                                <div class="employee-header">
-                                    <div class="employee-title">
-                                        <h4><?php echo Security::escapeHTML($employee['first_name'] . ' ' . $employee['last_name']); ?></h4>
-                                        <p class="employee-company"><?php echo Security::escapeHTML($employee['position']); ?></p>
-                                    </div>
-                                    <span class="status-badge status-<?php echo $employee['status']; ?>">
-                                        <?php echo ucfirst($employee['status']); ?>
-                                    </span>
-                                </div>
-                                
-                                <div class="employee-info">
-                                    <div class="employee-detail">
-                                        <span class="employee-icon">🆔</span>
-                                        <span class="employee-value"><?php echo Security::escapeHTML($employee['employee_id']); ?></span>
-                                    </div>
-                                    
-                                    <div class="employee-detail">
-                                        <span class="employee-icon">📧</span>
-                                        <span class="employee-value"><?php echo Security::escapeHTML($employee['email']); ?></span>
-                                    </div>
-                                    
-                                    <div class="employee-detail">
-                                        <span class="employee-icon">🏢</span>
-                                        <span class="employee-value"><?php echo Security::escapeHTML($employee['department']); ?></span>
-                                    </div>
-                                    
-                                    <div class="employee-detail">
-                                        <span class="employee-icon">📅</span>
-                                        <span class="employee-value">Since <?php echo Utils::formatDate($employee['hire_date']); ?></span>
-                                    </div>
-                                    
-                                    <?php if ($employee['salary']): ?>
-                                        <div class="employee-detail">
-                                            <span class="employee-icon">💰</span>
-                                            <span class="employee-value"><?php echo Utils::formatCurrency($employee['salary']); ?></span>
-                                        </div>
-                                    <?php endif; ?>
-                                    
-                                    <?php if ($employee['manager_first_name']): ?>
-                                        <div class="employee-detail">
-                                            <span class="employee-icon">👤</span>
-                                            <span class="employee-value">Manager: <?php echo Security::escapeHTML($employee['manager_first_name'] . ' ' . $employee['manager_last_name']); ?></span>
-                                        </div>
-                                    <?php endif; ?>
-                                </div>
-                                
-                                <div class="employee-actions">
-                                    <button type="button" class="btn-small btn-view" onclick="viewEmployee(<?php echo $employee['id']; ?>)">
-                                        👁️ View
-                                    </button>
-                                    <button type="button" class="btn-small btn-edit" onclick="editEmployee(<?php echo $employee['id']; ?>)">
-                                        ✏️ Edit
-                                    </button>
-                                </div>
-                            </div>
+
+        <!-- ══════════ TAB: OVERVIEW ══════════ -->
+        <div id="tab-overview" class="hr-tab-content active">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;flex-wrap:wrap;">
+                <!-- Dept breakdown -->
+                <div class="hr-card">
+                    <h3>Employees by Department</h3>
+                    <div class="dept-grid">
+                        <?php foreach ($dept_counts as $dept => $cnt): ?>
+                        <div class="dept-chip">
+                            <div class="dc-num"><?php echo $cnt; ?></div>
+                            <div class="dc-lbl"><?php echo Security::escapeHTML($dept); ?></div>
+                        </div>
                         <?php endforeach; ?>
                     </div>
                 </div>
+                <!-- Status breakdown -->
+                <div class="hr-card">
+                    <h3>Workforce Status</h3>
+                    <?php
+                    $status_counts = [];
+                    foreach ($employees as $e) $status_counts[$e['status']] = ($status_counts[$e['status']] ?? 0) + 1;
+                    $status_colors = ['active'=>'#059669','inactive'=>'#d97706','terminated'=>'#dc2626'];
+                    ?>
+                    <?php foreach ($status_counts as $st => $cnt): ?>
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                        <div style="flex:1;font-size:.87rem;color:#374151;text-transform:capitalize;"><?php echo $st; ?></div>
+                        <div style="width:120px;height:8px;background:#f3f4f6;border-radius:8px;overflow:hidden;">
+                            <div style="width:<?php echo round($cnt/$total_emp*100); ?>%;height:100%;background:<?php echo $status_colors[$st]??'#9ca3af'; ?>;border-radius:8px;"></div>
+                        </div>
+                        <div style="font-size:.85rem;font-weight:700;color:<?php echo $status_colors[$st]??'#374151'; ?>;width:24px;text-align:right;"><?php echo $cnt; ?></div>
+                    </div>
+                    <?php endforeach; ?>
+                    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #f3f4f6;">
+                        <div style="font-size:.8rem;color:#9ca3af;">Portal Account Linked</div>
+                        <?php $linked = count(array_filter($employees, fn($e)=>!empty($e['user_id']))); ?>
+                        <div style="font-size:1.2rem;font-weight:700;color:var(--hr);margin-top:4px;">
+                            <?php echo $linked; ?> / <?php echo $total_emp; ?>
+                            <span style="font-size:.75rem;color:#9ca3af;font-weight:400;">&nbsp;employees have portal access</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Recent leave -->
+            <div class="hr-card">
+                <h3>Recent Leave Requests</h3>
+                <?php $recent_leave = array_slice($leave_requests, 0, 6); ?>
+                <?php if (empty($recent_leave)): ?>
+                <p style="color:#9ca3af;font-size:.87rem;">No leave requests yet.</p>
+                <?php else: ?>
+                <div class="hr-table-wrap">
+                <table class="hr-table">
+                    <thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Status</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($recent_leave as $lr): ?>
+                    <tr>
+                        <td><?php echo Security::escapeHTML($lr['first_name'].' '.$lr['last_name']); ?></td>
+                        <td style="text-transform:capitalize;"><?php echo Security::escapeHTML($lr['leave_type']); ?></td>
+                        <td><?php echo date('d M',strtotime($lr['start_date'])); ?> – <?php echo date('d M',strtotime($lr['end_date'])); ?></td>
+                        <td><?php echo $lr['days_requested']; ?></td>
+                        <td><span class="hbadge hbadge-<?php echo $lr['status']; ?>"><?php echo ucfirst($lr['status']); ?></span></td>
+                    </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
 
-        <!-- Leave Management Tab -->
-        <div id="leave" class="tab-content">
-            <div class="section">
-                <div class="section-header">
-                    <h2>Leave Management</h2>
+        <!-- ══════════ TAB: EMPLOYEES ══════════ -->
+        <div id="tab-employees" class="hr-tab-content">
+            <?php if ($can_write): ?>
+            <div class="hr-collapsible" id="addEmp-wrap">
+                <div class="hr-collapsible-header" onclick="toggleCollapsible('addEmp')">
+                    <span>+ Add New Employee</span><span id="addEmp-arrow">▼</span>
                 </div>
-                <div class="section-content">
-                    <div class="form-container">
-                        <h3 class="form-title">Submit Leave Request</h3>
-                        <form method="POST" class="form-grid form-grid-2col">
-                            <?php echo Security::getCSRFTokenField(); ?>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Employee *</label>
-                                <select name="employee_id" class="form-select" required>
-                                    <option value="">Select Employee</option>
-                                    <?php foreach ($employees as $emp): ?>
-                                        <option value="<?php echo $emp['id']; ?>"><?php echo Security::escapeHTML($emp['first_name'] . ' ' . $emp['last_name'] . ' (' . $emp['employee_id'] . ')'); ?></option>
+                <div class="hr-collapsible-body" id="addEmp-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
+                        <input type="hidden" name="create_employee" value="1">
+                        <div class="hr-form-grid">
+                            <div class="hr-field"><label>First Name *</label><input type="text" name="first_name" required></div>
+                            <div class="hr-field"><label>Last Name *</label><input type="text" name="last_name" required></div>
+                            <div class="hr-field"><label>Email *</label><input type="email" name="email" required></div>
+                            <div class="hr-field"><label>Phone</label><input type="tel" name="phone"></div>
+                            <div class="hr-field"><label>Position *</label><input type="text" name="position" required></div>
+                            <div class="hr-field"><label>Department *</label>
+                                <select name="department" required>
+                                    <?php foreach(['IT','Marketing','Finance','HR','Business Development'] as $d): ?>
+                                    <option value="<?php echo $d; ?>"><?php echo $d; ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Leave Type *</label>
-                                <select name="leave_type" class="form-select" required>
-                                    <option value="">Select Type</option>
-                                    <option value="vacation">Vacation</option>
-                                    <option value="sick">Sick Leave</option>
+                            <div class="hr-field"><label>Role</label>
+                                <select name="role">
+                                    <option value="employee">Employee</option>
+                                    <option value="manager">Manager</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                            </div>
+                            <div class="hr-field"><label>Hire Date *</label><input type="date" name="hire_date" required value="<?php echo date('Y-m-d'); ?>"></div>
+                            <div class="hr-field"><label>Salary (ZAR)</label><input type="number" name="salary" step="0.01" min="0"></div>
+                            <div class="hr-field"><label>Manager</label>
+                                <select name="manager_id">
+                                    <option value="">None</option>
+                                    <?php foreach ($employees as $mgr): ?>
+                                    <option value="<?php echo $mgr['id']; ?>"><?php echo Security::escapeHTML($mgr['first_name'].' '.$mgr['last_name']); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+                        <p style="font-size:.78rem;color:#9ca3af;margin-top:10px;">A portal account will be created automatically. Temporary credentials will appear in the confirmation message.</p>
+                        <div style="margin-top:12px;"><button type="submit" class="hr-btn hr-btn-violet">+ Create Employee</button></div>
+                    </form>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <!-- Search/filter -->
+            <div class="hr-controls">
+                <input class="hr-search" type="text" id="emp-search" placeholder="Search employees…" oninput="filterHR('emp-tbody','emp-search','emp-dept-filter','emp-status-filter','emp-count')">
+                <select class="hr-filter" id="emp-dept-filter" onchange="filterHR('emp-tbody','emp-search','emp-dept-filter','emp-status-filter','emp-count')">
+                    <option value="">All Departments</option>
+                    <?php foreach (array_keys($dept_counts) as $d): ?>
+                    <option value="<?php echo strtolower($d); ?>"><?php echo Security::escapeHTML($d); ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <select class="hr-filter" id="emp-status-filter" onchange="filterHR('emp-tbody','emp-search','emp-dept-filter','emp-status-filter','emp-count')">
+                    <option value="">All Statuses</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="terminated">Terminated</option>
+                </select>
+                <span class="hr-count" id="emp-count"><?php echo $total_emp; ?> employees</span>
+            </div>
+
+            <div class="hr-table-wrap">
+            <table class="hr-table">
+                <thead>
+                    <tr>
+                        <th>Employee</th>
+                        <th>ID</th>
+                        <th>Position</th>
+                        <th>Department</th>
+                        <th>Hire Date</th>
+                        <th>Status</th>
+                        <th>Portal</th>
+                        <?php if ($can_write): ?><th>Actions</th><?php endif; ?>
+                    </tr>
+                </thead>
+                <tbody id="emp-tbody">
+                <?php foreach ($employees as $emp):
+                    $initials = strtoupper(substr($emp['first_name'],0,1).substr($emp['last_name'],0,1));
+                    $search_str = strtolower($emp['first_name'].' '.$emp['last_name'].' '.$emp['email'].' '.$emp['position'].' '.$emp['employee_id']);
+                ?>
+                <tr data-search="<?php echo htmlspecialchars($search_str,ENT_QUOTES); ?>"
+                    data-dept="<?php echo strtolower(htmlspecialchars($emp['department']??'')); ?>"
+                    data-status="<?php echo $emp['status']; ?>">
+                    <td>
+                        <div class="emp-name-cell">
+                            <div class="hr-avatar"><?php echo $initials; ?></div>
+                            <div>
+                                <div style="font-weight:600;color:#111827;"><?php echo Security::escapeHTML($emp['first_name'].' '.$emp['last_name']); ?></div>
+                                <div style="font-size:.75rem;color:#9ca3af;"><?php echo Security::escapeHTML($emp['email']); ?></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td style="font-family:monospace;font-size:.8rem;"><?php echo Security::escapeHTML($emp['employee_id']); ?></td>
+                    <td><?php echo Security::escapeHTML($emp['position'] ?? '—'); ?></td>
+                    <td><?php echo Security::escapeHTML($emp['department'] ?? '—'); ?></td>
+                    <td><?php echo $emp['hire_date'] ? date('d M Y',strtotime($emp['hire_date'])) : '—'; ?></td>
+                    <td><span class="hbadge hbadge-<?php echo $emp['status']; ?>"><?php echo ucfirst($emp['status']); ?></span></td>
+                    <td>
+                        <?php if (!empty($emp['user_id'])): ?>
+                        <span class="linked-badge yes">🔗 Linked</span>
+                        <?php else: ?>
+                        <span class="linked-badge no">— None</span>
+                        <?php endif; ?>
+                    </td>
+                    <?php if ($can_write): ?>
+                    <td>
+                        <button class="hr-btn hr-btn-gray" style="font-size:.75rem;" onclick="openEditEmp(<?php echo htmlspecialchars(json_encode($emp),ENT_QUOTES); ?>)">✏️ Edit</button>
+                    </td>
+                    <?php endif; ?>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            <div class="hr-no-results" id="emp-tbody-no-results">No employees match your search.</div>
+            </div>
+        </div>
+
+        <!-- ══════════ TAB: LEAVE ══════════ -->
+        <div id="tab-leave" class="hr-tab-content">
+            <?php if ($can_write): ?>
+            <div class="hr-collapsible">
+                <div class="hr-collapsible-header" onclick="toggleCollapsible('leaveForm')">
+                    <span>+ Create Leave Request</span><span id="leaveForm-arrow">▼</span>
+                </div>
+                <div class="hr-collapsible-body" id="leaveForm-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
+                        <input type="hidden" name="create_leave_request" value="1">
+                        <div class="hr-form-grid">
+                            <div class="hr-field"><label>Employee *</label>
+                                <select name="employee_id" required>
+                                    <option value="">Select…</option>
+                                    <?php foreach ($employees as $e): ?>
+                                    <option value="<?php echo $e['id']; ?>"><?php echo Security::escapeHTML($e['first_name'].' '.$e['last_name']); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="hr-field"><label>Leave Type *</label>
+                                <select name="leave_type" required>
+                                    <option value="annual">Annual</option>
+                                    <option value="sick">Sick</option>
                                     <option value="personal">Personal</option>
-                                    <option value="maternity">Maternity/Paternity</option>
-                                    <option value="emergency">Emergency</option>
+                                    <option value="maternity">Maternity</option>
+                                    <option value="paternity">Paternity</option>
+                                    <option value="study">Study</option>
+                                    <option value="unpaid">Unpaid</option>
                                 </select>
                             </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Start Date *</label>
-                                <input type="date" name="start_date" class="form-input" required>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">End Date *</label>
-                                <input type="date" name="end_date" class="form-input" required>
-                            </div>
-                            
-                            <div class="form-group form-group-full">
-                                <label class="form-label">Reason</label>
-                                <textarea name="reason" rows="3" class="form-textarea"></textarea>
-                            </div>
-                            
-                            <div class="form-group form-group-full form-actions">
-                                <button type="submit" name="create_leave_request" class="btn-primary">
-                                    📅 Submit Leave Request
-                                </button>
-                            </div>
+                            <div class="hr-field"><label>Start Date *</label><input type="date" name="start_date" required></div>
+                            <div class="hr-field"><label>End Date *</label><input type="date" name="end_date" required></div>
+                            <div class="hr-field full"><label>Reason</label><textarea name="reason" placeholder="Optional reason…"></textarea></div>
+                        </div>
+                        <div style="margin-top:14px;"><button type="submit" class="hr-btn hr-btn-violet">Submit Request</button></div>
+                    </form>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <div class="hr-controls">
+                <input class="hr-search" type="text" id="lv-search" placeholder="Search by employee or type…" oninput="filterHR('lv-tbody','lv-search','lv-type-filter','lv-status-filter','lv-count')">
+                <select class="hr-filter" id="lv-type-filter" onchange="filterHR('lv-tbody','lv-search','lv-type-filter','lv-status-filter','lv-count')">
+                    <option value="">All Types</option>
+                    <?php foreach(['annual','sick','personal','maternity','paternity','study','unpaid'] as $lt): ?>
+                    <option value="<?php echo $lt; ?>"><?php echo ucfirst($lt); ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <select class="hr-filter" id="lv-status-filter" onchange="filterHR('lv-tbody','lv-search','lv-type-filter','lv-status-filter','lv-count')">
+                    <option value="">All Statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="cancelled">Cancelled</option>
+                </select>
+                <span class="hr-count" id="lv-count"><?php echo count($leave_requests); ?> requests</span>
+            </div>
+
+            <div class="hr-table-wrap">
+            <table class="hr-table">
+                <thead>
+                    <tr>
+                        <th>Employee</th>
+                        <th>Type</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Days</th>
+                        <th>Status</th>
+                        <th>Requested</th>
+                        <?php if ($can_write): ?><th>Actions</th><?php endif; ?>
+                    </tr>
+                </thead>
+                <tbody id="lv-tbody">
+                <?php foreach ($leave_requests as $lr):
+                    $search_lv = strtolower($lr['first_name'].' '.$lr['last_name'].' '.$lr['leave_type'].' '.$lr['emp_code']);
+                ?>
+                <tr data-search="<?php echo htmlspecialchars($search_lv,ENT_QUOTES); ?>"
+                    data-dept="<?php echo $lr['leave_type']; ?>"
+                    data-status="<?php echo $lr['status']; ?>">
+                    <td style="font-weight:500;"><?php echo Security::escapeHTML($lr['first_name'].' '.$lr['last_name']); ?></td>
+                    <td style="text-transform:capitalize;"><?php echo Security::escapeHTML($lr['leave_type']); ?></td>
+                    <td><?php echo date('d M Y',strtotime($lr['start_date'])); ?></td>
+                    <td><?php echo date('d M Y',strtotime($lr['end_date'])); ?></td>
+                    <td><?php echo $lr['days_requested']; ?></td>
+                    <td><span class="hbadge hbadge-<?php echo $lr['status']; ?>"><?php echo ucfirst($lr['status']); ?></span></td>
+                    <td style="font-size:.78rem;color:#9ca3af;"><?php echo date('d M Y',strtotime($lr['created_at'])); ?></td>
+                    <?php if ($can_write): ?>
+                    <td style="white-space:nowrap;">
+                        <?php if ($lr['status'] === 'pending'): ?>
+                        <form method="POST" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
+                            <input type="hidden" name="update_leave_status" value="1">
+                            <input type="hidden" name="leave_id" value="<?php echo $lr['id']; ?>">
+                            <input type="hidden" name="status" value="approved">
+                            <button type="submit" class="hr-btn hr-btn-green" style="font-size:.72rem;padding:4px 10px;">✓ Approve</button>
                         </form>
-                    </div>
-                    
-                    <h3>Leave Requests</h3>
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Employee</th>
-                                <th>Type</th>
-                                <th>Start Date</th>
-                                <th>End Date</th>
-                                <th>Days</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($leave_requests as $request): ?>
-                                <tr>
-                                    <td><?php echo Security::escapeHTML($request['first_name'] . ' ' . $request['last_name']); ?></td>
-                                    <td><?php echo ucfirst($request['leave_type']); ?></td>
-                                    <td><?php echo Utils::formatDate($request['start_date']); ?></td>
-                                    <td><?php echo Utils::formatDate($request['end_date']); ?></td>
-                                    <td><?php echo $request['days_requested']; ?></td>
-                                    <td><span class="status-badge status-<?php echo $request['status']; ?>"><?php echo ucfirst($request['status']); ?></span></td>
-                                    <td>
-                                        <?php if ($request['status'] === 'pending' && Security::canWriteInDepartment($_SESSION['role'], $_SESSION['department'], 'HR')): ?>
-                                            <form method="POST" style="display: inline;">
-                                                <?php echo Security::getCSRFTokenField(); ?>
-                                                <input type="hidden" name="leave_id" value="<?php echo $request['id']; ?>">
-                                                <input type="hidden" name="status" value="approved">
-                                                <button type="submit" name="update_leave_status" class="btn-small btn-success">Approve</button>
-                                            </form>
-                                            <form method="POST" style="display: inline;">
-                                                <?php echo Security::getCSRFTokenField(); ?>
-                                                <input type="hidden" name="leave_id" value="<?php echo $request['id']; ?>">
-                                                <input type="hidden" name="status" value="rejected">
-                                                <button type="submit" name="update_leave_status" class="btn-small btn-danger">Reject</button>
-                                            </form>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
+                        <form method="POST" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
+                            <input type="hidden" name="update_leave_status" value="1">
+                            <input type="hidden" name="leave_id" value="<?php echo $lr['id']; ?>">
+                            <input type="hidden" name="status" value="rejected">
+                            <button type="submit" class="hr-btn hr-btn-rose" style="font-size:.72rem;padding:4px 10px;">✗ Reject</button>
+                        </form>
+                        <?php else: ?>
+                        <span style="font-size:.78rem;color:#9ca3af;">—</span>
+                        <?php endif; ?>
+                    </td>
+                    <?php endif; ?>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            <div class="hr-no-results" id="lv-tbody-no-results">No leave requests match your filter.</div>
+            </div>
+        </div>
+
+        <!-- ══════════ TAB: PERFORMANCE ══════════ -->
+        <div id="tab-performance" class="hr-tab-content">
+            <?php if ($can_write): ?>
+            <div class="hr-collapsible">
+                <div class="hr-collapsible-header" onclick="toggleCollapsible('reviewForm')">
+                    <span>+ Create Performance Review</span><span id="reviewForm-arrow">▼</span>
+                </div>
+                <div class="hr-collapsible-body" id="reviewForm-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
+                        <input type="hidden" name="create_performance_review" value="1">
+                        <div class="hr-form-grid">
+                            <div class="hr-field"><label>Employee *</label>
+                                <select name="employee_id" required>
+                                    <option value="">Select…</option>
+                                    <?php foreach ($employees as $e): ?>
+                                    <option value="<?php echo $e['id']; ?>"><?php echo Security::escapeHTML($e['first_name'].' '.$e['last_name']); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="hr-field"><label>Reviewer (Portal User) *</label>
+                                <select name="reviewer_id" required>
+                                    <option value="">Select…</option>
+                                    <?php foreach ($unlinked_users as $u): ?>
+                                    <option value="<?php echo $u['id']; ?>"><?php echo Security::escapeHTML($u['username']); ?> (<?php echo $u['role']; ?>)</option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="hr-field"><label>Period Start *</label><input type="date" name="start_date" required></div>
+                            <div class="hr-field"><label>Period End *</label><input type="date" name="end_date" required></div>
+                            <div class="hr-field"><label>Overall Rating (1–5) *</label>
+                                <select name="overall_rating" required>
+                                    <option value="5">5 – Outstanding</option>
+                                    <option value="4">4 – Exceeds Expectations</option>
+                                    <option value="3" selected>3 – Meets Expectations</option>
+                                    <option value="2">2 – Needs Improvement</option>
+                                    <option value="1">1 – Unsatisfactory</option>
+                                </select>
+                            </div>
+                            <div class="hr-field full"><label>Goals &amp; Achievements</label><textarea name="goals_achievement"></textarea></div>
+                            <div class="hr-field full"><label>Strengths</label><textarea name="strengths"></textarea></div>
+                            <div class="hr-field full"><label>Areas for Improvement</label><textarea name="areas_for_improvement"></textarea></div>
+                            <div class="hr-field full"><label>Manager Comments</label><textarea name="comments"></textarea></div>
+                        </div>
+                        <div style="margin-top:14px;"><button type="submit" class="hr-btn hr-btn-rose">Save Review</button></div>
+                    </form>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <div class="hr-controls">
+                <input class="hr-search" type="text" id="rv-search" placeholder="Search reviews…" oninput="filterHR('rv-tbody','rv-search','rv-dept-filter','rv-status-filter','rv-count')">
+                <select class="hr-filter" id="rv-dept-filter" onchange="filterHR('rv-tbody','rv-search','rv-dept-filter','rv-status-filter','rv-count')">
+                    <option value="">All Ratings</option>
+                    <option value="5">5 Stars</option><option value="4">4 Stars</option>
+                    <option value="3">3 Stars</option><option value="2">2 Stars</option><option value="1">1 Star</option>
+                </select>
+                <select class="hr-filter" id="rv-status-filter" onchange="filterHR('rv-tbody','rv-search','rv-dept-filter','rv-status-filter','rv-count')">
+                    <option value="">All Statuses</option>
+                    <option value="draft">Draft</option>
+                    <option value="published">Published</option>
+                    <option value="completed">Completed</option>
+                </select>
+                <span class="hr-count" id="rv-count"><?php echo count($performance_reviews); ?> reviews</span>
+            </div>
+
+            <div class="hr-table-wrap">
+            <table class="hr-table">
+                <thead>
+                    <tr>
+                        <th>Employee</th>
+                        <th>Period</th>
+                        <th>Rating</th>
+                        <th>Reviewer</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody id="rv-tbody">
+                <?php foreach ($performance_reviews as $rv):
+                    $search_rv = strtolower($rv['first_name'].' '.$rv['last_name'].' '.($rv['reviewer_name']??''));
+                    $stars = str_repeat('★', (int)$rv['overall_rating']).str_repeat('☆', 5-(int)$rv['overall_rating']);
+                ?>
+                <tr data-search="<?php echo htmlspecialchars($search_rv,ENT_QUOTES); ?>"
+                    data-dept="<?php echo $rv['overall_rating']; ?>"
+                    data-status="<?php echo $rv['status']; ?>">
+                    <td style="font-weight:500;"><?php echo Security::escapeHTML($rv['first_name'].' '.$rv['last_name']); ?></td>
+                    <td style="font-size:.8rem;">
+                        <?php echo date('M Y',strtotime($rv['review_period_start'])); ?>
+                        – <?php echo date('M Y',strtotime($rv['review_period_end'])); ?>
+                    </td>
+                    <td><span class="hr-stars"><?php echo $stars; ?></span></td>
+                    <td style="font-size:.82rem;"><?php echo Security::escapeHTML($rv['reviewer_name'] ?? '—'); ?></td>
+                    <td><span class="hbadge hbadge-<?php echo $rv['status']; ?>"><?php echo ucfirst($rv['status']); ?></span></td>
+                    <td style="font-size:.78rem;color:#9ca3af;"><?php echo date('d M Y',strtotime($rv['created_at'])); ?></td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            <div class="hr-no-results" id="rv-tbody-no-results">No reviews match your filter.</div>
+            </div>
+        </div>
+
+        <!-- ══════════ TAB: RECRUITMENT ══════════ -->
+        <div id="tab-recruitment" class="hr-tab-content">
+            <?php if ($can_write): ?>
+            <!-- New job posting form -->
+            <div class="hr-collapsible">
+                <div class="hr-collapsible-header" onclick="toggleCollapsible('jobForm')">
+                    <span>+ Post New Job</span><span id="jobForm-arrow">▼</span>
+                </div>
+                <div class="hr-collapsible-body" id="jobForm-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
+                        <input type="hidden" name="create_job_posting" value="1">
+                        <div class="hr-form-grid">
+                            <div class="hr-field"><label>Job Title *</label><input type="text" name="title" required></div>
+                            <div class="hr-field"><label>Department *</label>
+                                <select name="department" required>
+                                    <?php foreach(['IT','Marketing','Finance','HR','Business Development'] as $d): ?>
+                                    <option value="<?php echo $d; ?>"><?php echo $d; ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="hr-field"><label>Salary Range</label><input type="text" name="salary_range" placeholder="e.g. R25,000 – R35,000"></div>
+                            <div class="hr-field full"><label>Description *</label><textarea name="description" required></textarea></div>
+                            <div class="hr-field full"><label>Requirements</label><textarea name="requirements"></textarea></div>
+                        </div>
+                        <div style="margin-top:14px;"><button type="submit" class="hr-btn hr-btn-violet">Post Job</button></div>
+                    </form>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <!-- Job postings table -->
+            <div class="hr-controls">
+                <input class="hr-search" type="text" id="jp-search" placeholder="Search postings…" oninput="filterHR('jp-tbody','jp-search','jp-dept-filter','jp-status-filter','jp-count')">
+                <select class="hr-filter" id="jp-dept-filter" onchange="filterHR('jp-tbody','jp-search','jp-dept-filter','jp-status-filter','jp-count')">
+                    <option value="">All Departments</option>
+                    <?php foreach(['IT','Marketing','Finance','HR','Business Development'] as $d): ?>
+                    <option value="<?php echo strtolower($d); ?>"><?php echo $d; ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <select class="hr-filter" id="jp-status-filter" onchange="filterHR('jp-tbody','jp-search','jp-dept-filter','jp-status-filter','jp-count')">
+                    <option value="">All Statuses</option>
+                    <option value="active">Active</option>
+                    <option value="draft">Draft</option>
+                    <option value="closed">Closed</option>
+                </select>
+                <span class="hr-count" id="jp-count"><?php echo count($job_postings); ?> postings</span>
+            </div>
+
+            <div class="hr-table-wrap" style="margin-bottom:24px;">
+            <table class="hr-table">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Department</th>
+                        <th>Salary Range</th>
+                        <th>Status</th>
+                        <th>Posted</th>
+                        <th>Candidates</th>
+                        <?php if ($can_write): ?><th>Actions</th><?php endif; ?>
+                    </tr>
+                </thead>
+                <tbody id="jp-tbody">
+                <?php foreach ($job_postings as $jp):
+                    $jp_candidates = array_filter($candidates, fn($c)=>$c['job_posting_id']===$jp['id']);
+                    $search_jp = strtolower($jp['title'].' '.$jp['department'].' '.($jp['posted_by_name']??''));
+                ?>
+                <tr data-search="<?php echo htmlspecialchars($search_jp,ENT_QUOTES); ?>"
+                    data-dept="<?php echo strtolower(htmlspecialchars($jp['department']??'')); ?>"
+                    data-status="<?php echo $jp['status']; ?>">
+                    <td style="font-weight:600;"><?php echo Security::escapeHTML($jp['title']); ?></td>
+                    <td><?php echo Security::escapeHTML($jp['department']); ?></td>
+                    <td style="font-size:.82rem;"><?php echo Security::escapeHTML($jp['salary_range'] ?? '—'); ?></td>
+                    <td><span class="hbadge hbadge-<?php echo $jp['status']; ?>"><?php echo ucfirst($jp['status']); ?></span></td>
+                    <td style="font-size:.78rem;color:#9ca3af;"><?php echo date('d M Y',strtotime($jp['created_at'])); ?></td>
+                    <td><?php echo count($jp_candidates); ?></td>
+                    <?php if ($can_write): ?>
+                    <td style="white-space:nowrap;">
+                        <button class="hr-btn hr-btn-gray" style="font-size:.73rem;" onclick="openEditJob(<?php echo htmlspecialchars(json_encode($jp),ENT_QUOTES); ?>)">✏️ Edit</button>
+                        <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this posting and all candidates?')">
+                            <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
+                            <input type="hidden" name="delete_job_posting" value="1">
+                            <input type="hidden" name="job_id" value="<?php echo $jp['id']; ?>">
+                            <button type="submit" class="hr-btn hr-btn-rose" style="font-size:.73rem;">🗑 Delete</button>
+                        </form>
+                    </td>
+                    <?php endif; ?>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            <div class="hr-no-results" id="jp-tbody-no-results">No job postings match your filter.</div>
+            </div>
+
+            <!-- Candidates section -->
+            <div class="hr-collapsible">
+                <div class="hr-collapsible-header" onclick="toggleCollapsible('candForm')">
+                    <span>+ Add Candidate Application</span><span id="candForm-arrow">▼</span>
+                </div>
+                <div class="hr-collapsible-body" id="candForm-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
+                        <input type="hidden" name="create_candidate" value="1">
+                        <div class="hr-form-grid">
+                            <div class="hr-field full"><label>Job Posting *</label>
+                                <select name="job_posting_id" required>
+                                    <option value="">Select…</option>
+                                    <?php foreach ($job_postings as $jp): ?>
+                                    <option value="<?php echo $jp['id']; ?>"><?php echo Security::escapeHTML($jp['title'].' — '.$jp['department']); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="hr-field"><label>First Name *</label><input type="text" name="first_name" required></div>
+                            <div class="hr-field"><label>Last Name *</label><input type="text" name="last_name" required></div>
+                            <div class="hr-field"><label>Email *</label><input type="email" name="email" required></div>
+                            <div class="hr-field"><label>Phone</label><input type="tel" name="phone"></div>
+                            <div class="hr-field full"><label>Cover Letter</label><textarea name="cover_letter" placeholder="Candidate's cover letter…"></textarea></div>
+                            <div class="hr-field full"><label>CV / Resume (PDF)</label><input type="file" name="resume_file" accept=".pdf,.doc,.docx"></div>
+                        </div>
+                        <div style="margin-top:14px;"><button type="submit" class="hr-btn hr-btn-violet">Submit Application</button></div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Candidates table -->
+            <div class="hr-controls" style="margin-top:16px;">
+                <input class="hr-search" type="text" id="cand-search" placeholder="Search candidates…" oninput="filterHR('cand-tbody','cand-search','cand-job-filter','cand-status-filter','cand-count')">
+                <select class="hr-filter" id="cand-job-filter" onchange="filterHR('cand-tbody','cand-search','cand-job-filter','cand-status-filter','cand-count')">
+                    <option value="">All Positions</option>
+                    <?php foreach ($job_postings as $jp): ?>
+                    <option value="<?php echo strtolower(htmlspecialchars($jp['title'])); ?>"><?php echo Security::escapeHTML($jp['title']); ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <select class="hr-filter" id="cand-status-filter" onchange="filterHR('cand-tbody','cand-search','cand-job-filter','cand-status-filter','cand-count')">
+                    <option value="">All Statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="interview">Interview</option>
+                    <option value="hired">Hired</option>
+                    <option value="rejected">Rejected</option>
+                </select>
+                <span class="hr-count" id="cand-count"><?php echo count($candidates); ?> candidates</span>
+            </div>
+
+            <div class="hr-table-wrap">
+            <table class="hr-table">
+                <thead>
+                    <tr>
+                        <th>Candidate</th>
+                        <th>Position</th>
+                        <th>Department</th>
+                        <th>Status</th>
+                        <th>Applied</th>
+                        <th>CV</th>
+                    </tr>
+                </thead>
+                <tbody id="cand-tbody">
+                <?php foreach ($candidates as $cand):
+                    $search_cand = strtolower($cand['first_name'].' '.$cand['last_name'].' '.$cand['email'].' '.$cand['job_title']);
+                ?>
+                <tr data-search="<?php echo htmlspecialchars($search_cand,ENT_QUOTES); ?>"
+                    data-dept="<?php echo strtolower(htmlspecialchars($cand['job_title']??'')); ?>"
+                    data-status="<?php echo $cand['status']; ?>">
+                    <td>
+                        <div style="font-weight:600;"><?php echo Security::escapeHTML($cand['first_name'].' '.$cand['last_name']); ?></div>
+                        <div style="font-size:.75rem;color:#9ca3af;"><?php echo Security::escapeHTML($cand['email']); ?></div>
+                    </td>
+                    <td><?php echo Security::escapeHTML($cand['job_title']); ?></td>
+                    <td><?php echo Security::escapeHTML($cand['job_department']); ?></td>
+                    <td><span class="hbadge hbadge-<?php echo $cand['status']; ?>"><?php echo ucfirst($cand['status']); ?></span></td>
+                    <td style="font-size:.78rem;color:#9ca3af;"><?php echo date('d M Y',strtotime($cand['created_at'])); ?></td>
+                    <td>
+                        <?php if (!empty($cand['resume_file'])): ?>
+                        <a href="../uploads/<?php echo Security::escapeHTML($cand['resume_file']); ?>" target="_blank" class="hr-btn hr-btn-gray" style="font-size:.73rem;">📄 CV</a>
+                        <?php else: ?>
+                        <span style="font-size:.75rem;color:#9ca3af;">—</span>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            <div class="hr-no-results" id="cand-tbody-no-results">No candidates match your filter.</div>
+            </div>
+        </div>
+
+    </div><!-- /.main-content -->
+
+    <!-- ══ Edit Employee Modal ══ -->
+    <div class="hr-modal-overlay" id="editEmpModal">
+        <div class="hr-modal">
+            <button class="hr-modal-close" onclick="closeModal('editEmpModal')">✕</button>
+            <h2>Edit Employee</h2>
+            <form method="POST" id="editEmpForm">
+                <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
+                <input type="hidden" name="update_employee" value="1">
+                <input type="hidden" name="employee_id" id="edit_emp_id">
+                <div class="hr-form-grid">
+                    <div class="hr-field"><label>First Name *</label><input type="text" name="first_name" id="edit_first_name" required></div>
+                    <div class="hr-field"><label>Last Name *</label><input type="text" name="last_name" id="edit_last_name" required></div>
+                    <div class="hr-field"><label>Email *</label><input type="email" name="email" id="edit_email" required></div>
+                    <div class="hr-field"><label>Phone</label><input type="tel" name="phone" id="edit_phone"></div>
+                    <div class="hr-field"><label>Position</label><input type="text" name="position" id="edit_position"></div>
+                    <div class="hr-field"><label>Department</label>
+                        <select name="department" id="edit_department">
+                            <?php foreach(['IT','Marketing','Finance','HR','Business Development'] as $d): ?>
+                            <option value="<?php echo $d; ?>"><?php echo $d; ?></option>
                             <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-         <!-- Performance Reviews Tab -->
-        <div id="performance" class="tab-content">
-            <div class="section">
-                <div class="section-header">
-                    <h2>Performance Reviews</h2>
-                </div>
-                <div class="section-content">
-                    <?php if (Security::canWriteInDepartment($_SESSION['role'], $_SESSION['department'], 'HR')): ?>
-                        <div class="form-container">
-                            <h3 class="form-title">Create Performance Review</h3>
-                            <form method="POST" class="form-grid form-grid-2col">
-                                <?php echo Security::getCSRFTokenField(); ?>
-                                
-                                <div class="form-group">
-                                    <label class="form-label">Employee *</label>
-                                    <select name="employee_id" class="form-select" required>
-                                        <option value="">Select Employee</option>
-                                        <?php foreach ($employees as $emp): ?>
-                                            <option value="<?php echo $emp['id']; ?>"><?php echo Security::escapeHTML($emp['first_name'] . ' ' . $emp['last_name']); ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label class="form-label">Reviewer *</label>
-                                    <select name="reviewer_id" class="form-select" required>
-                                        <option value="">Select Reviewer</option>
-                                        <?php foreach ($employees as $emp): ?>
-                                            <option value="<?php echo $emp['id']; ?>"><?php echo Security::escapeHTML($emp['first_name'] . ' ' . $emp['last_name']); ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label class="form-label">Review Period *</label>
-                                    <input type="text" name="review_period" class="form-input" placeholder="e.g., Q4 2025" required>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label class="form-label">Period Start Date *</label>
-                                    <input type="date" name="start_date" class="form-input" required>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label class="form-label">Period End Date *</label>
-                                    <input type="date" name="end_date" class="form-input" required>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label class="form-label">Overall Rating (1-5) *</label>
-                                    <select name="overall_rating" class="form-select" required>
-                                        <option value="">Select Rating</option>
-                                        <option value="1">1 - Needs Improvement</option>
-                                        <option value="2">2 - Below Expectations</option>
-                                        <option value="3">3 - Meets Expectations</option>
-                                        <option value="4">4 - Exceeds Expectations</option>
-                                        <option value="5">5 - Outstanding</option>
-                                    </select>
-                                </div>
-                                
-                                <div class="form-group form-group-full">
-                                    <label class="form-label">Goals Achievement</label>
-                                    <textarea name="goals_achievement" rows="3" class="form-textarea"></textarea>
-                                </div>
-                                
-                                <div class="form-group form-group-full">
-                                    <label class="form-label">Strengths</label>
-                                    <textarea name="strengths" rows="3" class="form-textarea"></textarea>
-                                </div>
-                                
-                                <div class="form-group form-group-full">
-                                    <label class="form-label">Areas for Improvement</label>
-                                    <textarea name="areas_for_improvement" rows="3" class="form-textarea"></textarea>
-                                </div>
-                                
-                                <div class="form-group form-group-full">
-                                    <label class="form-label">Additional Comments</label>
-                                    <textarea name="comments" rows="3" class="form-textarea"></textarea>
-                                </div>
-                                
-                                <div class="form-group form-group-full form-actions">
-                                    <button type="submit" name="create_performance_review" class="btn-primary">
-                                        📊 Create Review
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    <?php endif; ?>
-                    
-                    <h3>Performance Reviews</h3>
-                    <?php foreach ($performance_reviews as $review): ?>
-                        <div class="card">
-                            <div class="card-header">
-                                <h4><?php echo Security::escapeHTML($review['first_name'] . ' ' . $review['last_name']); ?> - <?php echo Security::escapeHTML($review['review_period']); ?></h4>
-                                <div>
-                                    <small>Period: <?php echo $review['start_date'] ? Utils::formatDate($review['start_date']) : ''; ?> - <?php echo $review['end_date'] ? Utils::formatDate($review['end_date']) : ''; ?></small>
-                                    <span class="priority-badge priority-<?php echo $review['overall_rating'] >= 4 ? 'high' : ($review['overall_rating'] >= 3 ? 'medium' : 'low'); ?>">
-                                        Rating: <?php echo $review['overall_rating']; ?>/5
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="form-grid-2col">
-                                <div><strong>Reviewer:</strong> <?php echo Security::escapeHTML($review['reviewer_first_name'] . ' ' . $review['reviewer_last_name']); ?></div>
-                                <div><strong>Date:</strong> <?php echo Utils::formatDate($review['created_at']); ?></div>
-                            </div>
-                            <?php if ($review['goals_achievement']): ?>
-                                <div style="margin-top: 1rem;"><strong>Goals Achievement:</strong><br><?php echo Security::escapeHTML($review['goals_achievement']); ?></div>
-                            <?php endif; ?>
-                            <?php if ($review['strengths']): ?>
-                                <div style="margin-top: 1rem;"><strong>Strengths:</strong><br><?php echo Security::escapeHTML($review['strengths']); ?></div>
-                            <?php endif; ?>
-                            <?php if ($review['areas_for_improvement']): ?>
-                                <div style="margin-top: 1rem;"><strong>Areas for Improvement:</strong><br><?php echo Security::escapeHTML($review['areas_for_improvement']); ?></div>
-                            <?php endif; ?>
-                            <?php if ($review['comments']): ?>
-                                <div style="margin-top: 1rem;"><strong>Comments:</strong><br><?php echo Security::escapeHTML($review['comments']); ?></div>
-                            <?php endif; ?>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-        </div>
-
-        <!-- Recruitment Tab -->
-        <div id="recruitment" class="tab-content">
-            <div class="section">
-                <div class="section-header">
-                    <h2>Job Postings</h2>
-                </div>
-                <div class="section-content">
-                    <?php if (Security::canWriteInDepartment($_SESSION['role'], $_SESSION['department'], 'HR')): ?>
-                        <div class="form-container">
-                            <h3 class="form-title">Create Job Posting</h3>
-                            <form method="POST" class="form-grid form-grid-2col">
-                                <?php echo Security::getCSRFTokenField(); ?>
-                                
-                                <div class="form-group">
-                                    <label class="form-label">Job Title *</label>
-                                    <input type="text" name="title" class="form-input" required>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label class="form-label">Department *</label>
-                                    <select name="department" class="form-select" required>
-                                        <option value="">Select Department</option>
-                                        <option value="IT">IT</option>
-                                        <option value="Marketing">Marketing</option>
-                                        <option value="Finance">Finance</option>
-                                        <option value="HR">HR</option>
-                                        <option value="Sales">Sales</option>
-                                    </select>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label class="form-label">Salary Range</label>
-                                    <input type="text" name="salary_range" class="form-input" placeholder="e.g., R 50,000 - R 70,000">
-                                </div>
-                                
-                                <div class="form-group form-group-full">
-                                    <label class="form-label">Job Description *</label>
-                                    <textarea name="description" rows="4" class="form-textarea" required></textarea>
-                                </div>
-                                
-                                <div class="form-group form-group-full">
-                                    <label class="form-label">Requirements *</label>
-                                    <textarea name="requirements" rows="4" class="form-textarea" required></textarea>
-                                </div>
-                                
-                                <div class="form-group form-group-full form-actions">
-                                    <button type="submit" name="create_job_posting" class="btn-primary">
-                                        📋 Post Job
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    <?php endif; ?>
-                    
-                    <h3>Current Job Postings</h3>
-                    <?php foreach ($job_postings as $job): ?>
-                        <div class="card" id="job-<?php echo $job['id']; ?>">
-                            <div class="card-header">
-                                <h4><?php echo Security::escapeHTML($job['title']); ?></h4>
-                                <div style="display: flex; align-items: center; gap: 1rem;">
-                                    <span class="status-badge status-<?php echo $job['status']; ?>"><?php echo ucfirst($job['status']); ?></span>
-                                    <?php if (Security::canWriteInDepartment($_SESSION['role'], $_SESSION['department'], 'HR')): ?>
-                                        <div class="job-actions">
-                                            <button type="button" class="btn-small btn-edit" onclick="editJob(<?php echo $job['id']; ?>)" title="Edit Job">✏️</button>
-                                            <button type="button" class="btn-small btn-danger" onclick="deleteJob(<?php echo $job['id']; ?>)" title="Delete Job">🗑️</button>
-                                        </div>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                            <div class="form-grid-2col">
-                                <div><strong>Department:</strong> <?php echo Security::escapeHTML($job['department']); ?></div>
-                                <div><strong>Salary:</strong> <?php echo Security::escapeHTML($job['salary_range']); ?></div>
-                                <div><strong>Posted by:</strong> <?php echo Security::escapeHTML($job['posted_by_name']); ?></div>
-                                <div><strong>Posted:</strong> <?php echo Utils::formatDate($job['created_at']); ?></div>
-                            </div>
-                            <div style="margin-top: 1rem;">
-                                <strong>Description:</strong><br>
-                                <span class="job-description"><?php echo nl2br(Security::escapeHTML($job['description'])); ?></span>
-                            </div>
-                            <div style="margin-top: 1rem;">
-                                <strong>Requirements:</strong><br>
-                                <span class="job-requirements"><?php echo nl2br(Security::escapeHTML($job['requirements'])); ?></span>
-                            </div>
-                            
-                            <!-- Edit Form -->
-                            <div class="edit-form" id="edit-form-<?php echo $job['id']; ?>" style="display: none;">
-                                <h5>Edit Job Posting</h5>
-                                <form method="POST" class="form-grid form-grid-2col">
-                                    <?php echo Security::getCSRFTokenField(); ?>
-                                    <input type="hidden" name="job_id" value="<?php echo $job['id']; ?>">
-                                    
-                                    <div class="form-group">
-                                        <label class="form-label">Job Title *</label>
-                                        <input type="text" name="title" value="<?php echo Security::escapeHTML($job['title']); ?>" class="form-input" required>
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label class="form-label">Department *</label>
-                                        <select name="department" class="form-select" required>
-                                            <option value="IT" <?php echo $job['department'] === 'IT' ? 'selected' : ''; ?>>IT</option>
-                                            <option value="Marketing" <?php echo $job['department'] === 'Marketing' ? 'selected' : ''; ?>>Marketing</option>
-                                            <option value="Finance" <?php echo $job['department'] === 'Finance' ? 'selected' : ''; ?>>Finance</option>
-                                            <option value="HR" <?php echo $job['department'] === 'HR' ? 'selected' : ''; ?>>HR</option>
-                                            <option value="Sales" <?php echo $job['department'] === 'Sales' ? 'selected' : ''; ?>>Sales</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label class="form-label">Salary Range</label>
-                                        <input type="text" name="salary_range" value="<?php echo Security::escapeHTML($job['salary_range']); ?>" class="form-input">
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label class="form-label">Status</label>
-                                        <select name="status" class="form-select">
-                                            <option value="active" <?php echo $job['status'] === 'active' ? 'selected' : ''; ?>>Active</option>
-                                            <option value="closed" <?php echo $job['status'] === 'closed' ? 'selected' : ''; ?>>Closed</option>
-                                            <option value="draft" <?php echo $job['status'] === 'draft' ? 'selected' : ''; ?>>Draft</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <div class="form-group form-group-full">
-                                        <label class="form-label">Job Description *</label>
-                                        <textarea name="description" rows="4" class="form-textarea" required><?php echo Security::escapeHTML($job['description']); ?></textarea>
-                                    </div>
-                                    
-                                    <div class="form-group form-group-full">
-                                        <label class="form-label">Requirements *</label>
-                                        <textarea name="requirements" rows="4" class="form-textarea" required><?php echo Security::escapeHTML($job['requirements']); ?></textarea>
-                                    </div>
-                                    
-                                    <div class="form-group form-group-full form-actions">
-                                        <button type="submit" name="update_job_posting" class="btn-primary">Update Job</button>
-                                        <button type="button" class="btn-primary btn-warning" onclick="cancelEdit(<?php echo $job['id']; ?>)">Cancel</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-            
-            <div class="section">
-                <div class="section-header">
-                    <h2>External Candidate Application Form</h2>
-                </div>
-                <div class="section-content">
-                    <?php if (isset($success_message)): ?>
-                        <div class="alert alert-success"><?php echo $success_message; ?></div>
-                    <?php endif; ?>
-                    <?php if (isset($error_message)): ?>
-                        <div class="alert alert-danger"><?php echo $error_message; ?></div>
-                    <?php endif; ?>
-                    
-                    <div class="candidate-form">
-                        <form method="POST" enctype="multipart/form-data" id="candidateForm">
-                            <?php echo Security::getCSRFTokenField(); ?>
-                            
-                            <!-- Basic Information Section -->
-                            <div class="form-section">
-                                <div class="form-section-title">📋 Basic Information</div>
-                                <div class="form-grid">
-                                    <div class="form-group">
-                                        <label>Job Position *:</label>
-                                        <select name="job_posting_id" required>
-                                            <option value="">Select Position</option>
-                                            <?php foreach ($job_postings as $job): ?>
-                                                <option value="<?php echo $job['id']; ?>"><?php echo Security::escapeHTML($job['title'] . ' - ' . $job['department']); ?></option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>First Name *:</label>
-                                        <input type="text" name="first_name" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Last Name *:</label>
-                                        <input type="text" name="last_name" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Email *:</label>
-                                        <input type="email" name="email" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Phone:</label>
-                                        <input type="tel" name="phone">
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Years of Experience:</label>
-                                        <input type="number" name="years_experience" min="0" max="50">
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Professional Details Section -->
-                            <div class="form-section">
-                                <div class="form-section-title">💼 Professional Details</div>
-                                <div class="form-grid">
-                                    <div class="form-group">
-                                        <label>Salary Expectation (R):</label>
-                                        <input type="number" name="salary_expectation" step="0.01" placeholder="e.g., 65000">
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Available Start Date:</label>
-                                        <input type="date" name="availability_date">
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Preferred Location:</label>
-                                        <input type="text" name="preferred_location" placeholder="e.g., Cape Town, Remote">
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Work Authorization:</label>
-                                        <select name="work_authorization">
-                                            <option value="">Select Status</option>
-                                            <option value="citizen">South African Citizen</option>
-                                            <option value="permanent_resident">Permanent Resident</option>
-                                            <option value="work_permit">Work Permit</option>
-                                            <option value="student_visa">Student Visa</option>
-                                            <option value="other">Other</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>LinkedIn Profile:</label>
-                                        <input type="url" name="linkedin_profile" placeholder="https://linkedin.com/in/yourprofile">
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Portfolio Website:</label>
-                                        <input type="url" name="portfolio_website" placeholder="https://yourportfolio.com">
-                                    </div>
-                                    <div class="form-group">
-                                        <label style="display: flex; align-items: center;">
-                                            <input type="checkbox" name="willing_to_relocate" style="margin-right: 0.5rem;">
-                                            Willing to relocate if necessary
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- CV Upload Section -->
-                            <div class="form-section">
-                                <div class="form-section-title">📄 CV Upload</div>
-                                <div class="file-upload-area">
-                                    <input type="file" name="resume_file" id="resume_file" accept=".pdf,.doc,.docx" style="display: none;">
-                                    <label for="resume_file" style="cursor: pointer;">
-                                        <div>📁 Click to upload your CV</div>
-                                        <div class="file-info">Supported formats: PDF, DOC, DOCX (Max 5MB)</div>
-                                    </label>
-                                    <div id="file-name" class="file-info" style="display: none;"></div>
-                                </div>
-                            </div>
-                            
-                            <!-- Work Experience Section -->
-                            <div class="form-section">
-                                <div class="form-section-title">💼 Work Experience</div>
-                                <div id="work-experience-container">
-                                    <div class="dynamic-section work-experience-item">
-                                        <button type="button" class="remove-btn" onclick="removeSection(this)" style="display: none;">×</button>
-                                        <div class="form-grid">
-                                            <div class="form-group">
-                                                <label>Company Name *:</label>
-                                                <input type="text" name="work_experience[0][company_name]" required>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Position *:</label>
-                                                <input type="text" name="work_experience[0][position]" required>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Start Date *:</label>
-                                                <input type="date" name="work_experience[0][start_date]" required>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>End Date:</label>
-                                                <input type="date" name="work_experience[0][end_date]">
-                                            </div>
-                                            <div class="form-group">
-                                                <label style="display: flex; align-items: center;">
-                                                    <input type="checkbox" name="work_experience[0][is_current]" style="margin-right: 0.5rem;" onchange="toggleEndDate(this)">
-                                                    Currently working here
-                                                </label>
-                                            </div>
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Job Description:</label>
-                                            <textarea name="work_experience[0][description]" rows="3" placeholder="Describe your responsibilities and achievements"></textarea>
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Skills Used:</label>
-                                            <input type="text" name="work_experience[0][skills_used]" placeholder="e.g., JavaScript, Project Management, Leadership">
-                                        </div>
-                                    </div>
-                                </div>
-                                <button type="button" class="add-btn" onclick="addWorkExperience()">+ Add More Experience</button>
-                            </div>
-                            
-                            <!-- Education Section -->
-                            <div class="form-section">
-                                <div class="form-section-title">🎓 Education</div>
-                                <div id="education-container">
-                                    <div class="dynamic-section education-item">
-                                        <button type="button" class="remove-btn" onclick="removeSection(this)" style="display: none;">×</button>
-                                        <div class="form-grid">
-                                            <div class="form-group">
-                                                <label>Institution Name *:</label>
-                                                <input type="text" name="education[0][institution_name]" required>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Degree Type *:</label>
-                                                <select name="education[0][degree_type]" required>
-                                                    <option value="">Select Degree</option>
-                                                    <option value="matric">Matric Certificate</option>
-                                                    <option value="diploma">Diploma</option>
-                                                    <option value="bachelor">Bachelor's Degree</option>
-                                                    <option value="honors">Honours Degree</option>
-                                                    <option value="master">Master's Degree</option>
-                                                    <option value="doctorate">Doctorate</option>
-                                                    <option value="certificate">Certificate</option>
-                                                </select>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Field of Study *:</label>
-                                                <input type="text" name="education[0][field_of_study]" required placeholder="e.g., Computer Science">
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Start Date *:</label>
-                                                <input type="date" name="education[0][start_date]" required>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>End Date:</label>
-                                                <input type="date" name="education[0][end_date]">
-                                            </div>
-                                            <div class="form-group">
-                                                <label style="display: flex; align-items: center;">
-                                                    <input type="checkbox" name="education[0][is_current]" style="margin-right: 0.5rem;" onchange="toggleEndDate(this)">
-                                                    Currently studying here
-                                                </label>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Grade/GPA:</label>
-                                                <input type="text" name="education[0][grade_gpa]" placeholder="e.g., 3.8 GPA, 75%">
-                                            </div>
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Achievements:</label>
-                                            <textarea name="education[0][achievements]" rows="2" placeholder="Awards, honors, relevant coursework"></textarea>
-                                        </div>
-                                    </div>
-                                </div>
-                                <button type="button" class="add-btn" onclick="addEducation()">+ Add More Education</button>
-                            </div>
-                            
-                            <!-- Cover Letter Section -->
-                            <div class="form-section">
-                                <div class="form-section-title">✍️ Cover Letter</div>
-                                <div class="form-group">
-                                    <label>Cover Letter:</label>
-                                    <textarea name="cover_letter" rows="6" placeholder="Tell us why you're interested in this position and what makes you a great fit..."></textarea>
-                                </div>
-                            </div>
-                            
-                            <div style="text-align: center; margin-top: 2rem;">
-                                <button type="submit" name="create_candidate" class="btn" style="padding: 1rem 2rem; font-size: 1.1rem;">Submit Application</button>
-                            </div>
-                        </form>
+                        </select>
                     </div>
-                    
-                    <h3>Candidate Applications</h3>
-                    <?php foreach ($candidates as $candidate): ?>
-                        <div class="candidate-card">
-                            <div class="candidate-header">
-                                <h4><?php echo Security::escapeHTML($candidate['first_name'] . ' ' . $candidate['last_name']); ?></h4>
-                                <div>
-                                    <span class="status-badge status-<?php echo $candidate['status']; ?>"><?php echo ucfirst($candidate['status']); ?></span>
-                                    <?php if ($candidate['resume_file']): ?>
-                                        <a href="<?php echo FileUpload::getFileUrl($candidate['resume_file']); ?>" target="_blank" class="btn btn-small" style="margin-left: 0.5rem;">📄 View CV</a>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                            
-                            <div class="candidate-details">
-                                <div><strong>Position:</strong> <?php echo Security::escapeHTML($candidate['job_title']); ?></div>
-                                <div><strong>Department:</strong> <?php echo Security::escapeHTML($candidate['job_department']); ?></div>
-                                <div><strong>Email:</strong> <?php echo Security::escapeHTML($candidate['email']); ?></div>
-                                <div><strong>Phone:</strong> <?php echo Security::escapeHTML($candidate['phone']); ?></div>
-                                <div><strong>Applied:</strong> <?php echo Utils::formatDate($candidate['created_at']); ?></div>
-                                <?php if (isset($candidate['years_experience']) && $candidate['years_experience']): ?>
-                                    <div><strong>Experience:</strong> <?php echo $candidate['years_experience']; ?> years</div>
-                                <?php endif; ?>
-                                <?php if (isset($candidate['salary_expectation']) && $candidate['salary_expectation']): ?>
-                                    <div><strong>Salary Expectation:</strong> <?php echo Utils::formatCurrency($candidate['salary_expectation']); ?></div>
-                                <?php endif; ?>
-                                <?php if (isset($candidate['availability_date']) && $candidate['availability_date']): ?>
-                                    <div><strong>Available From:</strong> <?php echo Utils::formatDate($candidate['availability_date']); ?></div>
-                                <?php endif; ?>
-                                <?php if (isset($candidate['preferred_location']) && $candidate['preferred_location']): ?>
-                                    <div><strong>Location:</strong> <?php echo Security::escapeHTML($candidate['preferred_location']); ?></div>
-                                <?php endif; ?>
-                                <?php if (isset($candidate['work_authorization']) && $candidate['work_authorization']): ?>
-                                    <div><strong>Work Authorization:</strong> <?php echo ucfirst(str_replace('_', ' ', $candidate['work_authorization'])); ?></div>
-                                <?php endif; ?>
-                                <?php if (isset($candidate['willing_to_relocate']) && $candidate['willing_to_relocate']): ?>
-                                    <div><strong>Willing to Relocate:</strong> Yes</div>
-                                <?php endif; ?>
-                                <?php if (isset($candidate['linkedin_profile']) && $candidate['linkedin_profile']): ?>
-                                    <div><strong>LinkedIn:</strong> <a href="<?php echo Security::escapeHTML($candidate['linkedin_profile']); ?>" target="_blank">View Profile</a></div>
-                                <?php endif; ?>
-                                <?php if (isset($candidate['portfolio_website']) && $candidate['portfolio_website']): ?>
-                                    <div><strong>Portfolio:</strong> <a href="<?php echo Security::escapeHTML($candidate['portfolio_website']); ?>" target="_blank">View Website</a></div>
-                                <?php endif; ?>
-                            </div>
-                            
-                            <?php if (!empty($candidate['work_experience'])): ?>
-                                <div style="margin-top: 1.5rem;">
-                                    <h5 style="margin-bottom: 1rem; color: #333;">💼 Work Experience</h5>
-                                    <?php foreach ($candidate['work_experience'] as $exp): ?>
-                                        <div class="experience-item">
-                                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
-                                                <div>
-                                                    <strong><?php echo Security::escapeHTML($exp['position']); ?></strong>
-                                                    <div style="color: #007bff; font-weight: 500;"><?php echo Security::escapeHTML($exp['company_name']); ?></div>
-                                                </div>
-                                                <div style="font-size: 0.9rem; color: #666;">
-                                                    <?php echo Utils::formatDate($exp['start_date']); ?> - 
-                                                    <?php echo $exp['is_current'] ? 'Present' : ($exp['end_date'] ? Utils::formatDate($exp['end_date']) : 'N/A'); ?>
-                                                </div>
-                                            </div>
-                                            <?php if ($exp['description']): ?>
-                                                <div style="margin-bottom: 0.5rem; color: #555;">
-                                                    <?php echo nl2br(Security::escapeHTML($exp['description'])); ?>
-                                                </div>
-                                            <?php endif; ?>
-                                            <?php if ($exp['skills_used']): ?>
-                                                <div style="font-size: 0.9rem;">
-                                                    <strong>Skills:</strong> <?php echo Security::escapeHTML($exp['skills_used']); ?>
-                                                </div>
-                                            <?php endif; ?>
-                                        </div>
-                                    <?php endforeach; ?>
-                                </div>
-                            <?php endif; ?>
-                            
-                            <?php if (!empty($candidate['education'])): ?>
-                                <div style="margin-top: 1.5rem;">
-                                    <h5 style="margin-bottom: 1rem; color: #333;">🎓 Education</h5>
-                                    <?php foreach ($candidate['education'] as $edu): ?>
-                                        <div class="education-item">
-                                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
-                                                <div>
-                                                    <strong><?php echo Security::escapeHTML($edu['field_of_study']); ?></strong>
-                                                    <div style="color: #007bff; font-weight: 500;"><?php echo Security::escapeHTML($edu['institution_name']); ?></div>
-                                                    <div style="font-size: 0.9rem; color: #666;">
-                                                        <?php echo ucfirst(str_replace('_', ' ', $edu['degree_type'])); ?>
-                                                        <?php if ($edu['grade_gpa']): ?>
-                                                            - <?php echo Security::escapeHTML($edu['grade_gpa']); ?>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                </div>
-                                                <div style="font-size: 0.9rem; color: #666;">
-                                                    <?php echo Utils::formatDate($edu['start_date']); ?> - 
-                                                    <?php echo $edu['is_current'] ? 'Present' : ($edu['end_date'] ? Utils::formatDate($edu['end_date']) : 'N/A'); ?>
-                                                </div>
-                                            </div>
-                                            <?php if ($edu['achievements']): ?>
-                                                <div style="font-size: 0.9rem; color: #555;">
-                                                    <strong>Achievements:</strong> <?php echo nl2br(Security::escapeHTML($edu['achievements'])); ?>
-                                                </div>
-                                            <?php endif; ?>
-                                        </div>
-                                    <?php endforeach; ?>
-                                </div>
-                            <?php endif; ?>
-                            
-                            <?php if ($candidate['cover_letter']): ?>
-                                <div style="margin-top: 1.5rem;">
-                                    <h5 style="margin-bottom: 0.5rem; color: #333;">✍️ Cover Letter</h5>
-                                    <div style="background: #f8f9fa; padding: 1rem; border-radius: 4px; font-style: italic; color: #555;">
-                                        <?php echo nl2br(Security::escapeHTML($candidate['cover_letter'])); ?>
-                                    </div>
-                                </div>
-                            <?php endif; ?>
-                        </div>
-                    <?php endforeach; ?>
-                    
-                    <?php if (empty($candidates)): ?>
-                        <div style="text-align: center; padding: 2rem; color: #666;">
-                            <p>No candidate applications yet.</p>
-                        </div>
-                    <?php endif; ?>
+                    <div class="hr-field"><label>Role</label>
+                        <select name="role" id="edit_role">
+                            <option value="employee">Employee</option>
+                            <option value="manager">Manager</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <div class="hr-field"><label>Status</label>
+                        <select name="status" id="edit_status">
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="terminated">Terminated</option>
+                        </select>
+                    </div>
+                    <div class="hr-field"><label>Salary (ZAR)</label><input type="number" name="salary" id="edit_salary" step="0.01" min="0"></div>
+                    <div class="hr-field"><label>Manager</label>
+                        <select name="manager_id" id="edit_manager_id">
+                            <option value="">None</option>
+                            <?php foreach ($employees as $mgr): ?>
+                            <option value="<?php echo $mgr['id']; ?>"><?php echo Security::escapeHTML($mgr['first_name'].' '.$mgr['last_name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="hr-field"><label>Link Portal Account</label>
+                        <select name="user_id_link" id="edit_user_id_link">
+                            <option value="">Not linked</option>
+                            <?php foreach ($unlinked_users as $u): ?>
+                            <option value="<?php echo $u['id']; ?>"><?php echo Security::escapeHTML($u['username']); ?> (<?php echo $u['role']; ?>)</option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                 </div>
-            </div>
+                <div style="margin-top:20px;display:flex;gap:10px;">
+                    <button type="submit" class="hr-btn hr-btn-violet">Save Changes</button>
+                    <button type="button" class="hr-btn hr-btn-gray" onclick="closeModal('editEmpModal')">Cancel</button>
+                </div>
+            </form>
         </div>
     </div>
 
-    <script>
-        // Job posting management functions
-        function editJob(jobId) {
-            const editForm = document.getElementById('edit-form-' + jobId);
-            const isVisible = editForm.style.display !== 'none';
-            
-            // Hide all edit forms first
-            document.querySelectorAll('.edit-form').forEach(form => {
-                form.style.display = 'none';
-            });
-            
-            // Toggle the clicked form
-            if (!isVisible) {
-                editForm.style.display = 'block';
-                editForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }
-        }
-        
-        function cancelEdit(jobId) {
-            document.getElementById('edit-form-' + jobId).style.display = 'none';
-        }
-        
-        function deleteJob(jobId) {
-            if (confirm('Are you sure you want to delete this job posting? This will also delete all related candidate applications.')) {
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.innerHTML = `
-                    <input type="hidden" name="delete_job_posting" value="1">
-                    <input type="hidden" name="job_id" value="${jobId}">
-                    <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
-                `;
-                document.body.appendChild(form);
-                form.submit();
-            }
-        }
-
-        // Tab functionality
-        function showTab(tabName) {
-            // Hide all tab contents
-            const tabContents = document.querySelectorAll('.tab-content');
-            tabContents.forEach(content => {
-                content.classList.remove('active');
-            });
-            
-            // Remove active class from all tab buttons
-            const tabBtns = document.querySelectorAll('.tab-btn');
-            tabBtns.forEach(btn => {
-                btn.classList.remove('active');
-            });
-            
-            // Show selected tab content
-            document.getElementById(tabName).classList.add('active');
-            
-            // Add active class to clicked tab button
-            event.target.classList.add('active');
-        }
-        
-        // File upload functionality
-        document.getElementById('resume_file')?.addEventListener('change', function(e) {
-            const fileName = e.target.files[0]?.name;
-            const fileNameDiv = document.getElementById('file-name');
-            if (fileName) {
-                fileNameDiv.textContent = `Selected: ${fileName}`;
-                fileNameDiv.style.display = 'block';
-            } else {
-                fileNameDiv.style.display = 'none';
-            }
-        });
-        
-        // Dynamic work experience functionality
-        let workExperienceCount = 1;
-        
-        function addWorkExperience() {
-            const container = document.getElementById('work-experience-container');
-            const newItem = document.createElement('div');
-            newItem.className = 'dynamic-section work-experience-item';
-            newItem.innerHTML = `
-                <button type="button" class="remove-btn" onclick="removeSection(this)">×</button>
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label>Company Name *:</label>
-                        <input type="text" name="work_experience[${workExperienceCount}][company_name]" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Position *:</label>
-                        <input type="text" name="work_experience[${workExperienceCount}][position]" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Start Date *:</label>
-                        <input type="date" name="work_experience[${workExperienceCount}][start_date]" required>
-                    </div>
-                    <div class="form-group">
-                        <label>End Date:</label>
-                        <input type="date" name="work_experience[${workExperienceCount}][end_date]">
-                    </div>
-                    <div class="form-group">
-                        <label style="display: flex; align-items: center;">
-                            <input type="checkbox" name="work_experience[${workExperienceCount}][is_current]" style="margin-right: 0.5rem;" onchange="toggleEndDate(this)">
-                            Currently working here
-                        </label>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Job Description:</label>
-                    <textarea name="work_experience[${workExperienceCount}][description]" rows="3" placeholder="Describe your responsibilities and achievements"></textarea>
-                </div>
-                <div class="form-group">
-                    <label>Skills Used:</label>
-                    <input type="text" name="work_experience[${workExperienceCount}][skills_used]" placeholder="e.g., JavaScript, Project Management, Leadership">
-                </div>
-            `;
-            container.appendChild(newItem);
-            workExperienceCount++;
-            updateRemoveButtons('work-experience-item');
-        }
-        
-        // Dynamic education functionality
-        let educationCount = 1;
-        
-        function addEducation() {
-            const container = document.getElementById('education-container');
-            const newItem = document.createElement('div');
-            newItem.className = 'dynamic-section education-item';
-            newItem.innerHTML = `
-                <button type="button" class="remove-btn" onclick="removeSection(this)">×</button>
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label>Institution Name *:</label>
-                        <input type="text" name="education[${educationCount}][institution_name]" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Degree Type *:</label>
-                        <select name="education[${educationCount}][degree_type]" required>
-                            <option value="">Select Degree</option>
-                            <option value="matric">Matric Certificate</option>
-                            <option value="diploma">Diploma</option>
-                            <option value="bachelor">Bachelor's Degree</option>
-                            <option value="honors">Honours Degree</option>
-                            <option value="master">Master's Degree</option>
-                            <option value="doctorate">Doctorate</option>
-                            <option value="certificate">Certificate</option>
+    <!-- ══ Edit Job Modal ══ -->
+    <div class="hr-modal-overlay" id="editJobModal">
+        <div class="hr-modal">
+            <button class="hr-modal-close" onclick="closeModal('editJobModal')">✕</button>
+            <h2>Edit Job Posting</h2>
+            <form method="POST" id="editJobForm">
+                <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
+                <input type="hidden" name="update_job_posting" value="1">
+                <input type="hidden" name="job_id" id="edit_job_id">
+                <div class="hr-form-grid">
+                    <div class="hr-field"><label>Title *</label><input type="text" name="title" id="edit_job_title" required></div>
+                    <div class="hr-field"><label>Department</label>
+                        <select name="department" id="edit_job_dept">
+                            <?php foreach(['IT','Marketing','Finance','HR','Business Development'] as $d): ?>
+                            <option value="<?php echo $d; ?>"><?php echo $d; ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label>Field of Study *:</label>
-                        <input type="text" name="education[${educationCount}][field_of_study]" required placeholder="e.g., Computer Science">
+                    <div class="hr-field"><label>Salary Range</label><input type="text" name="salary_range" id="edit_job_salary"></div>
+                    <div class="hr-field"><label>Status</label>
+                        <select name="status" id="edit_job_status">
+                            <option value="active">Active</option>
+                            <option value="draft">Draft</option>
+                            <option value="closed">Closed</option>
+                        </select>
                     </div>
-                    <div class="form-group">
-                        <label>Start Date *:</label>
-                        <input type="date" name="education[${educationCount}][start_date]" required>
-                    </div>
-                    <div class="form-group">
-                        <label>End Date:</label>
-                        <input type="date" name="education[${educationCount}][end_date]">
-                    </div>
-                    <div class="form-group">
-                        <label style="display: flex; align-items: center;">
-                            <input type="checkbox" name="education[${educationCount}][is_current]" style="margin-right: 0.5rem;" onchange="toggleEndDate(this)">
-                            Currently studying here
-                        </label>
-                    </div>
-                    <div class="form-group">
-                        <label>Grade/GPA:</label>
-                        <input type="text" name="education[${educationCount}][grade_gpa]" placeholder="e.g., 3.8 GPA, 75%">
-                    </div>
+                    <div class="hr-field full"><label>Description</label><textarea name="description" id="edit_job_desc"></textarea></div>
+                    <div class="hr-field full"><label>Requirements</label><textarea name="requirements" id="edit_job_req"></textarea></div>
                 </div>
-                <div class="form-group">
-                    <label>Achievements:</label>
-                    <textarea name="education[${educationCount}][achievements]" rows="2" placeholder="Awards, honors, relevant coursework"></textarea>
+                <div style="margin-top:20px;display:flex;gap:10px;">
+                    <button type="submit" class="hr-btn hr-btn-violet">Save Changes</button>
+                    <button type="button" class="hr-btn hr-btn-gray" onclick="closeModal('editJobModal')">Cancel</button>
                 </div>
-            `;
-            container.appendChild(newItem);
-            educationCount++;
-            updateRemoveButtons('education-item');
-        }
-        
-        // Remove section functionality
-        function removeSection(button) {
-            const section = button.closest('.dynamic-section');
-            const container = section.parentNode;
-            section.remove();
-            
-            // Update remove buttons visibility
-            if (container.id === 'work-experience-container') {
-                updateRemoveButtons('work-experience-item');
-            } else if (container.id === 'education-container') {
-                updateRemoveButtons('education-item');
-            }
-        }
-        
-        // Update remove buttons visibility
-        function updateRemoveButtons(className) {
-            const items = document.querySelectorAll(`.${className}`);
-            items.forEach((item, index) => {
-                const removeBtn = item.querySelector('.remove-btn');
-                if (removeBtn) {
-                    removeBtn.style.display = items.length > 1 ? 'block' : 'none';
-                }
-            });
-        }
-        
-        // Toggle end date when current position/education is checked
-        function toggleEndDate(checkbox) {
-            const container = checkbox.closest('.form-grid') || checkbox.closest('.dynamic-section');
-            const endDateInput = container.querySelector('input[type="date"][name*="[end_date]"]');
-            if (endDateInput) {
-                if (checkbox.checked) {
-                    endDateInput.disabled = true;
-                    endDateInput.value = '';
-                    endDateInput.style.opacity = '0.5';
-                } else {
-                    endDateInput.disabled = false;
-                    endDateInput.style.opacity = '1';
-                }
-            }
-        }
-        
-        // Form validation
-        document.getElementById('candidateForm')?.addEventListener('submit', function(e) {
-            // Check if at least one work experience is filled
-            const workExpItems = document.querySelectorAll('.work-experience-item');
-            let hasWorkExp = false;
-            workExpItems.forEach(item => {
-                const companyName = item.querySelector('input[name*="[company_name]"]').value.trim();
-                const position = item.querySelector('input[name*="[position]"]').value.trim();
-                if (companyName && position) {
-                    hasWorkExp = true;
-                }
-            });
-            
-            // Check if at least one education is filled
-            const eduItems = document.querySelectorAll('.education-item');
-            let hasEdu = false;
-            eduItems.forEach(item => {
-                const institutionName = item.querySelector('input[name*="[institution_name]"]').value.trim();
-                const degreeType = item.querySelector('select[name*="[degree_type]"]').value.trim();
-                if (institutionName && degreeType) {
-                    hasEdu = true;
-                }
-            });
-            
-            if (!hasWorkExp && !hasEdu) {
-                e.preventDefault();
-                alert('Please fill in at least one work experience or education entry.');
-                return false;
-            }
-        });
-        
-        // Employee View/Edit Functions
-        function viewEmployee(employeeId) {
-            // Fetch employee data securely via AJAX
-            fetch(`?ajax=view_employee&id=${employeeId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (!data.success) {
-                        alert('Employee not found');
-                        return;
-                    }
-                    
-                    const employee = data.employee;
-                    
-                    // Create modal content using DOM API (XSS-safe)
-                    const modalDiv = document.createElement('div');
-                    modalDiv.style.padding = '2rem';
-                    
-                    const title = document.createElement('h3');
-                    title.textContent = 'Employee Details';
-                    modalDiv.appendChild(title);
-                    
-                    const grid = document.createElement('div');
-                    grid.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;';
-                    
-                    // Safely create each field using textContent (no XSS risk)
-                    const fields = [
-                        ['ID:', employee.employee_id || 'N/A'],
-                        ['Status:', employee.status || 'N/A'],
-                        ['Name:', (employee.first_name || '') + ' ' + (employee.last_name || '')],
-                        ['Email:', employee.email || 'N/A'],
-                        ['Phone:', employee.phone || 'N/A'],
-                        ['Position:', employee.position || 'N/A'],
-                        ['Department:', employee.department || 'N/A'],
-                        ['Role:', employee.role || 'Not Assigned'],
-                        ['Hire Date:', employee.hire_date || 'N/A'],
-                        ['Salary:', employee.salary ? '$' + parseFloat(employee.salary).toLocaleString() : 'N/A'],
-                        ['Manager:', employee.manager_name || 'No Manager']
-                    ];
-                    
-                    fields.forEach(([label, value]) => {
-                        const fieldDiv = document.createElement('div');
-                        const strong = document.createElement('strong');
-                        strong.textContent = label + ' ';
-                        fieldDiv.appendChild(strong);
-                        fieldDiv.appendChild(document.createTextNode(value));
-                        grid.appendChild(fieldDiv);
-                    });
-                    
-                    modalDiv.appendChild(grid);
-                    
-                    // Add buttons
-                    const buttonDiv = document.createElement('div');
-                    buttonDiv.style.cssText = 'margin-top: 2rem; text-align: right;';
-                    
-                    const closeBtn = document.createElement('button');
-                    closeBtn.type = 'button';
-                    closeBtn.className = 'btn btn-secondary';
-                    closeBtn.textContent = 'Close';
-                    closeBtn.onclick = closeModal;
-                    
-                    const editBtn = document.createElement('button');
-                    editBtn.type = 'button';
-                    editBtn.className = 'btn';
-                    editBtn.textContent = 'Edit';
-                    editBtn.onclick = () => { closeModal(); editEmployee(employeeId); };
-                    
-                    buttonDiv.appendChild(closeBtn);
-                    buttonDiv.appendChild(document.createTextNode(' '));
-                    buttonDiv.appendChild(editBtn);
-                    modalDiv.appendChild(buttonDiv);
-                    
-                    showModal(modalDiv);
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Failed to load employee data');
-                });
-        }
-        
-        function editEmployee(employeeId) {
-            // Fetch employee data securely via AJAX (same as view)
-            fetch(`?ajax=view_employee&id=${employeeId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (!data.success) {
-                        alert('Employee not found');
-                        return;
-                    }
-                    
-                    const employee = data.employee;
-                    
-                    // Create edit form using DOM API (XSS-safe)
-                    const modalDiv = document.createElement('div');
-                    modalDiv.style.padding = '2rem';
-                    
-                    const title = document.createElement('h3');
-                    title.textContent = 'Edit Employee';
-                    modalDiv.appendChild(title);
-                    
-                    const form = document.createElement('form');
-                    form.method = 'POST';
-                    form.className = 'form-grid';
-                    form.style.marginTop = '1rem';
-                    
-                    // Add CSRF token
-                    form.innerHTML = '<?php echo Security::getCSRFTokenField(); ?>';
-                    
-                    // Add hidden employee ID
-                    const hiddenId = document.createElement('input');
-                    hiddenId.type = 'hidden';
-                    hiddenId.name = 'employee_id';
-                    hiddenId.value = employee.id;
-                    form.appendChild(hiddenId);
-                    
-                    // Create form fields safely
-                    const fields = [
-                        {label: 'First Name', name: 'first_name', type: 'text', value: employee.first_name, required: true},
-                        {label: 'Last Name', name: 'last_name', type: 'text', value: employee.last_name, required: true},
-                        {label: 'Email', name: 'email', type: 'email', value: employee.email, required: true},
-                        {label: 'Phone', name: 'phone', type: 'tel', value: employee.phone},
-                        {label: 'Position', name: 'position', type: 'text', value: employee.position, required: true},
-                        {label: 'Role', name: 'role', type: 'select', value: employee.role, department: employee.department},
-                        {label: 'Salary', name: 'salary', type: 'number', value: employee.salary, step: '0.01'}
-                    ];
-                    
-                    fields.forEach(field => {
-                        const div = document.createElement('div');
-                        div.className = 'form-group';
-                        
-                        const label = document.createElement('label');
-                        label.textContent = field.label + ':';
-                        div.appendChild(label);
-                        
-                        if (field.type === 'select' && field.name === 'role') {
-                            // Department-specific role dropdown
-                            const select = document.createElement('select');
-                            select.name = field.name;
-                            
-                            // Add default option
-                            const defaultOption = document.createElement('option');
-                            defaultOption.value = '';
-                            defaultOption.textContent = 'Select Role';
-                            select.appendChild(defaultOption);
-                            
-                            // Define department-specific roles
-                            const rolesByDept = {
-                                'IT': ['Junior Developer', 'Senior Developer', 'Tech Lead', 'DevOps Engineer', 'System Administrator', 'QA Engineer'],
-                                'Marketing': ['Marketing Coordinator', 'Marketing Manager', 'Digital Marketing Specialist', 'Content Creator', 'SEO Specialist', 'Campaign Manager'],
-                                'Finance': ['Financial Analyst', 'Senior Accountant', 'Finance Manager', 'Budget Analyst', 'Tax Specialist', 'Auditor'],
-                                'HR': ['HR Specialist', 'Recruiter', 'HR Manager', 'Training Coordinator', 'Benefits Administrator', 'Employee Relations'],
-                                'Sales': ['Sales Representative', 'Senior Sales Rep', 'Sales Manager', 'Account Manager', 'Business Development', 'Customer Success']
-                            };
-                            
-                            const roles = rolesByDept[field.department] || [];
-                            roles.forEach(role => {
-                                const option = document.createElement('option');
-                                option.value = role;
-                                option.textContent = role;
-                                if (role === field.value) option.selected = true;
-                                select.appendChild(option);
-                            });
-                            
-                            div.appendChild(select);
-                        } else {
-                            // Regular input field
-                            const input = document.createElement('input');
-                            input.type = field.type;
-                            input.name = field.name;
-                            input.value = field.value || '';
-                            if (field.required) input.required = true;
-                            if (field.step) input.step = field.step;
-                            div.appendChild(input);
-                        }
-                        
-                        form.appendChild(div);
-                    });
-                    
-                    // Department dropdown
-                    const deptDiv = document.createElement('div');
-                    deptDiv.className = 'form-group';
-                    const deptLabel = document.createElement('label');
-                    deptLabel.textContent = 'Department:';
-                    deptDiv.appendChild(deptLabel);
-                    
-                    const deptSelect = document.createElement('select');
-                    deptSelect.name = 'department';
-                    deptSelect.required = true;
-                    
-                    ['', 'IT', 'Marketing', 'Finance', 'HR', 'Sales'].forEach(dept => {
-                        const option = document.createElement('option');
-                        option.value = dept;
-                        option.textContent = dept || 'Select Department';
-                        if (dept === employee.department) option.selected = true;
-                        deptSelect.appendChild(option);
-                    });
-                    
-                    deptDiv.appendChild(deptSelect);
-                    form.appendChild(deptDiv);
-                    
-                    // Status dropdown
-                    const statusDiv = document.createElement('div');
-                    statusDiv.className = 'form-group';
-                    const statusLabel = document.createElement('label');
-                    statusLabel.textContent = 'Status:';
-                    statusDiv.appendChild(statusLabel);
-                    
-                    const statusSelect = document.createElement('select');
-                    statusSelect.name = 'status';
-                    statusSelect.required = true;
-                    
-                    [['active', 'Active'], ['inactive', 'Inactive'], ['terminated', 'Terminated']].forEach(([value, text]) => {
-                        const option = document.createElement('option');
-                        option.value = value;
-                        option.textContent = text;
-                        if (value === employee.status) option.selected = true;
-                        statusSelect.appendChild(option);
-                    });
-                    
-                    statusDiv.appendChild(statusSelect);
-                    form.appendChild(statusDiv);
-                    
-                    // Manager dropdown (department-based)
-                    const mgmtDiv = document.createElement('div');
-                    mgmtDiv.className = 'form-group';
-                    const mgmtLabel = document.createElement('label');
-                    mgmtLabel.textContent = 'Manager:';
-                    mgmtDiv.appendChild(mgmtLabel);
-                    
-                    const mgmtSelect = document.createElement('select');
-                    mgmtSelect.name = 'manager_id';
-                    
-                    const noMgrOption = document.createElement('option');
-                    noMgrOption.value = '';
-                    noMgrOption.textContent = 'No Manager';
-                    mgmtSelect.appendChild(noMgrOption);
-                    
-                    // Fetch department managers via AJAX
-                    fetch(`?ajax=get_department_managers&dept=${employee.department}`)
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                data.managers.forEach(manager => {
-                                    const option = document.createElement('option');
-                                    option.value = manager.id;
-                                    option.textContent = manager.first_name + ' ' + manager.last_name;
-                                    if (manager.id == employee.manager_id) option.selected = true;
-                                    mgmtSelect.appendChild(option);
-                                });
-                            }
-                        });
-                    
-                    mgmtDiv.appendChild(mgmtSelect);
-                    form.appendChild(mgmtDiv);
-                    
-                    // Buttons
-                    const buttonDiv = document.createElement('div');
-                    buttonDiv.style.cssText = 'grid-column: 1 / -1; margin-top: 1rem; text-align: right;';
-                    
-                    const cancelBtn = document.createElement('button');
-                    cancelBtn.type = 'button';
-                    cancelBtn.className = 'btn btn-secondary';
-                    cancelBtn.textContent = 'Cancel';
-                    cancelBtn.onclick = closeModal;
-                    
-                    const updateBtn = document.createElement('button');
-                    updateBtn.type = 'submit';
-                    updateBtn.name = 'update_employee';
-                    updateBtn.className = 'btn';
-                    updateBtn.textContent = 'Update Employee';
-                    
-                    buttonDiv.appendChild(cancelBtn);
-                    buttonDiv.appendChild(document.createTextNode(' '));
-                    buttonDiv.appendChild(updateBtn);
-                    form.appendChild(buttonDiv);
-                    
-                    modalDiv.appendChild(form);
-                    showModal(modalDiv);
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Failed to load employee data');
-                });
-        }
-        
-        function showModal(content) {
-            const modal = document.createElement('div');
-            modal.className = 'modal';
-            modal.style.cssText = `
-                position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-                background: rgba(0,0,0,0.5); z-index: 1000; display: flex; 
-                align-items: center; justify-content: center;
-            `;
-            
-            const modalBox = document.createElement('div');
-            modalBox.style.cssText = `
-                background: white; border-radius: 8px; max-width: 600px; 
-                width: 90%; max-height: 90%; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            `;
-            
-            // Safely append content (can be DOM element or HTML string)
-            if (typeof content === 'string') {
-                modalBox.innerHTML = content;
-            } else {
-                modalBox.appendChild(content);
-            }
-            
-            modal.appendChild(modalBox);
-            document.body.appendChild(modal);
-            
-            // Close modal when clicking outside
-            modal.addEventListener('click', function(e) {
-                if (e.target === modal) {
-                    closeModal();
-                }
-            });
-        }
-        
-        function closeModal() {
-            const modal = document.querySelector('.modal');
-            if (modal) {
-                modal.remove();
-            }
-        }
+            </form>
+        </div>
+    </div>
 
-        // Navigation functions
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('active');
-        }
-        
-        function toggleNotifications() {
-            // Placeholder for notifications
-        }
-        
-        // Close sidebar when clicking outside on mobile
-        document.addEventListener('click', function(event) {
-            const sidebar = document.getElementById('sidebar');
-            const menuToggle = document.querySelector('.menu-toggle');
-            
-            if (window.innerWidth <= 768 && 
-                !sidebar.contains(event.target) && 
-                !menuToggle.contains(event.target) && 
-                sidebar.classList.contains('active')) {
-                sidebar.classList.remove('active');
-            }
+    <script src="../js/notification.js"></script>
+    <script>
+    // ── Tab switching ────────────────────────────────────────────────────────
+    function switchTab(name) {
+        document.querySelectorAll('.hr-tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.hr-tab').forEach(el => el.classList.remove('active'));
+        const content = document.getElementById('tab-' + name);
+        if (content) content.classList.add('active');
+        const btns = document.querySelectorAll('.hr-tab');
+        btns.forEach(btn => {
+            if (btn.textContent.toLowerCase().includes(name.slice(0,4))) btn.classList.add('active');
         });
+    }
 
-        // Initialize remove button visibility on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            updateRemoveButtons('work-experience-item');
-            updateRemoveButtons('education-item');
+    // ── Collapsible form sections ────────────────────────────────────────────
+    function toggleCollapsible(id) {
+        const body  = document.getElementById(id + '-body');
+        const arrow = document.getElementById(id + '-arrow');
+        if (!body) return;
+        const open = body.classList.toggle('open');
+        if (arrow) arrow.textContent = open ? '▲' : '▼';
+    }
+    function openHeroForm(id) {
+        switchTab('employees');
+        const body = document.getElementById(id + '-body');
+        if (body && !body.classList.contains('open')) toggleCollapsible(id);
+        body && body.scrollIntoView({behavior:'smooth',block:'start'});
+    }
+
+    // ── Filter function ──────────────────────────────────────────────────────
+    function filterHR(tbodyId, searchId, filter1Id, filter2Id, countId) {
+        const q      = (document.getElementById(searchId)?.value||'').toLowerCase().trim();
+        const f1     = (document.getElementById(filter1Id)?.value||'').toLowerCase();
+        const f2     = (document.getElementById(filter2Id)?.value||'').toLowerCase();
+        const tbody  = document.getElementById(tbodyId);
+        if (!tbody) return;
+        const rows   = tbody.querySelectorAll('tr');
+        let visible  = 0;
+        rows.forEach(row => {
+            const txt  = (row.dataset.search||'').toLowerCase();
+            const dept = (row.dataset.dept||'').toLowerCase();
+            const stat = (row.dataset.status||'').toLowerCase();
+            const show = (!q||txt.includes(q)) && (!f1||dept.includes(f1)) && (!f2||stat===f2);
+            row.style.display = show ? '' : 'none';
+            if (show) visible++;
         });
+        const noRes = document.getElementById(tbodyId + '-no-results');
+        if (noRes) noRes.style.display = visible ? 'none' : 'block';
+        const cnt = document.getElementById(countId);
+        if (cnt) cnt.textContent = visible + ' ' + (tbodyId.includes('emp')?'employees':tbodyId.includes('lv')?'requests':tbodyId.includes('rv')?'reviews':tbodyId.includes('jp')?'postings':'candidates');
+    }
+
+    // ── Modals ───────────────────────────────────────────────────────────────
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+    document.querySelectorAll('.hr-modal-overlay').forEach(overlay => {
+        overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+    });
+
+    function openEditEmp(emp) {
+        document.getElementById('edit_emp_id').value       = emp.id;
+        document.getElementById('edit_first_name').value   = emp.first_name || '';
+        document.getElementById('edit_last_name').value    = emp.last_name  || '';
+        document.getElementById('edit_email').value        = emp.email      || '';
+        document.getElementById('edit_phone').value        = emp.phone      || '';
+        document.getElementById('edit_position').value     = emp.position   || '';
+        document.getElementById('edit_salary').value       = emp.salary     || '';
+        setSelectVal('edit_department', emp.department);
+        setSelectVal('edit_role',       emp.role);
+        setSelectVal('edit_status',     emp.status);
+        setSelectVal('edit_manager_id', emp.manager_id);
+        setSelectVal('edit_user_id_link', emp.user_id);
+        document.getElementById('editEmpModal').classList.add('open');
+    }
+
+    function openEditJob(jp) {
+        document.getElementById('edit_job_id').value      = jp.id;
+        document.getElementById('edit_job_title').value   = jp.title        || '';
+        document.getElementById('edit_job_salary').value  = jp.salary_range || '';
+        document.getElementById('edit_job_desc').value    = jp.description  || '';
+        document.getElementById('edit_job_req').value     = jp.requirements || '';
+        setSelectVal('edit_job_dept',   jp.department);
+        setSelectVal('edit_job_status', jp.status);
+        document.getElementById('editJobModal').classList.add('open');
+    }
+
+    function setSelectVal(id, val) {
+        const sel = document.getElementById(id);
+        if (!sel || val === null || val === undefined) return;
+        for (let i = 0; i < sel.options.length; i++) {
+            if (sel.options[i].value == val) { sel.selectedIndex = i; return; }
+        }
+    }
     </script>
-
-    <script src="../js/notification.js"></script>  
 </body>
 </html>
