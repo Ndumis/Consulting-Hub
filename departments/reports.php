@@ -79,7 +79,7 @@ $query = "SELECT
           LEFT JOIN invoices i ON p.id = i.project_id 
             AND i.invoice_date BETWEEN ? AND ?
           GROUP BY p.id, p.name, p.status
-          ORDER BY project_revenue DESC NULLS LAST
+          ORDER BY ISNULL(project_revenue), project_revenue DESC
           LIMIT 10";
 $stmt = $db->prepare($query);
 $stmt->execute([$start_date, $end_date]);
@@ -100,7 +100,7 @@ $query = "SELECT
           LEFT JOIN invoices i ON c.id = i.client_id 
             AND i.invoice_date BETWEEN ? AND ?
           GROUP BY c.id, c.name
-          ORDER BY client_revenue DESC NULLS LAST
+          ORDER BY ISNULL(client_revenue), client_revenue DESC
           LIMIT 10";
 $stmt = $db->prepare($query);
 $stmt->execute([$start_date, $end_date]);
@@ -108,15 +108,15 @@ $client_stats = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Monthly Trends Analytics
 $monthly_trends = [];
-$query = "SELECT 
-            TO_CHAR(invoice_date, 'YYYY-MM') as month,
+$query = "SELECT
+            DATE_FORMAT(invoice_date, '%Y-%m') as month,
             COUNT(*) as invoice_count,
             SUM(total_amount) as revenue,
             SUM(paid_amount) as payments,
             COUNT(DISTINCT client_id) as unique_clients
-          FROM invoices 
-          WHERE invoice_date >= ?::date - INTERVAL '12 months'
-          GROUP BY TO_CHAR(invoice_date, 'YYYY-MM')
+          FROM invoices
+          WHERE invoice_date >= DATE_SUB(?, INTERVAL 12 MONTH)
+          GROUP BY DATE_FORMAT(invoice_date, '%Y-%m')
           ORDER BY month";
 $stmt = $db->prepare($query);
 $stmt->execute([$end_date]);
@@ -146,11 +146,11 @@ $query = "SELECT
             COUNT(*) as count,
             SUM(total_amount) as total_value,
             AVG(total_amount) as avg_value,
-            AVG(EXTRACT(DAY FROM (COALESCE(
-                CASE WHEN status = 'paid' THEN 
+            AVG(DATEDIFF(COALESCE(
+                CASE WHEN status = 'paid' THEN
                     (SELECT MAX(transaction_date) FROM money_flow WHERE invoice_id = i.id)
-                ELSE NULL END, 
-                due_date) - invoice_date))) as avg_payment_days
+                ELSE NULL END,
+                due_date), invoice_date)) as avg_payment_days
           FROM invoices i
           WHERE invoice_date BETWEEN ? AND ?
           GROUP BY status

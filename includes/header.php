@@ -125,24 +125,3 @@ try {
     </div>
 </header>
 
-<script>
-function toggleSidebar() {
-    const sidebar  = document.getElementById('sidebar');
-    const overlay  = document.getElementById('sidebarOverlay');
-    if (!sidebar) return;
-    const isOpen = sidebar.classList.toggle('sidebar-open');
-    if (overlay) overlay.style.display = (isOpen && window.innerWidth <= 768) ? 'block' : 'none';
-}
-
-function toggleNotifications() {
-    const dd = document.getElementById('notificationsDropdown');
-    if (!dd) return;
-    dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
-}
-
-document.addEventListener('click', function(e) {
-    const wrap = document.querySelector('.header-notif-wrap');
-    const dd = document.getElementById('notificationsDropdown');
-    if (dd && wrap && !wrap.contains(e.target)) dd.style.display = 'none';
-});
-</script>
