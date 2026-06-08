@@ -158,6 +158,13 @@ if ($_POST && isset($_POST['create_leave_request'])) {
     $days       = (new DateTime($start_date))->diff(new DateTime($end_date))->days + 1;
     $stmt = $db->prepare("INSERT INTO hr_leave_requests (employee_id,leave_type,start_date,end_date,days_requested,reason) VALUES (?,?,?,?,?,?)");
     $stmt->execute([$emp_id,$leave_type,$start_date,$end_date,$days,$reason]);
+    // Notify all HR managers
+    $emp_name_r = $db->prepare("SELECT CONCAT(first_name,' ',last_name) as name FROM hr_employees WHERE id=?");
+    $emp_name_r->execute([$emp_id]);
+    $emp_name = $emp_name_r->fetchColumn() ?: 'An employee';
+    Notifications::sendToDept($db, 'HR', 'leave', "New leave request",
+        "$emp_name requested $days day(s) of $leave_type leave starting $start_date.",
+        'hr.php?tab=leave');
     $success_message = "Leave request created.";
 }
 
@@ -170,6 +177,16 @@ if ($_POST && isset($_POST['update_leave_status'])) {
     if (!in_array($status, ['approved','rejected','cancelled'])) $status = 'pending';
     $stmt = $db->prepare("UPDATE hr_leave_requests SET status=?,approved_by=? WHERE id=?");
     $stmt->execute([$status,$sess_user_id,$leave_id]);
+    // Notify the employee's linked user account
+    $lr_r = $db->prepare("SELECT lr.leave_type, lr.start_date, e.user_id
+        FROM hr_leave_requests lr JOIN hr_employees e ON lr.employee_id=e.id WHERE lr.id=?");
+    $lr_r->execute([$leave_id]);
+    $lr_row = $lr_r->fetch(PDO::FETCH_ASSOC);
+    if ($lr_row && $lr_row['user_id']) {
+        $icon  = $status === 'approved' ? 'success' : 'warning';
+        $msg   = ucfirst($status)." — {$lr_row['leave_type']} from {$lr_row['start_date']}";
+        Notifications::send($db, $lr_row['user_id'], $icon, "Leave request $status", $msg, '../profile.php?tab=leave');
+    }
     $success_message = "Leave request ".ucfirst($status).".";
 }
 

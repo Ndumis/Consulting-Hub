@@ -304,12 +304,39 @@ try {
     $recent_blog_posts = [];
 }
 
-// Monthly trends data (hardcoded for now — TODO: pull from DB)
+// Monthly trends — real DB data, last 6 months with data (all-time, newest first capped at 6)
+$mt_months = []; $mt_proj = []; $mt_camp = []; $mt_clients = []; $mt_leads = [];
+try {
+    // Build a month spine: all distinct months that have any activity
+    $spine_rows = $db->query("
+        SELECT ym FROM (
+            SELECT DATE_FORMAT(updated_at,'%Y-%m') AS ym FROM projects WHERE status='completed'
+            UNION SELECT DATE_FORMAT(created_at,'%Y-%m') FROM marketing_campaigns
+            UNION SELECT DATE_FORMAT(created_at,'%Y-%m') FROM clients
+            UNION SELECT DATE_FORMAT(created_at,'%Y-%m') FROM bd_leads
+        ) t GROUP BY ym ORDER BY ym DESC LIMIT 6")->fetchAll(PDO::FETCH_COLUMN);
+    $spine = array_reverse($spine_rows);
+
+    foreach ($spine as $ym) {
+        $mt_months[] = date('M Y', strtotime($ym.'-01'));
+    }
+    foreach ($spine as $ym) {
+        $s = $db->prepare("SELECT COUNT(*) FROM projects WHERE status='completed' AND DATE_FORMAT(updated_at,'%Y-%m')=?");
+        $s->execute([$ym]); $mt_proj[] = (int)$s->fetchColumn();
+        $s = $db->prepare("SELECT COUNT(*) FROM marketing_campaigns WHERE DATE_FORMAT(created_at,'%Y-%m')=?");
+        $s->execute([$ym]); $mt_camp[] = (int)$s->fetchColumn();
+        $s = $db->prepare("SELECT COUNT(*) FROM clients WHERE DATE_FORMAT(created_at,'%Y-%m')=?");
+        $s->execute([$ym]); $mt_clients[] = (int)$s->fetchColumn();
+        $s = $db->prepare("SELECT COUNT(*) FROM bd_leads WHERE DATE_FORMAT(created_at,'%Y-%m')=?");
+        $s->execute([$ym]); $mt_leads[] = (int)$s->fetchColumn();
+    }
+} catch (Exception $e) { /* silent */ }
 $monthly_trends = [
-    'projects_completed' => [8, 12, 15, 18, 22, 25],
-    'campaigns_launched' => [3, 5, 4, 7, 6, 8],
-    'clients_acquired'   => [2, 4, 3, 5, 4, 6],
-    'leads_generated'    => [10, 15, 12, 18, 20, 22]
+    'labels'             => $mt_months,
+    'projects_completed' => $mt_proj,
+    'campaigns_launched' => $mt_camp,
+    'clients_acquired'   => $mt_clients,
+    'leads_generated'    => $mt_leads,
 ];
 
 // ── DEPT CONFIG ─────────────────────────────────────────────
@@ -1061,7 +1088,7 @@ if ($role === 'admin') {
         if (_mtc) new Chart(_mtc.getContext('2d'), {
             type: 'line',
             data: {
-                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                labels: <?php echo json_encode($monthly_trends['labels']); ?>,
                 datasets: [
                     {
                         label: 'Projects Completed',

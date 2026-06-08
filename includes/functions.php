@@ -63,44 +63,85 @@ class Utils {
     }
     
     /**
-     * Log system activity for admin monitoring
+     * Log user activity to user_activities table.
      */
-    public static function logActivity($department, $activity_type, $description, $target_type = null, $target_id = null) {
+    public static function logActivity($db, $activity_type, $description, $resource_type = null, $resource_id = null) {
         try {
-            // Skip logging if no user session (like public forms)
-            if (!isset($_SESSION['user_id'])) {
-                return;
-            }
-            
-            require_once __DIR__ . '/../config/database.php';
-            $database = new Database();
-            $db = $database->getConnection();
-            
-            $user_id = $_SESSION['user_id'];
-            $ip_address = $_SERVER['REMOTE_ADDR'] ?? null;
-            $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? null;
-            
-            $query = "INSERT INTO system_activities 
-                      (user_id, department, activity_type, description, target_type, target_id, ip_address, user_agent) 
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-            
-            $stmt = $db->prepare($query);
+            if (!isset($_SESSION['user_id'])) return;
+            $stmt = $db->prepare("INSERT INTO user_activities
+                (user_id, username, activity_type, description, page_url, resource_type, resource_id, ip_address, user_agent)
+                VALUES (?,?,?,?,?,?,?,?,?)");
             $stmt->execute([
-                $user_id, 
-                $department, 
-                $activity_type, 
-                $description, 
-                $target_type, 
-                $target_id, 
-                $ip_address, 
-                $user_agent
+                $_SESSION['user_id'],
+                $_SESSION['username'] ?? '',
+                $activity_type,
+                $description,
+                $_SERVER['REQUEST_URI'] ?? '',
+                $resource_type,
+                $resource_id,
+                $_SERVER['REMOTE_ADDR'] ?? '',
+                $_SERVER['HTTP_USER_AGENT'] ?? '',
             ]);
-            
         } catch (Exception $e) {
-            // Silent fail for logging errors to avoid breaking main functionality
-            error_log("Activity logging failed: " . $e->getMessage());
+            error_log("logActivity failed: " . $e->getMessage());
         }
     }
+}
+}
+
+// ── Notifications helper ──────────────────────────────────────────────────────
+if (!class_exists('Notifications')) {
+class Notifications {
+    /** Send a notification to a specific user */
+    public static function send($db, $user_id, $type, $title, $message = '', $link = '') {
+        try {
+            $db->prepare("INSERT INTO notifications (user_id,type,title,message,link) VALUES (?,?,?,?,?)")
+               ->execute([$user_id, $type, $title, $message, $link]);
+        } catch (Exception $e) {
+            error_log("Notifications::send failed: " . $e->getMessage());
+        }
+    }
+
+    /** Send a notification to every user in a department */
+    public static function sendToDept($db, $dept, $type, $title, $message = '', $link = '', $exclude_uid = null) {
+        try {
+            $s = $db->prepare("SELECT id FROM users WHERE department=?");
+            $s->execute([$dept]);
+            foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $uid) {
+                if ($uid !== $exclude_uid) {
+                    self::send($db, $uid, $type, $title, $message, $link);
+                }
+            }
+        } catch (Exception $e) {
+            error_log("Notifications::sendToDept failed: " . $e->getMessage());
+        }
+    }
+
+    /** Send a notification to all admins and managers */
+    public static function sendToAdmins($db, $type, $title, $message = '', $link = '', $exclude_uid = null) {
+        try {
+            $s = $db->query("SELECT id FROM users WHERE role IN ('admin','manager')");
+            foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $uid) {
+                if ($uid !== $exclude_uid) {
+                    self::send($db, $uid, $type, $title, $message, $link);
+                }
+            }
+        } catch (Exception $e) {
+            error_log("Notifications::sendToAdmins failed: " . $e->getMessage());
+        }
+    }
+}
+}
+
+// ── Time-ago helper ───────────────────────────────────────────────────────────
+if (!function_exists('time_ago')) {
+function time_ago($dt) {
+    $diff = time() - strtotime($dt);
+    if ($diff < 60)     return 'just now';
+    if ($diff < 3600)   return round($diff/60).'m ago';
+    if ($diff < 86400)  return round($diff/3600).'h ago';
+    if ($diff < 604800) return round($diff/86400).'d ago';
+    return date('d M Y', strtotime($dt));
 }
 }
 

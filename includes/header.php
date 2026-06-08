@@ -13,49 +13,29 @@ $_hdr_initials = count($_hdr_parts) >= 2
     ? strtoupper(mb_substr($_hdr_parts[0], 0, 1) . mb_substr($_hdr_parts[count($_hdr_parts)-1], 0, 1))
     : strtoupper(mb_substr($_hdr_user, 0, 2));
 
-/* Notification count */
+/* Notifications from notifications table */
 $_hdr_notif_count = 0;
+$_hdr_notifs      = [];
 try {
-    $q = "SELECT COUNT(DISTINCT pa.id) FROM project_assignments pa
-          JOIN projects p ON pa.project_id = p.id
-          WHERE pa.user_id = ? AND pa.assigned_at > DATE_SUB(NOW(), INTERVAL 7 DAY)";
-    $s = $db->prepare($q); $s->execute([$_hdr_uid]);
-    $_hdr_notif_count += (int)$s->fetchColumn();
+    $s = $db->prepare("SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0");
+    $s->execute([$_hdr_uid]);
+    $_hdr_notif_count = (int)$s->fetchColumn();
 
-    $q = "SELECT COUNT(DISTINCT pc.id) FROM project_comments pc
-          JOIN project_assignments pa ON pc.project_id = pa.project_id
-          WHERE pa.user_id = ? AND pc.user_id != ? AND pc.created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)";
-    $s = $db->prepare($q); $s->execute([$_hdr_uid, $_hdr_uid]);
-    $_hdr_notif_count += (int)$s->fetchColumn();
+    $s = $db->prepare("SELECT id, type, title, message, link, is_read, created_at
+        FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 12");
+    $s->execute([$_hdr_uid]);
+    $_hdr_notifs = $s->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {
     $_hdr_notif_count = 0;
+    $_hdr_notifs      = [];
 }
 
-/* Recent notifications for dropdown */
-$_hdr_notifs = [];
-try {
-    $q = "SELECT p.name as title, pa.assigned_at as ts, pa.role, 'assignment' as type
-          FROM project_assignments pa JOIN projects p ON pa.project_id = p.id
-          WHERE pa.user_id = ? AND pa.assigned_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
-          ORDER BY pa.assigned_at DESC LIMIT 5";
-    $s = $db->prepare($q); $s->execute([$_hdr_uid]);
-    $_hdr_notifs = $s->fetchAll(PDO::FETCH_ASSOC);
-
-    $q = "SELECT p.name as title, pc.comment, pc.created_at as ts, u.username, 'comment' as type
-          FROM project_comments pc
-          JOIN project_assignments pa ON pc.project_id = pa.project_id
-          JOIN projects p ON pc.project_id = p.id
-          JOIN users u ON pc.user_id = u.id
-          WHERE pa.user_id = ? AND pc.user_id != ? AND pc.created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
-          ORDER BY pc.created_at DESC LIMIT 5";
-    $s = $db->prepare($q); $s->execute([$_hdr_uid, $_hdr_uid]);
-    $_hdr_notifs = array_merge($_hdr_notifs, $s->fetchAll(PDO::FETCH_ASSOC));
-
-    usort($_hdr_notifs, fn($a, $b) => strtotime($b['ts']) - strtotime($a['ts']));
-    $_hdr_notifs = array_slice($_hdr_notifs, 0, 8);
-} catch (Exception $e) {
-    $_hdr_notifs = [];
-}
+/* Type → icon map */
+$_notif_icons = [
+    'leave'   => '📅', 'invoice' => '💰', 'project' => '📋',
+    'hr'      => '👥', 'success' => '✅', 'warning' => '⚠️',
+    'info'    => 'ℹ️', 'comment' => '💬', 'assignment' => '📌',
+];
 ?>
 <header class="app-header">
     <div class="header-left">
@@ -78,29 +58,43 @@ try {
             </button>
             <div id="notificationsDropdown" class="notifications-dropdown" style="display:none;">
                 <div class="notifications-header">
-                    <h4>Notifications</h4>
-                    <span class="close-notifications" onclick="toggleNotifications()">&times;</span>
+                    <h4>Notifications
+                        <?php if ($_hdr_notif_count > 0): ?>
+                        <span class="notif-count-label"><?= $_hdr_notif_count ?> unread</span>
+                        <?php endif; ?>
+                    </h4>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <?php if ($_hdr_notif_count > 0): ?>
+                        <button class="notif-mark-all-btn" onclick="markAllNotifRead()">Mark all read</button>
+                        <?php endif; ?>
+                        <span class="close-notifications" onclick="toggleNotifications()">&times;</span>
+                    </div>
                 </div>
-                <div class="notifications-body">
+                <div class="notifications-body" id="notifBody">
                     <?php if (empty($_hdr_notifs)): ?>
-                        <div class="notification-item">
-                            <p class="no-notifications">No recent notifications</p>
+                        <div class="notif-empty">
+                            <div style="font-size:2rem;margin-bottom:6px;">🔔</div>
+                            <p>You're all caught up!</p>
                         </div>
-                    <?php else: foreach ($_hdr_notifs as $n): ?>
-                        <div class="notification-item">
-                            <div class="notification-icon-type"><?= $n['type'] === 'assignment' ? '📋' : '💬' ?></div>
+                    <?php else: foreach ($_hdr_notifs as $n):
+                        $icon = $_notif_icons[$n['type']] ?? 'ℹ️';
+                        $unread_cls = $n['is_read'] ? '' : ' notif-unread';
+                        $link_open  = $n['link'] ? '<a href="'.Security::escapeHTML($n['link']).'" style="text-decoration:none;color:inherit;">' : '<div>';
+                        $link_close = $n['link'] ? '</a>' : '</div>';
+                    ?>
+                        <?= $link_open ?>
+                        <div class="notification-item<?= $unread_cls ?>" data-id="<?= $n['id'] ?>">
+                            <div class="notification-icon-type"><?= $icon ?></div>
                             <div class="notification-content">
-                                <?php if ($n['type'] === 'assignment'): ?>
-                                    <p class="notification-title">New Project Assignment</p>
-                                    <p class="notification-text">Assigned to: <strong><?= Security::escapeHTML($n['title']) ?></strong></p>
-                                    <p class="notification-meta">Role: <?= Security::escapeHTML($n['role']) ?> &bull; <?= date('M j, g:i A', strtotime($n['ts'])) ?></p>
-                                <?php else: ?>
-                                    <p class="notification-title">Comment on <?= Security::escapeHTML($n['title']) ?></p>
-                                    <p class="notification-text"><?= Security::escapeHTML(mb_strimwidth($n['comment'], 0, 60, '…')) ?></p>
-                                    <p class="notification-meta">By <?= Security::escapeHTML($n['username']) ?> &bull; <?= date('M j, g:i A', strtotime($n['ts'])) ?></p>
+                                <p class="notification-title"><?= Security::escapeHTML($n['title']) ?></p>
+                                <?php if ($n['message']): ?>
+                                <p class="notification-text"><?= Security::escapeHTML(mb_strimwidth($n['message'], 0, 70, '…')) ?></p>
                                 <?php endif; ?>
+                                <p class="notification-meta"><?= time_ago($n['created_at']) ?></p>
                             </div>
+                            <?php if (!$n['is_read']): ?><div class="notif-dot"></div><?php endif; ?>
                         </div>
+                        <?= $link_close ?>
                     <?php endforeach; endif; ?>
                 </div>
             </div>
@@ -182,9 +176,63 @@ try {
 .hdr-menu-icon { font-size: 1rem; width: 20px; text-align: center; }
 .hdr-menu-danger { color: #dc2626; }
 .hdr-menu-danger:hover { background: #fef2f2; color: #b91c1c; }
+
+/* Notification extras */
+.notif-count-label { font-size:.7rem;font-weight:600;background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:20px;margin-left:6px;vertical-align:middle; }
+.notif-mark-all-btn { font-size:.74rem;color:#6b7280;background:none;border:1px solid #e5e7eb;border-radius:6px;padding:3px 8px;cursor:pointer; }
+.notif-mark-all-btn:hover { background:#f9fafb;color:#374151; }
+.notif-unread { background:#eff6ff !important; }
+.notif-dot { width:8px;height:8px;border-radius:50%;background:#2563eb;flex-shrink:0;margin-top:4px; }
+.notification-item { display:flex;align-items:flex-start;gap:10px;padding:11px 14px;border-bottom:1px solid #f3f4f6;cursor:default;transition:background .12s; }
+.notification-item:last-child { border-bottom:none; }
+.notification-item:hover { background:#f9fafb; }
+.notif-empty { text-align:center;padding:28px 14px;color:#9ca3af;font-size:.84rem; }
 </style>
 
 <script>
+const _notifApiBase = '<?= rtrim($_ab,'/')?>/api/notifications.php';
+
+function toggleNotifications() {
+    const dd  = document.getElementById('notificationsDropdown');
+    const open = dd.style.display === 'none';
+    dd.style.display = open ? 'block' : 'none';
+    // Close user menu
+    document.getElementById('hdrUserMenu')?.classList.remove('open');
+    document.querySelector('.hdr-user-btn')?.setAttribute('aria-expanded','false');
+    // Mark all read when opening
+    if (open) markAllNotifRead();
+}
+
+function markAllNotifRead() {
+    fetch(_notifApiBase, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'mark_all_read'}) })
+        .then(r => r.json()).then(() => {
+            document.querySelector('.notification-badge')?.remove();
+            document.querySelector('.notif-count-label')?.remove();
+            document.querySelector('.notif-mark-all-btn')?.remove();
+            document.querySelectorAll('.notif-unread').forEach(el => el.classList.remove('notif-unread'));
+            document.querySelectorAll('.notif-dot').forEach(el => el.remove());
+        }).catch(() => {});
+}
+
+// Auto-refresh unread count every 60 s
+function refreshNotifCount() {
+    fetch(_notifApiBase + '?action=count')
+        .then(r => r.json()).then(d => {
+            let badge = document.querySelector('.notification-badge');
+            if (d.count > 0) {
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'notification-badge';
+                    document.querySelector('.header-notif-btn')?.appendChild(badge);
+                }
+                badge.textContent = Math.min(d.count, 99);
+            } else {
+                badge?.remove();
+            }
+        }).catch(() => {});
+}
+setInterval(refreshNotifCount, 60000);
+
 function toggleUserMenu(e) {
     e.stopPropagation();
     const menu = document.getElementById('hdrUserMenu');
@@ -192,7 +240,7 @@ function toggleUserMenu(e) {
     const open = menu.classList.toggle('open');
     btn.setAttribute('aria-expanded', open);
     if (open) {
-        document.getElementById('notificationsDropdown')?.style && (document.getElementById('notificationsDropdown').style.display = 'none');
+        document.getElementById('notificationsDropdown').style.display = 'none';
     }
 }
 document.addEventListener('click', function(e) {
@@ -200,6 +248,11 @@ document.addEventListener('click', function(e) {
     if (wrap && !wrap.contains(e.target)) {
         document.getElementById('hdrUserMenu')?.classList.remove('open');
         wrap.querySelector('.hdr-user-btn')?.setAttribute('aria-expanded','false');
+    }
+    const notifWrap = document.querySelector('.header-notif-wrap');
+    if (notifWrap && !notifWrap.contains(e.target)) {
+        const dd = document.getElementById('notificationsDropdown');
+        if (dd) dd.style.display = 'none';
     }
 });
 </script>
