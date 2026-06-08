@@ -494,18 +494,17 @@ if ($_POST && isset($_POST['record_payment'])) {
     if ($invoice) {
         $new_paid_amount = $invoice['paid_amount'] + $payment_amount;
         $status = ($new_paid_amount >= $invoice['total_amount']) ? 'paid' : 'partially_paid';
-        
-        $query = "UPDATE invoices SET paid_amount = ?, status = ? WHERE id = ?";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$new_paid_amount, $status, $invoice_id]);
-        
+
+        $db->prepare("UPDATE invoices SET paid_amount = ?, status = ?, updated_at = NOW() WHERE id = ?")
+           ->execute([$new_paid_amount, $status, $invoice_id]);
+
         // Record in money flow
-        $query = "INSERT INTO money_flow (transaction_type, category, amount, description, transaction_date, client_id, invoice_id, created_by) 
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-        $stmt = $db->prepare($query);
-        $stmt->execute(['income', 'Payment', $payment_amount, "Payment for invoice {$invoice['invoice_number']}", 
-                       date('Y-m-d'), $invoice['client_id'], $invoice_id, $_SESSION['user_id']]);
+        $db->prepare("INSERT INTO money_flow (transaction_type, category, amount, description, transaction_date, client_id, invoice_id, created_by)
+                      VALUES ('income', 'Payment', ?, ?, ?, ?, ?, ?)")
+           ->execute([$payment_amount, "Payment for invoice {$invoice['invoice_number']}", date('Y-m-d'), $invoice['client_id'], $invoice_id, $_SESSION['user_id']]);
     }
+    header('Location: finance.php?view=invoices&msg=' . urlencode('Payment recorded successfully.'));
+    exit();
 }
 
 // Handle purchase order update
@@ -651,11 +650,14 @@ if ($_POST && isset($_POST['update_po_status'])) {
     Security::requireWriteAccess('Finance');
 
     $po_id = (int)$_POST['po_id'];
+    $allowed_po = ['pending', 'approved', 'received', 'completed', 'cancelled'];
     $status = Security::sanitizeInput($_POST['status']);
-
-    $query = "UPDATE purchase_orders SET status = ? WHERE id = ?";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$status, $po_id]);
+    if ($po_id && in_array($status, $allowed_po)) {
+        $db->prepare("UPDATE purchase_orders SET status = ?, updated_at = NOW() WHERE id = ?")
+           ->execute([$status, $po_id]);
+    }
+    header('Location: finance.php?view=purchase_orders&msg=' . urlencode('Purchase order status updated.'));
+    exit();
 }
 
 // Handle quotation status update
@@ -666,12 +668,12 @@ if ($_POST && isset($_POST['update_quotation_status'])) {
     $quotation_id = (int)$_POST['quotation_id'];
     $allowed = ['draft', 'sent', 'accepted', 'rejected'];
     $status = Security::sanitizeInput($_POST['status']);
-    if (in_array($status, $allowed)) {
-        $query = "UPDATE quotations SET status = ?, updated_at = NOW() WHERE id = ?";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$status, $quotation_id]);
-        $success_message = "Quotation status updated to " . ucfirst($status) . ".";
+    if ($quotation_id && in_array($status, $allowed)) {
+        $db->prepare("UPDATE quotations SET status = ?, updated_at = NOW() WHERE id = ?")
+           ->execute([$status, $quotation_id]);
     }
+    header('Location: finance.php?view=quotations&msg=' . urlencode('Quotation status updated to ' . ucfirst($status) . '.'));
+    exit();
 }
 
 // Handle invoice status update
@@ -680,14 +682,14 @@ if ($_POST && isset($_POST['update_invoice_status'])) {
     Security::requireWriteAccess('Finance');
 
     $invoice_id = (int)$_POST['invoice_id'];
-    $allowed = ['pending', 'overdue', 'cancelled'];
+    $allowed = ['draft', 'sent', 'pending', 'overdue', 'cancelled'];
     $status = Security::sanitizeInput($_POST['status']);
-    if (in_array($status, $allowed)) {
-        $query = "UPDATE invoices SET status = ?, updated_at = NOW() WHERE id = ?";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$status, $invoice_id]);
-        $success_message = "Invoice status updated to " . ucfirst($status) . ".";
+    if ($invoice_id && in_array($status, $allowed)) {
+        $db->prepare("UPDATE invoices SET status = ?, updated_at = NOW() WHERE id = ?")
+           ->execute([$status, $invoice_id]);
     }
+    header('Location: finance.php?view=invoices&msg=' . urlencode('Invoice status updated to ' . ucfirst($status) . '.'));
+    exit();
 }
 
 // Handle new project revenue recording
@@ -750,24 +752,31 @@ if ($_POST && isset($_POST['update_project_revenue'])) {
         $stmt->execute([$project_id, $client_id, $revenue_type, $amount, $received_date, 
                        $payment_method, $reference_number, $notes, $revenue_id, $_SESSION['user_id']]);
         
-        // Update corresponding money_flow entry using MySQL approach
-        $query = "UPDATE money_flow 
-                  SET category = ?, amount = ?, description = ?, transaction_date = ?, 
+        // Update corresponding money_flow entry
+        $query = "UPDATE money_flow
+                  SET category = ?, amount = ?, description = ?, transaction_date = ?,
                       project_id = ?, client_id = ?
-                  WHERE transaction_type = 'income' 
-                    AND project_id = ? 
-                    AND client_id = ? 
-                    AND amount = ? 
+                  WHERE transaction_type = 'income'
+                    AND project_id = ?
+                    AND client_id = ?
+                    AND amount = ?
                     AND DATE(transaction_date) = DATE(?)
                     AND created_by = ?
-                  ORDER BY created_at DESC 
+                  ORDER BY created_at DESC
                   LIMIT 1";
         $stmt = $db->prepare($query);
         $stmt->execute([
-            $old_revenue['project_id'], $old_revenue['client_id'], $old_revenue['amount'], 
-            $old_revenue['received_date'], $_SESSION['user_id'],
-            ucfirst($revenue_type), $amount, $notes ?: "Project revenue - {$revenue_type}", 
-            $received_date, $project_id, $client_id
+            ucfirst($revenue_type),
+            $amount,
+            $notes ?: "Project revenue - {$revenue_type}",
+            $received_date,
+            $project_id,
+            $client_id,
+            $old_revenue['project_id'],
+            $old_revenue['client_id'],
+            $old_revenue['amount'],
+            $old_revenue['received_date'],
+            $_SESSION['user_id'],
         ]);
     }
 }
@@ -814,16 +823,10 @@ if ($_POST && isset($_POST['delete_project_revenue'])) {
         $stmt = $db->prepare($query);
         $stmt->execute([$revenue_id, $_SESSION['user_id']]);
         
-        // Log the deletion for audit purposes
-        $query = "INSERT INTO activity_log (user_id, action, details, created_at) 
-                  VALUES (?, ?, ?, NOW())";
-        $stmt = $db->prepare($query);
-        $stmt->execute([
-            $_SESSION['user_id'], 
-            'delete_project_revenue', 
-            "Deleted project revenue ID {$revenue_id} for project {$revenue['project_id']}, amount R" . number_format($revenue['amount'], 2)
-        ]);
+        Utils::logActivity($db, 'delete', "Deleted project revenue ID {$revenue_id}, amount R" . number_format($revenue['amount'], 2));
     }
+    header('Location: finance.php?view=project_revenues&msg=' . urlencode('Revenue record deleted.'));
+    exit();
 }
 
 // Handle manual money flow entry
@@ -851,39 +854,54 @@ if ($_POST && isset($_POST['add_money_flow'])) {
 if ($_POST && isset($_POST['create_expense'])) {
     Security::checkCSRFToken();
     Security::requireWriteAccess('Finance');
-    
-    $category = Security::sanitizeInput($_POST['category']);
-    $amount = floatval($_POST['amount']);
+
+    $category    = Security::sanitizeInput($_POST['category']);
+    $amount      = floatval($_POST['amount']);
     $expense_date = Security::sanitizeInput($_POST['expense_date']);
     $description = Security::sanitizeInput($_POST['description']);
-    $project_id = !empty($_POST['project_id']) ? (int)$_POST['project_id'] : null;
-    
-    $expense_number = Utils::generateExpenseNumber();
-    $vat_amount = $amount * 0.15; // 15% VAT
-    $total_amount = $amount + $vat_amount;
-    
-    $query = "INSERT INTO expenses (expense_number, category, amount, vat_amount, total_amount, expense_date, 
-              description, project_id, status, submitted_by) 
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$expense_number, $category, $amount, $vat_amount, $total_amount, $expense_date, 
-                   $description, $project_id, 'pending', $_SESSION['user_id']]);
-    
-    $expense_id = $stmt->fetchColumn();
-    
-    // Record in money flow
-    $query = "INSERT INTO money_flow (transaction_type, category, amount, description, transaction_date, 
-              project_id, created_by) 
-              VALUES (?, ?, ?, ?, ?, ?, ?)";
-    $stmt = $db->prepare($query);
-    $stmt->execute(['expense', ucfirst(str_replace('_', ' ', $category)), $total_amount, "Expense: {$description} ({$expense_number})", 
-                   $expense_date, $project_id, $_SESSION['user_id']]);
+    $project_id  = !empty($_POST['project_id']) ? (int)$_POST['project_id'] : null;
+
+    $db->prepare("INSERT INTO expenses (category, description, amount, expense_date, project_id, status, submitted_by)
+                  VALUES (?, ?, ?, ?, ?, 'pending', ?)")
+       ->execute([$category, $description, $amount, $expense_date, $project_id, $_SESSION['user_id']]);
+
+    // Record in money flow as a pending expense
+    $db->prepare("INSERT INTO money_flow (transaction_type, category, amount, description, transaction_date, project_id, created_by)
+                  VALUES ('expense', ?, ?, ?, ?, ?, ?)")
+       ->execute([ucfirst(str_replace('_', ' ', $category)), $amount, "Expense: {$description}", $expense_date, $project_id, $_SESSION['user_id']]);
+
+    header('Location: finance.php?view=expenses&msg=' . urlencode('Expense submitted for approval.'));
+    exit();
+}
+
+// Handle expense status update (approve / reject)
+if ($_POST && isset($_POST['update_expense_status'])) {
+    Security::checkCSRFToken();
+    Security::requireWriteAccess('Finance');
+
+    $expense_id = (int)($_POST['expense_id'] ?? 0);
+    $status     = Security::sanitizeInput($_POST['status'] ?? '');
+    $allowed    = ['pending', 'approved', 'rejected'];
+    if ($expense_id && in_array($status, $allowed)) {
+        $db->prepare("UPDATE expenses SET status=?, approved_by=?, approved_at=NOW() WHERE id=?")
+           ->execute([$status, $_SESSION['user_id'], $expense_id]);
+    }
+    header('Location: finance.php?view=expenses&msg=' . urlencode('Expense status updated.'));
+    exit();
 }
 
 
 // Get current view parameter
 $view = $_GET['view'] ?? 'money_flow';
-$tab = $_GET['view'] ?? 'finance';
+$tab  = $_GET['view'] ?? 'finance';
+
+// Flash messages passed via redirect (PRG pattern)
+if (empty($success_message) && !empty($_GET['msg'])) {
+    $success_message = htmlspecialchars($_GET['msg'], ENT_QUOTES, 'UTF-8');
+}
+if (empty($error_message) && !empty($_GET['err'])) {
+    $error_message = htmlspecialchars($_GET['err'], ENT_QUOTES, 'UTF-8');
+}
 
 // Get all data for display
 $query = "SELECT q.*, c.name as client_name, c.company as client_company, u.username as created_by_name
@@ -963,14 +981,26 @@ $unpaid_invoices = count(array_filter($invoices, function($i) { return $i['statu
 $total_purchase_orders = count($purchase_orders);
 $pending_purchase_orders = count(array_filter($purchase_orders, function($po) { return $po['status'] == 'pending'; }));
 
+// Revenue: sum of actual cash collected (paid_amount on invoices)
 $total_revenue = array_sum(array_column($invoices, 'paid_amount'));
-$outstanding_amount = array_sum(array_map(function($i) { return $i['total_amount'] - $i['paid_amount']; }, $invoices));
-$total_expenses = array_sum(array_column($purchase_orders, 'total_amount'));
 
-// Money flow statistics
-$total_income = array_sum(array_map(function($mf) { return $mf['transaction_type'] == 'income' ? $mf['amount'] : 0; }, $money_flows));
-$total_expense_flow = array_sum(array_map(function($mf) { return $mf['transaction_type'] == 'expense' ? $mf['amount'] : 0; }, $money_flows));
-$net_cash_flow = $total_income - $total_expense_flow;
+// Outstanding: balance owed on active invoices only (exclude paid & cancelled)
+$outstanding_amount = array_sum(array_map(function($i) {
+    return !in_array($i['status'], ['paid', 'cancelled']) ? max(0, $i['total_amount'] - $i['paid_amount']) : 0;
+}, $invoices));
+
+// Expenses: purchase orders + expenses table amounts
+$po_expense_total  = array_sum(array_column($purchase_orders, 'total_amount'));
+$exp_table_total   = array_sum(array_column($expenses, 'amount'));
+$total_expenses    = $po_expense_total + $exp_table_total;
+
+// Net P&L: cash collected minus total expenses incurred
+$net_pl = $total_revenue - $total_expenses;
+
+// Money flow statistics (for overview breakdown)
+$total_income       = array_sum(array_map(function($mf) { return $mf['transaction_type'] === 'income'  ? $mf['amount'] : 0; }, $money_flows));
+$total_expense_flow = array_sum(array_map(function($mf) { return $mf['transaction_type'] === 'expense' ? $mf['amount'] : 0; }, $money_flows));
+$net_cash_flow      = $total_income - $total_expense_flow;
 
 // Group money flows by category
 $income_by_category = [];
@@ -991,6 +1021,33 @@ $recent_income = array_sum(array_map(function($mf) use ($thirty_days_ago) {
 $recent_expenses = array_sum(array_map(function($mf) use ($thirty_days_ago) { 
     return ($mf['transaction_type'] == 'expense' && $mf['transaction_date'] >= $thirty_days_ago) ? $mf['amount'] : 0; 
 }, $money_flows));
+
+// Monthly cash flow for chart — last 6 months from money_flow
+$chart_raw = $db->query("
+    SELECT DATE_FORMAT(transaction_date,'%b') AS lbl,
+           DATE_FORMAT(transaction_date,'%Y-%m') AS mkey,
+           SUM(CASE WHEN transaction_type='income'  THEN amount ELSE 0 END) AS income,
+           SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END) AS expense
+    FROM money_flow
+    WHERE transaction_date >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 5 MONTH),'%Y-%m-01')
+    GROUP BY mkey, lbl
+    ORDER BY mkey ASC
+")->fetchAll(PDO::FETCH_ASSOC);
+
+$chart_months = [];
+for ($i = 5; $i >= 0; $i--) {
+    $key = date('Y-m', strtotime("-$i months"));
+    $chart_months[$key] = ['label' => date('M', strtotime("-$i months")), 'income' => 0, 'expense' => 0];
+}
+foreach ($chart_raw as $row) {
+    if (isset($chart_months[$row['mkey']])) {
+        $chart_months[$row['mkey']]['income']  = (float)$row['income'];
+        $chart_months[$row['mkey']]['expense'] = (float)$row['expense'];
+    }
+}
+$chart_labels_json  = json_encode(array_column(array_values($chart_months), 'label'));
+$chart_income_json  = json_encode(array_column(array_values($chart_months), 'income'));
+$chart_expense_json = json_encode(array_column(array_values($chart_months), 'expense'));
 
 // Create overview array for display
 $overview = [
@@ -1053,6 +1110,7 @@ if (!isset($expenses)) {
     <title>Finance Department - KConsulting Hub</title>
     <link rel="icon" type="image/png" href="../img/KConsultingLogo1.png">
     <link rel="stylesheet" href="../css/main.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         /* ── Finance Design System (Teal / Amber) ── */
         :root {
@@ -1375,6 +1433,7 @@ if (!isset($expenses)) {
                 <button class="btn-hero" onclick="resetInvoiceForm(); document.getElementById('invoiceModal').style.display='block'">+ Invoice</button>
                 <button class="btn-hero" onclick="document.getElementById('purchaseOrderModal').style.display='block'">+ Purchase Order</button>
                 <button class="btn-hero amber" onclick="resetRevenueForm(); document.getElementById('projectRevenueModal').style.display='block'">+ Revenue</button>
+                <button class="btn-hero" onclick="document.getElementById('expenseModal').style.display='block'">+ Expense</button>
             </div>
             <?php endif; ?>
         </div>
@@ -1382,24 +1441,29 @@ if (!isset($expenses)) {
         <!-- Stats bar -->
         <div class="fin-stats">
             <div class="fin-stat">
-                <div class="fin-stat-lbl">Total Revenue</div>
+                <div class="fin-stat-lbl">Collected Revenue</div>
                 <div class="fin-stat-val green">R <?php echo number_format($total_revenue, 2); ?></div>
+                <div style="font-size:.72rem;color:#6b7280;margin-top:3px;">Cash received from invoices</div>
             </div>
             <div class="fin-stat">
-                <div class="fin-stat-lbl">Outstanding</div>
+                <div class="fin-stat-lbl">Outstanding Receivables</div>
                 <div class="fin-stat-val amber">R <?php echo number_format($outstanding_amount, 2); ?></div>
+                <div style="font-size:.72rem;color:#6b7280;margin-top:3px;">Active unpaid invoices</div>
             </div>
             <div class="fin-stat">
                 <div class="fin-stat-lbl">Total Expenses</div>
                 <div class="fin-stat-val red">R <?php echo number_format($total_expenses, 2); ?></div>
+                <div style="font-size:.72rem;color:#6b7280;margin-top:3px;">POs R<?php echo number_format($po_expense_total,2); ?> + Claims R<?php echo number_format($exp_table_total,2); ?></div>
             </div>
             <div class="fin-stat">
-                <div class="fin-stat-lbl">Net Cash Flow</div>
-                <div class="fin-stat-val <?php echo $net_cash_flow >= 0 ? 'green' : 'red'; ?>">R <?php echo number_format($net_cash_flow, 2); ?></div>
+                <div class="fin-stat-lbl">Net P&amp;L</div>
+                <div class="fin-stat-val <?php echo $net_pl >= 0 ? 'green' : 'red'; ?>">R <?php echo number_format(abs($net_pl), 2); ?><?php echo $net_pl < 0 ? ' loss' : ''; ?></div>
+                <div style="font-size:.72rem;color:#6b7280;margin-top:3px;">Collected &minus; Expenses</div>
             </div>
             <div class="fin-stat">
                 <div class="fin-stat-lbl">Unpaid Invoices</div>
                 <div class="fin-stat-val red"><?php echo (int)$unpaid_invoices; ?></div>
+                <div style="font-size:.72rem;color:#6b7280;margin-top:3px;">Awaiting payment</div>
             </div>
         </div>
 
@@ -1410,6 +1474,7 @@ if (!isset($expenses)) {
             <button class="fin-tab-btn tab-btn <?php echo $view === 'invoices' ? 'active' : ''; ?>" onclick="showTab('invoices')">Invoices (<?php echo (int)$total_invoices; ?>)</button>
             <button class="fin-tab-btn tab-btn <?php echo $view === 'purchase_orders' ? 'active' : ''; ?>" onclick="showTab('purchase_orders')">Purchase Orders (<?php echo (int)$total_purchase_orders; ?>)</button>
             <button class="fin-tab-btn tab-btn <?php echo $view === 'project_revenues' ? 'active' : ''; ?>" onclick="showTab('project_revenues')">Revenues (<?php echo count($project_revenues); ?>)</button>
+            <button class="fin-tab-btn tab-btn <?php echo $view === 'expenses' ? 'active' : ''; ?>" onclick="showTab('expenses')">Expenses (<?php echo count($expenses); ?>)</button>
         </div>
 
         <!-- TAB: OVERVIEW -->
@@ -1564,6 +1629,8 @@ if (!isset($expenses)) {
                                         <span class="fin-btn fin-btn-gray" style="padding:0;">
                                             <select onchange="updateInvoiceStatus(<?php echo $invoice['id']; ?>, this.value)" title="Update Status">
                                                 <option value="">Status</option>
+                                                <option value="draft"     <?php echo $invoice['status']==='draft'    ?'selected':''; ?>>Draft</option>
+                                                <option value="sent"      <?php echo $invoice['status']==='sent'     ?'selected':''; ?>>Sent</option>
                                                 <option value="pending"   <?php echo $invoice['status']==='pending'  ?'selected':''; ?>>Pending</option>
                                                 <option value="overdue"   <?php echo $invoice['status']==='overdue'  ?'selected':''; ?>>Overdue</option>
                                                 <option value="cancelled" <?php echo $invoice['status']==='cancelled'?'selected':''; ?>>Cancelled</option>
@@ -1622,13 +1689,15 @@ if (!isset($expenses)) {
                                     <?php else: ?>
                                         <button class="fin-btn fin-btn-gray" disabled title="Approve first">PDF</button>
                                     <?php endif; ?>
-                                    <?php if ($po['status'] === 'pending'): ?>
+                                    <?php if (!in_array($po['status'], ['completed', 'cancelled'])): ?>
                                     <span class="fin-btn fin-btn-gray" style="padding:0;">
                                         <select onchange="updatePOStatus(<?php echo $po['id']; ?>, this.value)" title="Update Status">
-                                            <option value="pending">Pending</option>
-                                            <option value="approved">Approve</option>
-                                            <option value="received">Received</option>
-                                            <option value="cancelled">Cancel</option>
+                                            <option value="">Change Status</option>
+                                            <option value="pending"   <?php echo $po['status']==='pending'  ?'selected':''; ?>>Pending</option>
+                                            <option value="approved"  <?php echo $po['status']==='approved' ?'selected':''; ?>>Approved</option>
+                                            <option value="received"  <?php echo $po['status']==='received' ?'selected':''; ?>>Received</option>
+                                            <option value="completed" <?php echo $po['status']==='completed'?'selected':''; ?>>Completed</option>
+                                            <option value="cancelled">Cancelled</option>
                                         </select>
                                     </span>
                                     <?php endif; ?>
@@ -1688,6 +1757,71 @@ if (!isset($expenses)) {
             </div>
         </div>
 
+        <!-- TAB: EXPENSES -->
+        <div id="expenses" class="tab-content <?php echo $view === 'expenses' ? 'active' : ''; ?>">
+            <div class="fin-controls">
+                <input type="text" id="exp-search" placeholder="Search category or description..." oninput="filterFinTab('exp-tbody','exp-search','exp-status','exp-count')">
+                <select id="exp-status" onchange="filterFinTab('exp-tbody','exp-search','exp-status','exp-count')">
+                    <option value="">All Statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                </select>
+                <span class="fin-controls-count" id="exp-count"><?php echo count($expenses); ?> expense<?php echo count($expenses) !== 1 ? 's' : ''; ?></span>
+            </div>
+            <div class="fin-table-wrap">
+                <table class="fin-table">
+                    <thead><tr>
+                        <th>Category</th><th>Description</th><th>Amount</th><th>Date</th><th>Project</th><th>Submitted By</th><th>Status</th><?php if ($can_write): ?><th>Actions</th><?php endif; ?>
+                    </tr></thead>
+                    <tbody id="exp-tbody">
+                        <?php foreach ($expenses as $exp): ?>
+                        <tr data-search="<?php echo strtolower(Security::escapeHTML($exp['category']).' '.Security::escapeHTML($exp['description'])); ?>"
+                            data-status="<?php echo $exp['status']; ?>">
+                            <td><span class="fbadge fbadge-sent"><?php echo Security::escapeHTML(ucfirst(str_replace('_',' ',$exp['category']))); ?></span></td>
+                            <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<?php echo Security::escapeHTML($exp['description']); ?>"><?php echo Security::escapeHTML($exp['description']); ?></td>
+                            <td class="amt">R <?php echo number_format($exp['amount'], 2); ?></td>
+                            <td style="white-space:nowrap;"><?php echo $exp['expense_date'] ? date('d M Y', strtotime($exp['expense_date'])) : '—'; ?></td>
+                            <td><?php echo Security::escapeHTML($exp['project_name'] ?? '—'); ?></td>
+                            <td><?php echo Security::escapeHTML($exp['submitted_by_name'] ?? '—'); ?></td>
+                            <td>
+                                <span class="fbadge fbadge-<?php echo $exp['status']; ?>">
+                                    <?php echo ucfirst($exp['status']); ?>
+                                </span>
+                            </td>
+                            <?php if ($can_write): ?>
+                            <td>
+                                <?php if ($exp['status'] === 'pending'): ?>
+                                <div class="action-buttons">
+                                    <form method="POST" style="display:inline;">
+                                        <?php echo Security::getCSRFTokenField(); ?>
+                                        <input type="hidden" name="expense_id" value="<?php echo $exp['id']; ?>">
+                                        <input type="hidden" name="status" value="approved">
+                                        <button type="submit" name="update_expense_status" value="1" class="fin-btn fin-btn-green">Approve</button>
+                                    </form>
+                                    <form method="POST" style="display:inline;">
+                                        <?php echo Security::getCSRFTokenField(); ?>
+                                        <input type="hidden" name="expense_id" value="<?php echo $exp['id']; ?>">
+                                        <input type="hidden" name="status" value="rejected">
+                                        <button type="submit" name="update_expense_status" value="1" class="fin-btn fin-btn-red">Reject</button>
+                                    </form>
+                                </div>
+                                <?php else: ?>
+                                <span style="font-size:.78rem;color:#94a3b8;">—</span>
+                                <?php endif; ?>
+                            </td>
+                            <?php endif; ?>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php if (empty($expenses)): ?>
+                        <tr><td colspan="8" class="fin-no-results" style="display:table-cell;text-align:center;padding:40px;color:#6b7280;">No expenses recorded yet.</td></tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+                <div class="fin-no-results" id="exp-tbody-no-results">No expenses match your filter.</div>
+            </div>
+        </div>
+
     </div><!-- /.main-content -->
     <script src="../js/notification.js"></script>  
     <script>
@@ -1740,45 +1874,41 @@ if (!isset($expenses)) {
         var quotationItemCount = 1;
         var invoiceItemCount = 1;
         
-        // Chart.js Cash Flow Chart (with guard)
-        if (typeof Chart !== 'undefined') {
+        // Cash Flow Chart — real monthly data from money_flow
+        (function() {
             const ctx = document.getElementById('cashFlowChart');
-            if (ctx) {
-                const cashFlowChart = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-                        datasets: [{
-                            label: 'Revenue',
-                            data: [<?php echo $overview['total_revenue'] ?? 0; ?>, 45000, 38000, 52000, 48000, 55000],
-                            borderColor: '#28a745',
-                            backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                            tension: 0.4
-                        }, {
-                            label: 'Expenses',
-                            data: [<?php echo $overview['total_expenses'] ?? 0; ?>, 32000, 28000, 35000, 31000, 38000],
-                            borderColor: '#dc3545',
-                            backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                            tension: 0.4
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                ticks: {
-                                    callback: function(value) {
-                                        return 'R ' + value.toLocaleString();
-                                    }
-                                }
-                            }
+            if (!ctx) return;
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: <?php echo $chart_labels_json; ?>,
+                    datasets: [{
+                        label: 'Income',
+                        data: <?php echo $chart_income_json; ?>,
+                        borderColor: '#059669',
+                        backgroundColor: 'rgba(5,150,105,0.08)',
+                        tension: 0.4, fill: true, pointRadius: 4
+                    }, {
+                        label: 'Expenses',
+                        data: <?php echo $chart_expense_json; ?>,
+                        borderColor: '#dc2626',
+                        backgroundColor: 'rgba(220,38,38,0.08)',
+                        tension: 0.4, fill: true, pointRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top' } },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { callback: v => 'R ' + v.toLocaleString('en-ZA') }
                         }
                     }
-                });
-            }
-        }
+                }
+            });
+        })();
         
         
         // Purchase Order item management (for modal)
@@ -2489,9 +2619,10 @@ if (!isset($expenses)) {
         
         function updatePOStatus(poId, newStatus) {
             if (!newStatus) return;
-            if (confirm('Update Purchase Order #' + poId + ' status to: ' + newStatus + '?')) {
+            if (confirm('Update Purchase Order status to: ' + newStatus + '?')) {
                 const form = document.createElement('form');
                 form.method = 'POST';
+                form.action  = '?view=purchase_orders';
                 form.innerHTML = `
                     <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
                     <input type="hidden" name="update_po_status" value="1">
@@ -2505,9 +2636,10 @@ if (!isset($expenses)) {
 
         function updateQuotationStatus(quotationId, newStatus) {
             if (!newStatus) return;
-            if (confirm('Update Quotation #' + quotationId + ' status to: ' + newStatus + '?')) {
+            if (confirm('Update Quotation status to: ' + newStatus + '?')) {
                 const form = document.createElement('form');
                 form.method = 'POST';
+                form.action  = '?view=quotations';
                 form.innerHTML = `
                     <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
                     <input type="hidden" name="update_quotation_status" value="1">
@@ -2521,9 +2653,10 @@ if (!isset($expenses)) {
 
         function updateInvoiceStatus(invoiceId, newStatus) {
             if (!newStatus) return;
-            if (confirm('Update Invoice #' + invoiceId + ' status to: ' + newStatus + '?')) {
+            if (confirm('Update Invoice status to: ' + newStatus + '?')) {
                 const form = document.createElement('form');
                 form.method = 'POST';
+                form.action  = '?view=invoices';
                 form.innerHTML = `
                     <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
                     <input type="hidden" name="update_invoice_status" value="1">
@@ -3104,6 +3237,59 @@ if (!isset($expenses)) {
                 <div style="display: flex; gap: 1rem; justify-content: flex-end;">
                     <button type="button" onclick="closeModal('deleteRevenueModal')" class="btn btn-secondary">Cancel</button>
                     <button type="submit" name="delete_project_revenue" class="btn btn-danger">🗑️ Delete Revenue</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Expense Modal -->
+    <div id="expenseModal" style="display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;overflow:auto;background:rgba(0,0,0,0.4);">
+        <div style="background:#fefefe;margin:5% auto;padding:20px;border:1px solid #888;width:90%;max-width:560px;border-radius:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <h3>Submit Expense Claim</h3>
+                <span onclick="closeModal('expenseModal')" style="color:#aaa;font-size:28px;font-weight:bold;cursor:pointer;">&times;</span>
+            </div>
+            <form method="POST" action="?view=expenses">
+                <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Category *</label>
+                        <select name="category" required>
+                            <option value="">Select category...</option>
+                            <option value="office">Office Supplies</option>
+                            <option value="travel">Travel</option>
+                            <option value="equipment">Equipment</option>
+                            <option value="utilities">Utilities</option>
+                            <option value="software">Software / Subscriptions</option>
+                            <option value="marketing">Marketing</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Amount (ZAR) *</label>
+                        <input type="number" name="amount" step="0.01" min="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Expense Date *</label>
+                        <input type="date" name="expense_date" value="<?php echo date('Y-m-d'); ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Project (optional)</label>
+                        <select name="project_id">
+                            <option value="">— None —</option>
+                            <?php foreach ($projects as $project): ?>
+                            <option value="<?php echo $project['id']; ?>"><?php echo Security::escapeHTML($project['name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Description *</label>
+                    <textarea name="description" rows="3" placeholder="What was this expense for?" required></textarea>
+                </div>
+                <div style="margin-top:16px;display:flex;gap:10px;">
+                    <button type="submit" name="create_expense" value="1" class="btn">Submit Expense</button>
+                    <button type="button" onclick="closeModal('expenseModal')" class="btn btn-secondary">Cancel</button>
                 </div>
             </form>
         </div>
