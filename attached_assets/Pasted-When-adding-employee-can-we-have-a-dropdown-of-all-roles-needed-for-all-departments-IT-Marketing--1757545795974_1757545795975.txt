@@ -1,0 +1,24 @@
+When adding employee can we have a dropdown of all roles needed for all departments, IT, Marketing, Finance, HR, similar to the project Team Assignments tab, on that tab we can remove the role tab because everyone will have their assigned from HR. The drop down must show the employee role on the dropdown
+
+Clients Department does not have a create new client option.
+
+Dashboard can the Upcoming Events can it read From all departments e.g marketing activities, It project starting or ending and client meeting,
+
+Marketing page can we add blog post as well and add new blogs on the dashboard
+
+Current Employees has warnings.
+Lets make textarea fit the form or column on the entire project. They are currently very small.
+
+HR must not submit Candidate Applications
+External Candidate Application Form lets use the posting job on Job Position dropdown that currently open only based on start and end date of the job post.
+lets have a Job Postings list as well and start and end date. lets separate the Candidate Application Form and Job Position as tabs. Job posting should have edit and delete function (delete function should archive data on all department. Delete must not delete data from db).
+Job Position should have a filter for active and non active posts, we must have stats on the dashboard page also.
+
+Candidate Applications has warning lets fix them
+
+
+Finance page Action option does not have view and edit from Quotation, Invoice, PO and and each view must have preview pdf, Quotation must convert to invoice.
+Can we remove Financial Overview & Cash Flow, Recent Purchase Orders and Expenses section from all tabs. Financial Overview & Cash Flow and Expenses should only appear on money flow tab.
+Purchase Orders tab is not working fully, create new PO is not working, can you fix that. Add item is not working on all modals in the finance department.
+Create Revenue and create money flow is not yet implemented. Can we create edit on all tabs in finance and view actions. Overview tabs does not have useful overview anymore
+Project Revenues does not have a capturing and view and edit.
