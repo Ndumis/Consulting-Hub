@@ -473,7 +473,7 @@ try {
 $quick_actions = [];
 if ($role === 'admin') {
     $quick_actions = [
-        ['href' => 'departments/it.php?action=new_project',     'icon' => '⚙️', 'label' => 'New Project'],
+        ['href' => 'departments/projects.php?view=create',      'icon' => '⚙️', 'label' => 'New Project'],
         ['href' => 'departments/marketing.php?action=new_campaign', 'icon' => '📢', 'label' => 'New Campaign'],
         ['href' => 'departments/bd.php?action=new_lead',        'icon' => '🎯', 'label' => 'New Lead'],
         ['href' => 'departments/finance.php?action=new_invoice','icon' => '💰', 'label' => 'Create Invoice'],
@@ -483,10 +483,10 @@ if ($role === 'admin') {
 } elseif ($role === 'manager') {
     $map = [
         'IT'                   => [
-            ['href' => 'departments/it.php?action=new_project', 'icon' => '⚙️', 'label' => 'New Project'],
-            ['href' => 'departments/it.php',                    'icon' => '📋', 'label' => 'View Projects'],
+            ['href' => 'departments/projects.php?view=create',  'icon' => '⚙️', 'label' => 'New Project'],
+            ['href' => 'departments/projects.php',              'icon' => '📋', 'label' => 'All Projects'],
+            ['href' => 'departments/it.php',                    'icon' => '💻', 'label' => 'IT Assets'],
             ['href' => 'departments/clients.php',               'icon' => '🏢', 'label' => 'Clients'],
-            ['href' => 'departments/insights.php',              'icon' => '📊', 'label' => 'Reports'],
         ],
         'Marketing' => [
             ['href' => 'departments/marketing.php?action=new_campaign', 'icon' => '📢', 'label' => 'New Campaign'],
@@ -523,8 +523,9 @@ if ($role === 'admin') {
 } else { // employee
     $map = [
         'IT'                   => [
-            ['href' => 'departments/it.php',  'icon' => '💻', 'label' => 'My Projects'],
-            ['href' => 'departments/clients.php', 'icon' => '🏢', 'label' => 'Clients'],
+            ['href' => 'departments/projects.php', 'icon' => '📋', 'label' => 'Projects'],
+            ['href' => 'departments/it.php',       'icon' => '💻', 'label' => 'IT Assets'],
+            ['href' => 'departments/clients.php',  'icon' => '🏢', 'label' => 'Clients'],
         ],
         'Marketing' => [
             ['href' => 'departments/marketing.php?view=blog-posts', 'icon' => '✍️', 'label' => 'New Blog Post'],
@@ -845,7 +846,8 @@ if ($role === 'admin') {
         <div class="department-grid">
             <?php
             $dept_cards = [
-                ['href'=>'departments/it.php',        'icon'=>'💻', 'title'=>'IT Department',          'desc'=>'Projects, tasks, blockers and tech management.',         'stat1'=>$stats['in_progress_projects'].' active', 'stat2'=>$stats['completed_projects'].' completed'],
+                ['href'=>'departments/projects.php',  'icon'=>'📋', 'title'=>'Project Management',       'desc'=>'All org-wide projects — track progress, team assignments and blockers.', 'stat1'=>$stats['in_progress_projects'].' active', 'stat2'=>$stats['completed_projects'].' completed'],
+                ['href'=>'departments/it.php',        'icon'=>'💻', 'title'=>'IT Department',            'desc'=>'Asset inventory, software licenses, and IT infrastructure.',             'stat1'=>'Assets & Licenses',                     'stat2'=>'IT team only'],
                 ['href'=>'departments/marketing.php', 'icon'=>'📈', 'title'=>'Marketing',              'desc'=>'Campaigns, blog posts, social media and analytics.',     'stat1'=>$stats['active_campaigns'].' campaigns',  'stat2'=>$stats['total_campaigns'].' total'],
                 ['href'=>'departments/bd.php',        'icon'=>'🎯', 'title'=>'Business Development',   'desc'=>'Leads, pipeline, meetings and growth tracking.',         'stat1'=>$stats['total_leads'].' leads',           'stat2'=>$stats['meetings_booked'].' meetings'],
                 ['href'=>'departments/finance.php',   'icon'=>'💰', 'title'=>'Finance',                'desc'=>'Invoices, quotations, expenses and PDF documents.',      'stat1'=>$stats['total_invoices'].' invoices',     'stat2'=>($stats['total_quotations'] ?? 0).' quotes'],

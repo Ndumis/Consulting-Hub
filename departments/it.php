@@ -8,650 +8,470 @@ if (!isset($_SESSION['user_id'])) {
 require_once '../config/database.php';
 require_once '../config/security.php';
 require_once '../includes/functions.php';
-require_once '../includes/page_tracker.php';
 
-// Check department access
 Security::requireDepartmentAccess('IT');
 
 $database = new Database();
 $db = $database->getConnection();
 
-// Handle new project creation with employee assignments
-if ($_POST && isset($_POST['create_project'])) {
+$role = $_SESSION['role'];
+
+// ── HANDLE POST ACTIONS ──────────────────────────────────────────────────────
+
+// Add asset
+if ($_POST && isset($_POST['add_asset'])) {
     Security::checkCSRFToken();
-    Security::requireWriteAccess('IT');
-    
-    $name = Security::sanitizeInput($_POST['name']);
-    $description = Security::sanitizeInput($_POST['description']);
-    $client_id = (int)$_POST['client_id'];
-    $category = Security::sanitizeInput($_POST['category']);
-    $priority = Security::sanitizeInput($_POST['priority']);
-    $start_date = Security::sanitizeInput($_POST['start_date']);
-    $end_date = Security::sanitizeInput($_POST['end_date']);
-    $assigned_employees = $_POST['assigned_employees'] ?? [];
-    
-    // Insert project
-    $query = "INSERT INTO projects (name, description, client_id, category, priority, start_date, end_date) 
-              VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$name, $description, $client_id, $category, $priority, $start_date, $end_date]);
-    $project_id = $stmt->fetchColumn();
-    
-    // Add project assignments
-    if (!empty($assigned_employees)) {
-        foreach ($assigned_employees as $user_id) {
-            if (!empty($user_id)) {
-                $query = "INSERT INTO project_assignments (project_id, user_id) VALUES (?, ?)";
-                $stmt = $db->prepare($query);
-                $stmt->execute([$project_id, $user_id]);
-            }
-        }
-    }
+    if (!in_array($role, ['admin', 'manager'])) { http_response_code(403); die('Access denied.'); }
+    $s = $db->prepare("INSERT INTO it_assets (asset_name, asset_type, brand, model, serial_number, purchase_date, warranty_expiry, assigned_to, status, location, notes, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)");
+    $s->execute([
+        Security::sanitizeInput($_POST['asset_name']),
+        Security::sanitizeInput($_POST['asset_type']),
+        Security::sanitizeInput($_POST['brand'] ?? ''),
+        Security::sanitizeInput($_POST['model'] ?? ''),
+        Security::sanitizeInput($_POST['serial_number'] ?? ''),
+        $_POST['purchase_date'] ?: null,
+        $_POST['warranty_expiry'] ?: null,
+        !empty($_POST['assigned_to']) ? (int)$_POST['assigned_to'] : null,
+        Security::sanitizeInput($_POST['status']),
+        Security::sanitizeInput($_POST['location'] ?? ''),
+        Security::sanitizeInput($_POST['notes'] ?? ''),
+        $_SESSION['user_id'],
+    ]);
+    header("Location: it.php?view=assets&msg=asset_added"); exit();
 }
 
-// Handle project updates
-if ($_POST && isset($_POST['update_project'])) {
+// Update asset
+if ($_POST && isset($_POST['update_asset'])) {
     Security::checkCSRFToken();
-    Security::requireWriteAccess('IT');
-    
-    $project_id = (int)$_POST['project_id'];
-    $progress = (int)$_POST['progress'];
-    $status = Security::sanitizeInput($_POST['status']);
-    
-    $query = "UPDATE projects SET progress = ?, status = ? WHERE id = ?";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$progress, $status, $project_id]);
+    if (!in_array($role, ['admin', 'manager'])) { http_response_code(403); die('Access denied.'); }
+    $s = $db->prepare("UPDATE it_assets SET asset_name=?, asset_type=?, brand=?, model=?, serial_number=?, purchase_date=?, warranty_expiry=?, assigned_to=?, status=?, location=?, notes=? WHERE id=?");
+    $s->execute([
+        Security::sanitizeInput($_POST['asset_name']),
+        Security::sanitizeInput($_POST['asset_type']),
+        Security::sanitizeInput($_POST['brand'] ?? ''),
+        Security::sanitizeInput($_POST['model'] ?? ''),
+        Security::sanitizeInput($_POST['serial_number'] ?? ''),
+        $_POST['purchase_date'] ?: null,
+        $_POST['warranty_expiry'] ?: null,
+        !empty($_POST['assigned_to']) ? (int)$_POST['assigned_to'] : null,
+        Security::sanitizeInput($_POST['status']),
+        Security::sanitizeInput($_POST['location'] ?? ''),
+        Security::sanitizeInput($_POST['notes'] ?? ''),
+        (int)$_POST['asset_id'],
+    ]);
+    header("Location: it.php?view=assets"); exit();
 }
 
-// Handle adding new comment
-if ($_POST && isset($_POST['add_comment'])) {
+// Add license
+if ($_POST && isset($_POST['add_license'])) {
     Security::checkCSRFToken();
-    
-    $project_id = (int)$_POST['project_id'];
-    $comment = Security::sanitizeInput($_POST['comment']);
-    $is_blocker = isset($_POST['is_blocker']) ? 1 : 0;
-    $parent_comment_id = !empty($_POST['parent_comment_id']) ? (int)$_POST['parent_comment_id'] : null;
-    
-    $query = "INSERT INTO project_comments (project_id, user_id, comment, is_blocker, parent_comment_id) 
-              VALUES (?, ?, ?, ?, ?)";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$project_id, $_SESSION['user_id'], $comment, $is_blocker, $parent_comment_id]);
+    if (!in_array($role, ['admin', 'manager'])) { http_response_code(403); die('Access denied.'); }
+    $s = $db->prepare("INSERT INTO it_licenses (software_name, vendor, license_key, license_type, seats, seats_used, purchase_date, expiry_date, cost, status, notes, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)");
+    $s->execute([
+        Security::sanitizeInput($_POST['software_name']),
+        Security::sanitizeInput($_POST['vendor'] ?? ''),
+        Security::sanitizeInput($_POST['license_key'] ?? ''),
+        Security::sanitizeInput($_POST['license_type']),
+        (int)($_POST['seats'] ?? 1),
+        (int)($_POST['seats_used'] ?? 0),
+        $_POST['purchase_date'] ?: null,
+        $_POST['expiry_date'] ?: null,
+        !empty($_POST['cost']) ? (float)$_POST['cost'] : null,
+        Security::sanitizeInput($_POST['status']),
+        Security::sanitizeInput($_POST['notes'] ?? ''),
+        $_SESSION['user_id'],
+    ]);
+    header("Location: it.php?view=licenses&msg=license_added"); exit();
 }
 
-// Handle employee assignment updates
-if ($_POST && isset($_POST['update_assignments'])) {
-    Security::checkCSRFToken();
-    Security::requireWriteAccess('IT');
-    
-    $project_id = (int)$_POST['project_id'];
-    $assigned_employees = $_POST['assigned_employees'] ?? [];
-    
-    // Remove existing assignments
-    $query = "DELETE FROM project_assignments WHERE project_id = ?";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$project_id]);
-    
-    // Add new assignments (roles now managed by HR department)
-    if (!empty($assigned_employees)) {
-        foreach ($assigned_employees as $user_id) {
-            if (!empty($user_id)) {
-                $query = "INSERT INTO project_assignments (project_id, user_id) VALUES (?, ?)";
-                $stmt = $db->prepare($query);
-                $stmt->execute([$project_id, $user_id]);
-            }
-        }
-    }
-}
+// ── FETCH DATA ───────────────────────────────────────────────────────────────
 
-// Handle filtering
-$filter_status = $_GET['filter_status'] ?? '';
-$filter_priority = $_GET['filter_priority'] ?? '';
-$filter_category = $_GET['filter_category'] ?? '';
-$filter_assigned = $_GET['filter_assigned'] ?? '';
+$assets = $db->query("SELECT a.*, u.username as assigned_username FROM it_assets a LEFT JOIN users u ON a.assigned_to = u.id ORDER BY a.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
 
-// Build filtered query
-$where_conditions = [];
-$params = [];
+$licenses = $db->query("SELECT * FROM it_licenses ORDER BY expiry_date IS NULL, expiry_date ASC")->fetchAll(PDO::FETCH_ASSOC);
 
-if (!empty($filter_status)) {
-    $where_conditions[] = "p.status = ?";
-    $params[] = $filter_status;
-}
-if (!empty($filter_priority)) {
-    $where_conditions[] = "p.priority = ?";
-    $params[] = $filter_priority;
-}
-if (!empty($filter_category)) {
-    $where_conditions[] = "p.category = ?";
-    $params[] = $filter_category;
-}
-if (!empty($filter_assigned)) {
-    $where_conditions[] = "pa.user_id = ?";
-    $params[] = $filter_assigned;
-}
+$all_users = $db->query("SELECT id, username FROM users ORDER BY username")->fetchAll(PDO::FETCH_ASSOC);
 
-$where_clause = !empty($where_conditions) ? "WHERE " . implode(" AND ", $where_conditions) : "";
+// Stats
+$total_assets      = count($assets);
+$assigned_assets   = count(array_filter($assets, fn($a) => $a['status'] === 'assigned'));
+$maintenance       = count(array_filter($assets, fn($a) => $a['status'] === 'maintenance'));
+$total_licenses    = count($licenses);
+$expiring_soon     = count(array_filter($licenses, fn($l) => $l['expiry_date'] && strtotime($l['expiry_date']) <= strtotime('+30 days') && $l['status'] === 'active'));
 
-// Get all projects with assignments and comment counts (with filters)
-$query = "SELECT p.*, c.name as client_name,
-          COUNT(DISTINCT pc.id) as comment_count,
-          COUNT(DISTINCT CASE WHEN pc.is_blocker = true THEN pc.id END) as blocker_count,
-          COUNT(DISTINCT pa.user_id) as team_count
-          FROM projects p 
-          LEFT JOIN clients c ON p.client_id = c.id 
-          LEFT JOIN project_comments pc ON p.id = pc.project_id
-          LEFT JOIN project_assignments pa ON p.id = pa.project_id
-          $where_clause
-          GROUP BY p.id, c.name
-          ORDER BY p.created_at DESC";
-$stmt = $db->prepare($query);
-$stmt->execute($params);
-$projects = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$view = $_GET['view'] ?? 'assets';
+$msg  = $_GET['msg']  ?? '';
 
-// Get project assignments
-$assignments = [];
-if (!empty($projects)) {
-    $project_ids = array_column($projects, 'id');
-    $placeholders = str_repeat('?,', count($project_ids) - 1) . '?';
-    $query = "SELECT pa.*, u.username, u.email 
-              FROM project_assignments pa 
-              JOIN users u ON pa.user_id = u.id 
-              WHERE pa.project_id IN ($placeholders)
-              ORDER BY pa.project_id, u.username";
-    $stmt = $db->prepare($query);
-    $stmt->execute($project_ids);
-    $assignment_results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    foreach ($assignment_results as $assignment) {
-        $assignments[$assignment['project_id']][] = $assignment;
-    }
-}
-
-// Get project comments with user info
-$comments = [];
-if (!empty($projects)) {
-    $project_ids = array_column($projects, 'id');
-    $placeholders = str_repeat('?,', count($project_ids) - 1) . '?';
-    $query = "SELECT pc.*, u.username, u.email 
-              FROM project_comments pc 
-              JOIN users u ON pc.user_id = u.id 
-              WHERE pc.project_id IN ($placeholders)
-              ORDER BY pc.created_at DESC";
-    $stmt = $db->prepare($query);
-    $stmt->execute($project_ids);
-    $comment_results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    foreach ($comment_results as $comment) {
-        $comments[$comment['project_id']][] = $comment;
-    }
-}
-
-// Get clients for dropdown
-$query = "SELECT id, name FROM clients ORDER BY name";
-$stmt = $db->prepare($query);
-$stmt->execute();
-$clients = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-// Get all IT users for assignment and filters
-$query = "SELECT id, username, email FROM users WHERE department = 'IT' OR role = 'admin' ORDER BY username";
-$stmt = $db->prepare($query);
-$stmt->execute();
-$it_users = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-// Get unique categories for filter options
-$query = "SELECT DISTINCT category FROM projects WHERE category IS NOT NULL ORDER BY category";
-$stmt = $db->prepare($query);
-$stmt->execute();
-$categories = $stmt->fetchAll(PDO::FETCH_COLUMN, 0);
-
-$statuses = ['pending', 'in_progress', 'completed', 'on_hold'];
-$priorities = ['low', 'medium', 'high'];
-
-// Get current view parameter
-$view = $_GET['view'] ?? 'projects';
+$asset_types   = ['Computer', 'Laptop', 'Monitor', 'Printer', 'Router', 'Switch', 'Server', 'Phone', 'Tablet', 'Other'];
+$asset_statuses = ['available', 'assigned', 'maintenance', 'retired'];
+$license_types  = ['perpetual', 'subscription', 'trial', 'open_source'];
+$license_statuses = ['active', 'expired', 'cancelled'];
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IT Department - Business Management</title>
+    <title>IT Department - KConsulting Hub</title>
     <link rel="stylesheet" href="../css/main.css">
     <style>
-        /* Tab styles */
-        .nav-tabs {
-            display: flex;
-            background: white;
-            border-radius: 8px;
-            margin-bottom: 2rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        
-        .nav-tab {
-            flex: 1;
-            padding: 1rem 2rem;
-            text-decoration: none;
-            color: #666;
-            background: white;
-            border: none;
-            border-right: 1px solid #eee;
-            text-align: center;
-            font-weight: 500;
-            transition: all 0.3s ease;
-        }
-        
-        .nav-tab:last-child {
-            border-right: none;
-        }
-        
-        .nav-tab.active {
-            background: #007bff;
-            color: white;
-        }
-        
-        .nav-tab:hover:not(.active) {
-            background: #f8f9fa;
-        }
-
-        /* Project Grid Styles */
-        .project-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 1.5rem;
-            margin-top: 1rem;
-        }
-
-        .project-card {
-            border: 1px solid #e0e0e0;
-            border-radius: 12px;
-            padding: 1.5rem;
-            background: white;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            cursor: pointer;
-            height: fit-content;
-        }
-
-        .project-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-            border-color: #007bff;
-        }
-
-        /* Status and Priority Badges */
-        .status-badge, .priority-badge {
-            display: inline-block;
-            padding: 0.35rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .status-pending { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
-        .status-in_progress { background: #cce5ff; color: #004085; border: 1px solid #b3d7ff; }
-        .status-completed { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .status-on_hold { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-
-        .priority-low { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
-        .priority-medium { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
-        .priority-high { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .priority-urgent { background: #dc3545; color: white; border: 1px solid #c82333; }
-
-        /* Progress Bar */
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: #f0f0f0;
-            border-radius: 10px;
-            overflow: hidden;
-            margin: 0.5rem 0;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #4CAF50, #45a049);
-            border-radius: 10px;
-            transition: width 0.5s ease;
-        }
-
-        /* Responsive Design */
-        @media (max-width: 768px) {
-            .project-grid {
-                grid-template-columns: 1fr;
-                gap: 1rem;
-            }
-            
-            .project-card {
-                padding: 1rem;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .project-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .project-card {
-                margin: 0.5rem 0;
-            }
-        }
+        .nav-tabs { display:flex; background:#fff; border-radius:8px; margin-bottom:2rem; box-shadow:0 2px 4px rgba(0,0,0,.1); overflow:hidden; }
+        .nav-tab  { flex:1; padding:1rem 2rem; text-decoration:none; color:#666; background:#fff; border:none; border-right:1px solid #eee; text-align:center; font-weight:500; transition:all .3s; }
+        .nav-tab:last-child { border-right:none; }
+        .nav-tab.active { background:#0ea5e9; color:#fff; }
+        .nav-tab:hover:not(.active) { background:#f8f9fa; }
+        .it-table { width:100%; border-collapse:collapse; }
+        .it-table th { background:#f8f9fa; padding:.75rem 1rem; text-align:left; font-size:.85rem; font-weight:600; color:#374151; border-bottom:2px solid #e5e7eb; }
+        .it-table td { padding:.75rem 1rem; border-bottom:1px solid #f3f4f6; font-size:.875rem; }
+        .it-table tr:hover td { background:#f9fafb; }
+        .badge { display:inline-block; padding:.2rem .6rem; border-radius:20px; font-size:.75rem; font-weight:600; }
+        .badge-available   { background:#d1fae5; color:#065f46; }
+        .badge-assigned    { background:#dbeafe; color:#1e40af; }
+        .badge-maintenance { background:#fef3c7; color:#92400e; }
+        .badge-retired     { background:#f3f4f6; color:#6b7280; }
+        .badge-active      { background:#d1fae5; color:#065f46; }
+        .badge-expired     { background:#fee2e2; color:#991b1b; }
+        .badge-cancelled   { background:#f3f4f6; color:#6b7280; }
+        .badge-expiring    { background:#fef3c7; color:#92400e; }
+        .msg-success { background:#d1fae5; color:#065f46; padding:.75rem 1rem; border-radius:8px; margin-bottom:1rem; }
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; align-items:center; justify-content:center; }
+        .modal-overlay.open { display:flex; }
+        .modal { background:#fff; border-radius:12px; padding:2rem; width:90%; max-width:600px; max-height:90vh; overflow-y:auto; }
+        .modal h3 { margin:0 0 1.5rem; }
     </style>
 </head>
-<body>   
-    <?php include '../includes/header.php'; ?>
-    
-    <?php include '../includes/sidebar.php'; ?>
-    
+<body>
+    <?php
+    $asset_base = '../';
+    $nav_base   = '';
+    include '../includes/header.php';
+    include '../includes/sidebar.php';
+    ?>
+
     <div class="main-content">
-        <?php
-        $total_projects = count($projects);
-        $completed_projects = count(array_filter($projects, function($p) { return $p['status'] == 'completed'; }));
-        $in_progress = count(array_filter($projects, function($p) { return $p['status'] == 'in_progress'; }));
-        $avg_progress = $total_projects > 0 ? array_sum(array_column($projects, 'progress')) / $total_projects : 0;
-        $total_comments = array_sum(array_column($projects, 'comment_count'));
-        $total_blockers = array_sum(array_column($projects, 'blocker_count'));
-        ?>
-        
+
+        <!-- Stats -->
         <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-number"><?php echo $total_projects; ?></div>
-                <div class="stat-label">Total Projects</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number"><?php echo $in_progress; ?></div>
-                <div class="stat-label">In Progress</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number"><?php echo $completed_projects; ?></div>
-                <div class="stat-label">Completed</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number"><?php echo round($avg_progress); ?>%</div>
-                <div class="stat-label">Avg Progress</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number"><?php echo $total_comments; ?></div>
-                <div class="stat-label">Comments</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" style="color: <?php echo $total_blockers > 0 ? '#dc3545' : '#28a745'; ?>"><?php echo $total_blockers; ?></div>
-                <div class="stat-label">Blockers</div>
-            </div>
+            <div class="stat-card"><div class="stat-number"><?= $total_assets ?></div><div class="stat-label">Total Assets</div></div>
+            <div class="stat-card"><div class="stat-number"><?= $assigned_assets ?></div><div class="stat-label">Assigned</div></div>
+            <div class="stat-card"><div class="stat-number" style="color:<?= $maintenance > 0 ? '#f59e0b' : '#22c55e' ?>"><?= $maintenance ?></div><div class="stat-label">In Maintenance</div></div>
+            <div class="stat-card"><div class="stat-number"><?= $total_licenses ?></div><div class="stat-label">Licenses</div></div>
+            <div class="stat-card"><div class="stat-number" style="color:<?= $expiring_soon > 0 ? '#ef4444' : '#22c55e' ?>"><?= $expiring_soon ?></div><div class="stat-label">Expiring (30d)</div></div>
         </div>
-        
-        <!-- Tab Navigation -->
+
+        <?php if ($msg === 'asset_added'): ?>
+        <div class="msg-success">✅ Asset added successfully.</div>
+        <?php elseif ($msg === 'license_added'): ?>
+        <div class="msg-success">✅ License added successfully.</div>
+        <?php endif; ?>
+
+        <!-- Tabs -->
         <div class="nav-tabs">
-            <a href="?view=projects" class="nav-tab <?php echo $view === 'projects' ? 'active' : ''; ?>">📋 View Projects</a>
-            <a href="?view=create" class="nav-tab <?php echo $view === 'create' ? 'active' : ''; ?>">➕ Create New Project</a>
+            <a href="?view=assets"          class="nav-tab <?= $view === 'assets'          ? 'active' : '' ?>">🖥️ Assets</a>
+            <a href="?view=licenses"        class="nav-tab <?= $view === 'licenses'        ? 'active' : '' ?>">🔑 Licenses</a>
+            <?php if (in_array($role, ['admin', 'manager'])): ?>
+            <a href="?view=add_asset"       class="nav-tab <?= $view === 'add_asset'       ? 'active' : '' ?>">➕ Add Asset</a>
+            <a href="?view=add_license"     class="nav-tab <?= $view === 'add_license'     ? 'active' : '' ?>">➕ Add License</a>
+            <?php endif; ?>
         </div>
-        
-        <?php if ($view === 'projects'): ?>
-        <!-- Project Filters -->
+
+        <?php if ($view === 'assets'): ?>
+        <!-- ── ASSETS TABLE ── -->
         <div class="section">
-            <div class="section-header">🔍 Filter Projects</div>
-            <div class="section-content">
-                <form method="GET" class="filter-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
-                    <input type="hidden" name="view" value="projects">
-                    <div class="form-group">
-                        <label>Status:</label>
-                        <select name="filter_status">
-                            <option value="">All Statuses</option>
-                            <?php foreach ($statuses as $status): ?>
-                                <option value="<?php echo $status; ?>" <?php echo $filter_status == $status ? 'selected' : ''; ?>>
-                                    <?php echo ucfirst(str_replace('_', ' ', $status)); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Priority:</label>
-                        <select name="filter_priority">
-                            <option value="">All Priorities</option>
-                            <?php foreach ($priorities as $priority): ?>
-                                <option value="<?php echo $priority; ?>" <?php echo $filter_priority == $priority ? 'selected' : ''; ?>>
-                                    <?php echo ucfirst($priority); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Category:</label>
-                        <select name="filter_category">
-                            <option value="">All Categories</option>
-                            <?php foreach ($categories as $category): ?>
-                                <option value="<?php echo Security::escapeHTML($category); ?>" <?php echo $filter_category == $category ? 'selected' : ''; ?>>
-                                    <?php echo Security::escapeHTML($category); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Assigned To:</label>
-                        <select name="filter_assigned">
-                            <option value="">All Team Members</option>
-                            <?php foreach ($it_users as $user): ?>
-                                <option value="<?php echo $user['id']; ?>" <?php echo $filter_assigned == $user['id'] ? 'selected' : ''; ?>>
-                                    <?php echo Security::escapeHTML($user['username']); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group" style="display: flex; align-items: end; gap: 0.5rem;">
-                        <button type="submit" class="btn">Apply Filters</button>
-                        <a href="it.php" class="btn btn-secondary">Clear</a>
-                    </div>
-                </form>
+            <div class="section-header">🖥️ IT Assets (<?= $total_assets ?>)</div>
+            <div class="section-content" style="overflow-x:auto;">
+                <?php if (empty($assets)): ?>
+                <p style="text-align:center;color:#9ca3af;padding:2rem;">No assets recorded yet. <a href="?view=add_asset">Add your first asset →</a></p>
+                <?php else: ?>
+                <table class="it-table">
+                    <thead>
+                        <tr>
+                            <th>Asset</th><th>Type</th><th>Brand / Model</th><th>Serial No.</th>
+                            <th>Assigned To</th><th>Status</th><th>Warranty</th><th>Location</th>
+                            <?php if (in_array($role, ['admin', 'manager'])): ?><th></th><?php endif; ?>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($assets as $a):
+                        $ws = $a['warranty_expiry'] ? strtotime($a['warranty_expiry']) : null;
+                        $wExpired = $ws && $ws < time();
+                    ?>
+                        <tr>
+                            <td><strong><?= Security::escapeHTML($a['asset_name']) ?></strong></td>
+                            <td><?= Security::escapeHTML($a['asset_type']) ?></td>
+                            <td><?= Security::escapeHTML(trim($a['brand'] . ' ' . $a['model'])) ?></td>
+                            <td style="font-family:monospace;font-size:.8rem;"><?= Security::escapeHTML($a['serial_number'] ?? '—') ?></td>
+                            <td><?= $a['assigned_username'] ? Security::escapeHTML($a['assigned_username']) : '<span style="color:#9ca3af;">Unassigned</span>' ?></td>
+                            <td><span class="badge badge-<?= $a['status'] ?>"><?= ucfirst($a['status']) ?></span></td>
+                            <td>
+                                <?php if ($a['warranty_expiry']): ?>
+                                <span style="color:<?= $wExpired ? '#ef4444' : '#374151' ?>;font-size:.8rem;">
+                                    <?= date('M j, Y', strtotime($a['warranty_expiry'])) ?>
+                                    <?= $wExpired ? ' ⚠' : '' ?>
+                                </span>
+                                <?php else: ?>—<?php endif; ?>
+                            </td>
+                            <td style="font-size:.8rem;"><?= Security::escapeHTML($a['location'] ?? '—') ?></td>
+                            <?php if (in_array($role, ['admin', 'manager'])): ?>
+                            <td>
+                                <button onclick="openEdit(<?= htmlspecialchars(json_encode($a), ENT_QUOTES) ?>)" class="btn btn-small" style="font-size:.75rem;">Edit</button>
+                            </td>
+                            <?php endif; ?>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <?php endif; ?>
             </div>
         </div>
 
-        <!-- Project List -->
+        <?php elseif ($view === 'licenses'): ?>
+        <!-- ── LICENSES TABLE ── -->
         <div class="section">
-            <div class="section-header">
-                📋 Project List 
-                <?php if (!empty($filter_status) || !empty($filter_priority) || !empty($filter_category) || !empty($filter_assigned)): ?>
-                    <span style="font-size: 0.8rem; color: #666;">(Filtered - <?php echo count($projects); ?> projects)</span>
-                <?php endif; ?>
-            </div>
-            <div class="section-content">
-                <?php if (!empty($projects)): ?>
-                    <div class="project-grid">
-                        <?php foreach ($projects as $project): ?>
-                            <div class="project-card" onclick="window.location.href='project_detail.php?id=<?php echo $project['id']; ?>'">
-                                
-                                <!-- Header with Title and Badges -->
-                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
-                                    <h3 style="margin: 0; color: #333; font-size: 1.1rem; line-height: 1.4; flex: 1;">
-                                        <a href="project_detail.php?id=<?php echo $project['id']; ?>" style="text-decoration: none; color: inherit; display: block;">
-                                            <?php echo Security::escapeHTML($project['name']); ?>
-                                        </a>
-                                    </h3>
-                                    <div style="display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end;">
-                                        <span class="status-badge status-<?php echo $project['status']; ?>">
-                                            <?php echo ucfirst(str_replace('_', ' ', $project['status'])); ?>
-                                        </span>
-                                        <span class="priority-badge priority-<?php echo $project['priority']; ?>">
-                                            <?php echo ucfirst($project['priority']); ?>
-                                        </span>
-                                    </div>
-                                </div>
-                                
-                                <!-- Project Meta Information -->
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; font-size: 0.85rem;">
-                                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                                        <div>
-                                            <strong style="color: #666;">Client:</strong><br>
-                                            <span style="color: #333;"><?php echo Security::escapeHTML($project['client_name'] ?? 'No client'); ?></span>
-                                        </div>
-                                        <div>
-                                            <strong style="color: #666;">Category:</strong><br>
-                                            <span style="color: #333;"><?php echo Security::escapeHTML($project['category']); ?></span>
-                                        </div>
-                                    </div>
-                                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                                        <div>
-                                            <strong style="color: #666;">Team Size:</strong><br>
-                                            <span style="color: #333;"><?php echo (int)$project['team_count']; ?> member<?php echo $project['team_count'] != 1 ? 's' : ''; ?></span>
-                                        </div>
-                                        <div>
-                                            <strong style="color: #666;">Created:</strong><br>
-                                            <span style="color: #333;"><?php echo date('M j, Y', strtotime($project['created_at'])); ?></span>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Progress Section -->
-                                <div style="margin-bottom: 1rem;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                        <strong style="color: #333; font-size: 0.9rem;">Progress: <?php echo (int)$project['progress']; ?>%</strong>
-                                        <?php if ($project['end_date']): ?>
-                                            <span style="font-size: 0.75rem; color: #666;">
-                                                Due: <?php echo date('M j, Y', strtotime($project['end_date'])); ?>
-                                            </span>
-                                        <?php endif; ?>
-                                    </div>
-                                    <div class="progress-bar">
-                                        <div class="progress-fill" style="width: <?php echo (int)$project['progress']; ?>%"></div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Activity Indicators -->
-                                <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 0.75rem; border-top: 1px solid #f0f0f0;">
-                                    <div style="display: flex; gap: 1rem; font-size: 0.8rem;">
-                                        <span style="color: #666;">
-                                            <span style="font-weight: 600;">💬</span> <?php echo (int)$project['comment_count']; ?>
-                                        </span>
-                                        <?php if ($project['blocker_count'] > 0): ?>
-                                            <span style="color: #dc3545; font-weight: 600;">
-                                                <span>🚨</span> <?php echo (int)$project['blocker_count']; ?>
-                                            </span>
-                                        <?php endif; ?>
-                                    </div>
-                                    <a href="project_detail.php?id=<?php echo $project['id']; ?>" class="btn btn-small" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;">
-                                        View Details →
-                                    </a>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
+            <div class="section-header">🔑 Software Licenses (<?= $total_licenses ?>)</div>
+            <div class="section-content" style="overflow-x:auto;">
+                <?php if (empty($licenses)): ?>
+                <p style="text-align:center;color:#9ca3af;padding:2rem;">No licenses recorded yet. <a href="?view=add_license">Add your first license →</a></p>
                 <?php else: ?>
-                    <div style="text-align: center; padding: 3rem; color: #666; background: white; border-radius: 8px; border: 2px dashed #ddd;">
-                        <h3 style="margin-bottom: 1rem; color: #999;">📭 No Projects Found</h3>
-                        <p style="margin-bottom: 1.5rem;">
-                            <?php if (!empty($filter_status) || !empty($filter_priority) || !empty($filter_category) || !empty($filter_assigned)): ?>
-                                No projects match your current filters. 
-                            <?php else: ?>
-                                No projects have been created yet.
-                            <?php endif; ?>
-                        </p>
-                        <div style="display: flex; gap: 1rem; justify-content: center;">
-                            <?php if (!empty($filter_status) || !empty($filter_priority) || !empty($filter_category) || !empty($filter_assigned)): ?>
-                                <a href="it.php" class="btn">Clear Filters</a>
-                            <?php endif; ?>
-                            <a href="?view=create" class="btn btn-primary">➕ Create First Project</a>
-                        </div>
-                    </div>
+                <table class="it-table">
+                    <thead>
+                        <tr>
+                            <th>Software</th><th>Vendor</th><th>Type</th>
+                            <th>Seats (Used/Total)</th><th>Expiry</th><th>Cost</th><th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($licenses as $l):
+                        $expiry = $l['expiry_date'] ? strtotime($l['expiry_date']) : null;
+                        $isExpiringSoon = $expiry && $expiry <= strtotime('+30 days') && $l['status'] === 'active';
+                        $badgeClass = $l['status'] === 'active' ? ($isExpiringSoon ? 'badge-expiring' : 'badge-active') : 'badge-'.$l['status'];
+                    ?>
+                        <tr>
+                            <td><strong><?= Security::escapeHTML($l['software_name']) ?></strong></td>
+                            <td><?= Security::escapeHTML($l['vendor'] ?? '—') ?></td>
+                            <td><?= ucfirst(str_replace('_', ' ', $l['license_type'])) ?></td>
+                            <td>
+                                <div style="display:flex;align-items:center;gap:.5rem;">
+                                    <div style="flex:1;background:#f3f4f6;border-radius:10px;height:6px;overflow:hidden;">
+                                        <div style="width:<?= $l['seats'] > 0 ? min(100, round($l['seats_used']/$l['seats']*100)) : 0 ?>%;height:100%;background:#0ea5e9;"></div>
+                                    </div>
+                                    <span style="font-size:.8rem;"><?= $l['seats_used'] ?>/<?= $l['seats'] ?></span>
+                                </div>
+                            </td>
+                            <td>
+                                <?php if ($l['expiry_date']): ?>
+                                <span style="font-size:.8rem;color:<?= $isExpiringSoon ? '#ef4444' : '#374151' ?>;">
+                                    <?= date('M j, Y', strtotime($l['expiry_date'])) ?>
+                                    <?= $isExpiringSoon ? ' ⚠' : '' ?>
+                                </span>
+                                <?php else: ?><span style="color:#9ca3af;font-size:.8rem;">Perpetual</span><?php endif; ?>
+                            </td>
+                            <td><?= $l['cost'] ? 'R '.number_format($l['cost'], 2) : '—' ?></td>
+                            <td><span class="badge <?= $badgeClass ?>"><?= $isExpiringSoon ? 'Expiring Soon' : ucfirst($l['status']) ?></span></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
                 <?php endif; ?>
             </div>
         </div>
-        
-        <?php elseif ($view === 'create'): ?>
+
+        <?php elseif ($view === 'add_asset' && in_array($role, ['admin', 'manager'])): ?>
+        <!-- ── ADD ASSET FORM ── -->
         <div class="section">
-            <div class="section-header">➕ Create New Project</div>
+            <div class="section-header">➕ Add New Asset</div>
             <div class="section-content">
                 <form method="post">
-                    <?php echo Security::getCSRFTokenField(); ?>
+                    <?= Security::getCSRFTokenField() ?>
                     <div class="form-grid">
                         <div class="form-group">
-                            <label for="name">Project Name:</label>
-                            <input type="text" id="name" name="name" required>
+                            <label>Asset Name *</label>
+                            <input type="text" name="asset_name" required placeholder="e.g. Dev Laptop #3">
                         </div>
                         <div class="form-group">
-                            <label for="client_id">Client:</label>
-                            <select id="client_id" name="client_id" required>
-                                <option value="">Select Client</option>
-                                <?php foreach ($clients as $client): ?>
-                                    <option value="<?php echo $client['id']; ?>"><?php echo htmlspecialchars($client['name']); ?></option>
-                                <?php endforeach; ?>
+                            <label>Asset Type *</label>
+                            <select name="asset_type" required>
+                                <?php foreach ($asset_types as $t): ?><option value="<?= $t ?>"><?= $t ?></option><?php endforeach; ?>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="category">Category:</label>
-                            <select id="category" name="category" required>
-                                <option value="Web Dev">Web Development</option>
-                                <option value="Network Setup">Network Setup</option>
-                                <option value="Software Dev">Software Development</option>
-                                <option value="Mobile App">Mobile App</option>
-                                <option value="Database">Database</option>
-                                <option value="Security">Security</option>
+                            <label>Brand</label>
+                            <input type="text" name="brand" placeholder="e.g. Dell, HP, Lenovo">
+                        </div>
+                        <div class="form-group">
+                            <label>Model</label>
+                            <input type="text" name="model" placeholder="e.g. XPS 15 9500">
+                        </div>
+                        <div class="form-group">
+                            <label>Serial Number</label>
+                            <input type="text" name="serial_number">
+                        </div>
+                        <div class="form-group">
+                            <label>Status *</label>
+                            <select name="status" required>
+                                <?php foreach ($asset_statuses as $s): ?><option value="<?= $s ?>"><?= ucfirst($s) ?></option><?php endforeach; ?>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="priority">Priority:</label>
-                            <select id="priority" name="priority" required>
-                                <option value="low">Low</option>
-                                <option value="medium">Medium</option>
-                                <option value="high">High</option>
-                                <option value="urgent">Urgent</option>
+                            <label>Assigned To</label>
+                            <select name="assigned_to">
+                                <option value="">Unassigned</option>
+                                <?php foreach ($all_users as $u): ?><option value="<?= $u['id'] ?>"><?= Security::escapeHTML($u['username']) ?></option><?php endforeach; ?>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="start_date">Start Date:</label>
-                            <input type="date" id="start_date" name="start_date" required>
+                            <label>Location</label>
+                            <input type="text" name="location" placeholder="e.g. Office Floor 2, Desk 14">
                         </div>
                         <div class="form-group">
-                            <label for="end_date">End Date:</label>
-                            <input type="date" id="end_date" name="end_date" required>
+                            <label>Purchase Date</label>
+                            <input type="date" name="purchase_date">
+                        </div>
+                        <div class="form-group">
+                            <label>Warranty Expiry</label>
+                            <input type="date" name="warranty_expiry">
                         </div>
                     </div>
-                    
                     <div class="form-group">
-                        <label for="description">Description:</label>
-                        <textarea id="description" name="description" required></textarea>
+                        <label>Notes</label>
+                        <textarea name="notes" rows="3"></textarea>
                     </div>
-                    
-                    <div class="form-group">
-                        <label>Assign Team Members:</label>
-                        <div id="employee-assignments">
-                            <div class="assignment-row" style="display: flex; gap: 1rem; margin-bottom: 1rem; align-items: center;">
-                                <select name="assigned_employees[]" style="flex: 1;">
-                                    <option value="">Select Team Member</option>
-                                    <?php foreach ($it_users as $user): ?>
-                                        <option value="<?php echo $user['id']; ?>"><?php echo htmlspecialchars($user['username']); ?> (<?php echo htmlspecialchars($user['email']); ?>)</option>
-                                    <?php endforeach; ?>
-                                </select>
-                                <span style="font-size: 0.9em; color: #666; flex: 1;">Role assigned by HR department</span>
-                                <button type="button" onclick="addAssignmentRow()" class="btn btn-small">+ Add Member</button>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <button type="submit" name="create_project" class="btn">Create Project</button>
+                    <button type="submit" name="add_asset" class="btn">Save Asset</button>
+                    <a href="?view=assets" class="btn btn-secondary" style="margin-left:.5rem;">Cancel</a>
                 </form>
             </div>
         </div>
-        
-        <?php endif; ?>
-    </div>
 
-    <script src="../js/notification.js"></script>  
+        <?php elseif ($view === 'add_license' && in_array($role, ['admin', 'manager'])): ?>
+        <!-- ── ADD LICENSE FORM ── -->
+        <div class="section">
+            <div class="section-header">➕ Add Software License</div>
+            <div class="section-content">
+                <form method="post">
+                    <?= Security::getCSRFTokenField() ?>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Software Name *</label>
+                            <input type="text" name="software_name" required placeholder="e.g. Microsoft 365">
+                        </div>
+                        <div class="form-group">
+                            <label>Vendor</label>
+                            <input type="text" name="vendor" placeholder="e.g. Microsoft">
+                        </div>
+                        <div class="form-group">
+                            <label>License Key</label>
+                            <input type="text" name="license_key" placeholder="XXXXX-XXXXX-XXXXX-XXXXX">
+                        </div>
+                        <div class="form-group">
+                            <label>License Type *</label>
+                            <select name="license_type" required>
+                                <?php foreach ($license_types as $t): ?><option value="<?= $t ?>"><?= ucfirst(str_replace('_', ' ', $t)) ?></option><?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Total Seats</label>
+                            <input type="number" name="seats" value="1" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label>Seats Used</label>
+                            <input type="number" name="seats_used" value="0" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Purchase Date</label>
+                            <input type="date" name="purchase_date">
+                        </div>
+                        <div class="form-group">
+                            <label>Expiry Date</label>
+                            <input type="date" name="expiry_date">
+                        </div>
+                        <div class="form-group">
+                            <label>Cost (R)</label>
+                            <input type="number" name="cost" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label>Status *</label>
+                            <select name="status" required>
+                                <?php foreach ($license_statuses as $s): ?><option value="<?= $s ?>"><?= ucfirst($s) ?></option><?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Notes</label>
+                        <textarea name="notes" rows="3"></textarea>
+                    </div>
+                    <button type="submit" name="add_license" class="btn">Save License</button>
+                    <a href="?view=licenses" class="btn btn-secondary" style="margin-left:.5rem;">Cancel</a>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
+
+    </div><!-- /.main-content -->
+
+    <!-- Edit Asset Modal -->
+    <?php if (in_array($role, ['admin', 'manager'])): ?>
+    <div id="editModal" class="modal-overlay">
+        <div class="modal">
+            <h3>✏️ Edit Asset</h3>
+            <form method="post" id="editForm">
+                <?= Security::getCSRFTokenField() ?>
+                <input type="hidden" name="asset_id" id="edit_asset_id">
+                <div class="form-grid">
+                    <div class="form-group"><label>Asset Name *</label><input type="text" name="asset_name" id="edit_asset_name" required></div>
+                    <div class="form-group"><label>Type *</label>
+                        <select name="asset_type" id="edit_asset_type">
+                            <?php foreach ($asset_types as $t): ?><option value="<?= $t ?>"><?= $t ?></option><?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Brand</label><input type="text" name="brand" id="edit_brand"></div>
+                    <div class="form-group"><label>Model</label><input type="text" name="model" id="edit_model"></div>
+                    <div class="form-group"><label>Serial No.</label><input type="text" name="serial_number" id="edit_serial"></div>
+                    <div class="form-group"><label>Status</label>
+                        <select name="status" id="edit_status">
+                            <?php foreach ($asset_statuses as $s): ?><option value="<?= $s ?>"><?= ucfirst($s) ?></option><?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Assigned To</label>
+                        <select name="assigned_to" id="edit_assigned_to">
+                            <option value="">Unassigned</option>
+                            <?php foreach ($all_users as $u): ?><option value="<?= $u['id'] ?>"><?= Security::escapeHTML($u['username']) ?></option><?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Location</label><input type="text" name="location" id="edit_location"></div>
+                    <div class="form-group"><label>Purchase Date</label><input type="date" name="purchase_date" id="edit_purchase_date"></div>
+                    <div class="form-group"><label>Warranty Expiry</label><input type="date" name="warranty_expiry" id="edit_warranty"></div>
+                </div>
+                <div class="form-group"><label>Notes</label><textarea name="notes" id="edit_notes" rows="3"></textarea></div>
+                <button type="submit" name="update_asset" class="btn">Save Changes</button>
+                <button type="button" onclick="closeEdit()" class="btn btn-secondary" style="margin-left:.5rem;">Cancel</button>
+            </form>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <script src="../js/notification.js"></script>
     <script>
-        function addAssignmentRow() {
-            const container = document.getElementById('employee-assignments');
-            const newRow = container.firstElementChild.cloneNode(true);
-            
-            // Clear employee selection
-            const select = newRow.querySelector('select');
-            select.selectedIndex = 0;
-            
-            container.appendChild(newRow);
-        }
+    function openEdit(asset) {
+        document.getElementById('edit_asset_id').value    = asset.id;
+        document.getElementById('edit_asset_name').value  = asset.asset_name;
+        document.getElementById('edit_asset_type').value  = asset.asset_type;
+        document.getElementById('edit_brand').value       = asset.brand || '';
+        document.getElementById('edit_model').value       = asset.model || '';
+        document.getElementById('edit_serial').value      = asset.serial_number || '';
+        document.getElementById('edit_status').value      = asset.status;
+        document.getElementById('edit_assigned_to').value = asset.assigned_to || '';
+        document.getElementById('edit_location').value   = asset.location || '';
+        document.getElementById('edit_purchase_date').value = asset.purchase_date || '';
+        document.getElementById('edit_warranty').value   = asset.warranty_expiry || '';
+        document.getElementById('edit_notes').value      = asset.notes || '';
+        document.getElementById('editModal').classList.add('open');
+    }
+    function closeEdit() {
+        document.getElementById('editModal').classList.remove('open');
+    }
+    document.getElementById('editModal')?.addEventListener('click', function(e) {
+        if (e.target === this) closeEdit();
+    });
     </script>
 </body>
 </html>

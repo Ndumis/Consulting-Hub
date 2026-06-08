@@ -7,6 +7,7 @@ $_nb  = $nav_base   ?? '';       // dept link prefix: '' inside departments/, 'd
 $_cur = basename($_SERVER['PHP_SELF']);
 $_tab = match($_cur) {
     'it.php'        => 'it',
+    'projects.php'  => 'projects',
     'marketing.php', 'marketing_detail.php' => 'marketing',
     'bd.php'        => 'bd',
     'finance.php'   => 'finance',
@@ -33,7 +34,8 @@ function _nav($href, $icon, $label, $active) {
         <?= _nav($_ab . 'dashboard.php', '📊', 'Dashboard', $_tab === 'dashboard') ?>
 
         <div class="nav-section-label">Departments</div>
-        <?= _nav($_nb . 'it.php',        '💻', 'IT',                   $_tab === 'it')       ?>
+        <?= _nav($_nb . 'projects.php',  '📋', 'Projects',              $_tab === 'projects')  ?>
+        <?= _nav($_nb . 'it.php',        '💻', 'IT Dept',               $_tab === 'it')        ?>
         <?= _nav($_nb . 'marketing.php', '📈', 'Marketing',            $_tab === 'marketing') ?>
         <?= _nav($_nb . 'bd.php',        '🎯', 'Business Development', $_tab === 'bd')        ?>
         <?= _nav($_nb . 'finance.php',   '💰', 'Finance',              $_tab === 'finance')   ?>
