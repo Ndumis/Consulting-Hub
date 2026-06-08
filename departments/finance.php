@@ -1050,748 +1050,644 @@ if (!isset($expenses)) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enhanced Finance Department - Business Management</title>
+    <title>Finance Department - KConsulting Hub</title>
     <link rel="stylesheet" href="../css/main.css">
     <style>
-       
+        /* ── Finance Design System (Teal / Amber) ── */
+        :root {
+            --fin: #0d9488;
+            --fin-dk: #0f766e;
+            --fin-amber: #d97706;
+            --fin-amber-dk: #b45309;
+            --fin-grad: linear-gradient(135deg,#134e4a 0%,#0d9488 100%);
+        }
 
-        /* Tab content styling */
-        .tab-content {
-            display: none;
-            padding: 1.5rem;
-            background: white;
-        }
-        
-        .tab-content.active {
-            display: block;
-        }
-        
-        .section {
-            background: white;
-            margin-bottom: 2rem;
-            border-radius: 0 0 8px 8px;
-            overflow: hidden;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .section.no-nav {
-            border-radius: 8px;
-        }
-        
-        .section-header {
-            background: #333;
-            color: white;
-            padding: 1rem 1.5rem;
-            font-size: 1.2rem;
-            font-weight: bold;
+        /* ── Hero ── */
+        .fin-hero {
+            background: var(--fin-grad);
+            border-radius: 14px;
+            padding: 28px 32px;
             display: flex;
-            justify-content: space-between;
             align-items: center;
-        }
-        
-        .section-content {
-            padding: 1.5rem;
-        }
-        
-        .stats-overview {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-        
-        .stat-card {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 8px;
-            text-align: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            border-left: 4px solid #333;
-        }
-        
-        .stat-card.income {
-            border-left-color: #28a745;
-        }
-        
-        .stat-card.expense {
-            border-left-color: #dc3545;
-        }
-        
-        .stat-card.neutral {
-            border-left-color: #17a2b8;
-        }
-        
-        .stat-number {
-            font-size: 1.8rem;
-            font-weight: bold;
-            color: #333;
-        }
-        
-        .stat-number.positive {
-            color: #28a745;
-        }
-        
-        .stat-number.negative {
-            color: #dc3545;
-        }
-        
-        .stat-label {
-            color: #666;
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            margin-top: 0.5rem;
-        }
-        
-        .form-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1rem;
-        }
-        
-        .form-group {
-            margin-bottom: 1rem;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: 500;
-            color: #333;
-        }
-        
-        input, select, textarea {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 1rem;
-            transition: border-color 0.3s ease;
-        }
-        
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: #333;
-            box-shadow: 0 0 0 2px rgba(51, 51, 51, 0.1);
-        }
-        
-        textarea {
-            height: 80px;
-            resize: vertical;
-        }
-        
-        .btn {
-            background: #333;
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 1rem;
-            transition: background 0.3s ease;
-            text-decoration: none;
-            display: inline-block;
-        }
-        
-        .btn:hover {
-            background: #555;
-        }
-        
-        .btn-small {
-            padding: 0.5rem 1rem;
-            font-size: 0.9rem;
-        }
-        
-        .btn-success {
-            background: #28a745;
-        }
-        
-        .btn-success:hover {
-            background: #218838;
-        }
-        
-        .btn-danger {
-            background: #dc3545;
-        }
-        
-        .btn-danger:hover {
-            background: #c82333;
-        }
-        
-        .btn-info {
-            background: #17a2b8;
-        }
-        
-        .btn-info:hover {
-            background: #138496;
-        }
-        
-        .table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 1rem;
-        }
-        
-        .table th, .table td {
-            border: 1px solid #ddd;
-            padding: 0.75rem;
-            text-align: left;
-        }
-        
-        .table th {
-            background: #f8f9fa;
-            font-weight: bold;
-            color: #333;
-        }
-        
-        .table tr:nth-child(even) {
-            background: #f9f9f9;
-        }
-        
-        .table tr:hover {
-            background: #f0f0f0;
-        }
-        
-        .status-badge {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 15px;
-            font-size: 0.8rem;
-            font-weight: 500;
-            text-transform: uppercase;
-        }
-        
-        .status-draft { background: #fff3cd; color: #856404; }
-        .status-sent { background: #cce5ff; color: #004085; }
-        .status-pending { background: #fff3cd; color: #856404; }
-        .status-accepted { background: #d4edda; color: #155724; }
-        .status-approved { background: #d4edda; color: #155724; }
-        .status-converted { background: #e2e3e5; color: #6c757d; }
-        .status-paid { background: #d4edda; color: #155724; }
-        .status-received { background: #d4edda; color: #155724; }
-        .status-partially_paid { background: #fff3cd; color: #856404; }
-        .status-cancelled { background: #f8d7da; color: #721c24; }
-        
-        .document-card {
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 1.5rem;
-            background: #fafafa;
-            margin-bottom: 1rem;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        
-        .document-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-        }
-        
-        .document-title {
-            font-size: 1.2rem;
-            font-weight: bold;
-            margin-bottom: 0.5rem;
-            color: #333;
-        }
-        
-        .document-meta {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin: 1rem 0;
-            font-size: 0.9rem;
-        }
-        
-        .items-section {
-            background: #f8f9fa;
-            padding: 1rem;
-            border-radius: 4px;
-            margin: 1rem 0;
-        }
-        
-        .item-row {
-            display: grid;
-            grid-template-columns: 2fr 1fr 1fr 1fr auto;
-            gap: 1rem;
-            align-items: center;
-            margin-bottom: 0.5rem;
-            padding: 0.5rem;
-            background: white;
-            border-radius: 4px;
-        }
-        
-        .item-row:last-child {
-            margin-bottom: 0;
-        }
-        
-        .remove-item {
-            background: #dc3545;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            padding: 0.25rem 0.5rem;
-            cursor: pointer;
-            font-size: 0.8rem;
-        }
-        
-        .totals-section {
-            background: #f8f9fa;
-            padding: 1rem;
-            border-radius: 4px;
-            margin: 1rem 0;
-        }
-        
-        .totals-row {
-            display: flex;
             justify-content: space-between;
-            padding: 0.25rem 0;
+            gap: 16px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
         }
-        
-        .totals-row.total {
-            font-weight: bold;
-            border-top: 1px solid #ddd;
-            padding-top: 0.5rem;
-            margin-top: 0.5rem;
+        .fin-hero-left { display: flex; align-items: center; gap: 18px; }
+        .fin-hero-icon {
+            width: 58px; height: 58px; background: rgba(255,255,255,.15);
+            border-radius: 14px; display: flex; align-items: center;
+            justify-content: center; font-size: 26px; flex-shrink: 0;
         }
-        
+        .fin-hero h1 { color: #fff; font-size: 1.55rem; font-weight: 700; margin: 0 0 4px; }
+        .fin-hero p  { color: rgba(255,255,255,.75); font-size: 0.88rem; margin: 0; }
+        .fin-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .fin-hero-actions .btn-hero {
+            background: rgba(255,255,255,.18); color: #fff;
+            border: 1.5px solid rgba(255,255,255,.35);
+            padding: 8px 16px; border-radius: 8px; font-size: 0.82rem;
+            font-weight: 600; cursor: pointer; transition: background .2s;
+            white-space: nowrap;
+        }
+        .fin-hero-actions .btn-hero:hover { background: rgba(255,255,255,.3); }
+        .fin-hero-actions .btn-hero.amber {
+            background: var(--fin-amber); border-color: var(--fin-amber);
+        }
+        .fin-hero-actions .btn-hero.amber:hover { background: var(--fin-amber-dk); }
+
+        /* ── Flash messages ── */
+        .fin-flash {
+            padding: 12px 18px; border-radius: 8px; margin-bottom: 16px;
+            font-size: 0.9rem; font-weight: 500;
+        }
+        .fin-flash.success { background: #d1fae5; color: #065f46; border-left: 4px solid #059669; }
+        .fin-flash.error   { background: #fee2e2; color: #991b1b; border-left: 4px solid #dc2626; }
+
+        /* ── Stats bar ── */
+        .fin-stats {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .fin-stat {
+            background: #fff; border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            padding: 16px 18px;
+            box-shadow: 0 1px 4px rgba(0,0,0,.06);
+        }
+        .fin-stat-lbl { font-size: 0.72rem; color: #6b7280; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px; }
+        .fin-stat-val { font-size: 1.2rem; font-weight: 700; color: #111827; }
+        .fin-stat-val.green  { color: #059669; }
+        .fin-stat-val.amber  { color: #d97706; }
+        .fin-stat-val.red    { color: #dc2626; }
+        .fin-stat-val.teal   { color: var(--fin); }
+
+        /* ── Tab nav ── */
+        .fin-tabs {
+            display: flex; gap: 0; background: #fff;
+            border: 1px solid #e5e7eb; border-radius: 10px;
+            padding: 4px; margin-bottom: 20px;
+            overflow-x: auto;
+        }
+        .fin-tab-btn {
+            flex: none; padding: 9px 18px; border: none; background: transparent;
+            border-radius: 7px; cursor: pointer; font-size: 0.85rem; font-weight: 600;
+            color: #6b7280; transition: all .2s; white-space: nowrap;
+        }
+        .fin-tab-btn:hover { background: #f3f4f6; color: #111827; }
+        .fin-tab-btn.active { background: var(--fin); color: #fff; }
+
+        /* ── Tab panels ── */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* ── Controls row ── */
+        .fin-controls {
+            display: flex; gap: 10px; align-items: center;
+            flex-wrap: wrap; margin-bottom: 16px;
+        }
+        .fin-controls input[type="text"], .fin-controls select {
+            padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px;
+            font-size: 0.85rem; color: #374151; background: #fff; outline: none;
+            transition: border .2s;
+        }
+        .fin-controls input[type="text"] { min-width: 200px; flex: 1; max-width: 300px; }
+        .fin-controls input:focus, .fin-controls select:focus { border-color: var(--fin); }
+        .fin-controls-count { font-size: 0.8rem; color: #6b7280; margin-left: auto; white-space: nowrap; }
+
+        /* ── Data tables ── */
+        .fin-table-wrap {
+            background: #fff; border-radius: 12px;
+            border: 1px solid #e5e7eb; overflow: hidden;
+            box-shadow: 0 1px 4px rgba(0,0,0,.06);
+        }
+        .fin-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        .fin-table thead tr { background: var(--fin); }
+        .fin-table thead th {
+            color: #fff; font-weight: 600; font-size: 0.77rem;
+            letter-spacing: .4px; padding: 11px 14px; text-align: left;
+        }
+        .fin-table tbody tr { border-bottom: 1px solid #f3f4f6; transition: background .15s; }
+        .fin-table tbody tr:last-child { border-bottom: none; }
+        .fin-table tbody tr:hover { background: #f0fdfa; }
+        .fin-table tbody td { padding: 12px 14px; vertical-align: middle; color: #374151; }
+        .fin-table tbody td.mono { font-family: monospace; font-weight: 600; color: #111827; }
+        .fin-table tbody td.amt { font-weight: 700; color: #059669; }
+        .fin-table tbody td.amt-red { font-weight: 700; color: #dc2626; }
+
+        .fin-no-results {
+            display: none; text-align: center; padding: 40px 20px;
+            color: #6b7280; font-size: 0.9rem;
+        }
+
+        /* ── Status badges ── */
+        .fbadge {
+            display: inline-block; padding: 2px 10px; border-radius: 20px;
+            font-size: 0.73rem; font-weight: 600; text-transform: capitalize;
+        }
+        .fbadge-draft    { background: #f3f4f6; color: #374151; }
+        .fbadge-sent     { background: #eff6ff; color: #1d4ed8; }
+        .fbadge-accepted { background: #d1fae5; color: #065f46; }
+        .fbadge-rejected { background: #fee2e2; color: #991b1b; }
+        .fbadge-completed{ background: #e0e7ff; color: #3730a3; }
+        .fbadge-pending  { background: #fef3c7; color: #92400e; }
+        .fbadge-overdue  { background: #fee2e2; color: #991b1b; }
+        .fbadge-paid     { background: #d1fae5; color: #065f46; }
+        .fbadge-partially_paid { background: #fef3c7; color: #92400e; }
+        .fbadge-approved { background: #d1fae5; color: #065f46; }
+        .fbadge-received { background: #e0e7ff; color: #3730a3; }
+        .fbadge-cancelled{ background: #f3f4f6; color: #6b7280; }
+
+        /* ── Action buttons in table ── */
+        .fin-btn {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 4px 10px; border-radius: 6px; border: none; cursor: pointer;
+            font-size: 0.78rem; font-weight: 600; transition: all .15s;
+        }
+        .fin-btn-teal   { background: #ccfbf1; color: #0f766e; }
+        .fin-btn-teal:hover   { background: #0d9488; color: #fff; }
+        .fin-btn-blue   { background: #dbeafe; color: #1e40af; }
+        .fin-btn-blue:hover   { background: #2563eb; color: #fff; }
+        .fin-btn-amber  { background: #fef3c7; color: #92400e; }
+        .fin-btn-amber:hover  { background: #d97706; color: #fff; }
+        .fin-btn-green  { background: #d1fae5; color: #065f46; }
+        .fin-btn-green:hover  { background: #059669; color: #fff; }
+        .fin-btn-red    { background: #fee2e2; color: #991b1b; }
+        .fin-btn-red:hover    { background: #dc2626; color: #fff; }
+        .fin-btn-gray   { background: #f3f4f6; color: #374151; }
+        .fin-btn-gray:hover   { background: #6b7280; color: #fff; }
+        .fin-btn select { background: transparent; border: none; color: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
+
+        /* ── Overview tab ── */
+        .fin-overview-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+            margin-bottom: 24px;
+        }
+        .fin-cat-card {
+            background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+            padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.06);
+        }
+        .fin-cat-title {
+            font-size: 0.9rem; font-weight: 700; color: #111827;
+            border-bottom: 2px solid #f3f4f6; padding-bottom: 10px; margin-bottom: 12px;
+        }
+        .fin-cat-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 6px 0; border-bottom: 1px solid #f9fafb; font-size: 0.85rem;
+        }
+        .fin-cat-row:last-child { border-bottom: none; }
+        .fin-cat-row .income-val { color: #059669; font-weight: 600; }
+        .fin-cat-row .expense-val { color: #dc2626; font-weight: 600; }
+        .fin-cat-total {
+            margin-top: 10px; padding-top: 10px; border-top: 2px solid #e5e7eb;
+            display: flex; justify-content: space-between;
+            font-size: 0.85rem; font-weight: 700;
+        }
+        .fin-chart-card {
+            background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+            padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.06);
+            grid-column: 1 / -1;
+        }
+        .fin-chart-card h3 { font-size: 0.95rem; font-weight: 700; color: #111827; margin-bottom: 14px; }
+        .fin-chart-card canvas { max-height: 280px; }
+
+        /* ── Modal inner styles (keep working) ── */
         .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
+            display: none; position: fixed; z-index: 1000;
+            left: 0; top: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.45);
         }
-        
         .modal-content {
-            background-color: #fefefe;
-            margin: 2% auto;
-            padding: 2rem;
-            border-radius: 8px;
-            width: 90%;
-            max-width: 900px;
-            max-height: 90vh;
-            overflow-y: auto;
+            background: #fff; margin: 3% auto; padding: 2rem;
+            border-radius: 12px; width: 90%; max-width: 900px;
+            max-height: 90vh; overflow-y: auto;
         }
-        
-        .close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
+        .close { color: #aaa; float: right; font-size: 26px; font-weight: bold; cursor: pointer; }
+        .close:hover { color: #000; }
+        .form-grid {
+            display: grid; grid-template-columns: repeat(auto-fit,minmax(230px,1fr));
+            gap: 14px; margin-bottom: 14px;
         }
-        
-        .close:hover {
-            color: black;
+        .form-group { margin-bottom: 14px; }
+        label { display: block; margin-bottom: 5px; font-weight: 500; font-size: 0.87rem; color: #374151; }
+        input, select, textarea {
+            width: 100%; padding: 8px 11px; border: 1px solid #d1d5db;
+            border-radius: 7px; font-size: 0.9rem; transition: border .2s;
         }
-        
-        .hidden {
-            display: none;
+        input:focus, select:focus, textarea:focus {
+            outline: none; border-color: var(--fin);
+            box-shadow: 0 0 0 3px rgba(13,148,136,.1);
         }
-        
-        .category-breakdown {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
-            margin-top: 2rem;
+        textarea { height: 72px; resize: vertical; }
+        .btn {
+            background: var(--fin); color: white; padding: 8px 16px;
+            border: none; border-radius: 7px; cursor: pointer;
+            font-size: 0.88rem; font-weight: 600; transition: background .2s;
+            text-decoration: none; display: inline-block;
         }
-        
-        .category-section {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        .btn:hover { background: var(--fin-dk); }
+        .btn-small { padding: 5px 11px; font-size: 0.82rem; }
+        .btn-secondary { background: #6b7280; }
+        .btn-secondary:hover { background: #374151; }
+        .btn-success { background: #059669; }
+        .btn-success:hover { background: #047857; }
+        .btn-danger { background: #dc2626; }
+        .btn-danger:hover { background: #b91c1c; }
+        .btn-info { background: #0ea5e9; }
+        .btn-info:hover { background: #0284c7; }
+        .btn-primary { background: var(--fin); }
+        .btn-primary:hover { background: var(--fin-dk); }
+        .btn-warning { background: var(--fin-amber); color: #fff; }
+        .btn-warning:hover { background: var(--fin-amber-dk); }
+        .item-row {
+            display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto;
+            gap: 10px; align-items: center; margin-bottom: 8px;
+            padding: 8px; background: #f9fafb; border-radius: 7px;
         }
-        
-        .category-title {
-            font-size: 1.1rem;
-            font-weight: bold;
-            margin-bottom: 1rem;
-            color: #333;
-            border-bottom: 2px solid #eee;
-            padding-bottom: 0.5rem;
+        .remove-item-btn {
+            background: #fee2e2; color: #991b1b; border: none;
+            border-radius: 6px; padding: 5px 9px; cursor: pointer; font-size: 0.78rem; font-weight: 600;
         }
-        
-        .category-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 0.5rem 0;
-            border-bottom: 1px solid #f0f0f0;
+        .remove-item-btn:hover { background: #dc2626; color: #fff; }
+        .total-display { font-weight: 700; color: var(--fin); text-align: right; }
+        /* Keep existing status-badge class working for JS-built view modals */
+        .status-badge {
+            display: inline-block; padding: 2px 10px; border-radius: 12px;
+            font-size: 0.78rem; font-weight: 600; text-transform: capitalize;
         }
-        
-        .category-item:last-child {
-            border-bottom: none;
+        .status-draft { background: #f3f4f6; color: #374151; }
+        .status-sent { background: #eff6ff; color: #1d4ed8; }
+        .status-pending { background: #fef3c7; color: #92400e; }
+        .status-accepted { background: #d1fae5; color: #065f46; }
+        .status-approved { background: #d1fae5; color: #065f46; }
+        .status-converted { background: #e0e7ff; color: #3730a3; }
+        .status-paid { background: #d1fae5; color: #065f46; }
+        .status-received { background: #e0e7ff; color: #3730a3; }
+        .status-partially_paid { background: #fef3c7; color: #92400e; }
+        .status-cancelled { background: #f3f4f6; color: #6b7280; }
+        .amount.income { color: #059669; font-weight: 700; }
+        .amount.expense { color: #dc2626; font-weight: 700; }
+        .action-buttons { display: flex; flex-wrap: wrap; gap: 4px; }
+
+        @media (max-width: 900px) {
+            .fin-stats { grid-template-columns: repeat(3,1fr); }
+            .fin-overview-grid { grid-template-columns: 1fr; }
         }
-        
-        .amount {
-            font-weight: bold;
-        }
-        
-        .amount.income {
-            color: #28a745;
-        }
-        
-        .amount.expense {
-            color: #dc3545;
-        }
-        
-        @media (max-width: 768px) {
-            .nav-tabs {
-                flex-direction: column;
-            }
-            
-            .nav-tab {
-                border-right: none;
-                border-bottom: 1px solid #e0e0e0;
-            }
-            
-            .stats-overview {
-                grid-template-columns: 1fr;
-            }
-            
-            .form-grid {
-                grid-template-columns: 1fr;
-            }
+        @media (max-width: 600px) {
+            .fin-stats { grid-template-columns: repeat(2,1fr); }
+            .fin-hero { flex-direction: column; align-items: flex-start; }
+            .fin-table { font-size: 0.8rem; }
         }
     </style>
 </head>
 <body>
-    
+<?php $can_write = in_array($_SESSION['role'] ?? '', ['admin', 'manager']); ?>
+
     <?php include '../includes/header.php'; ?>
-    
     <?php include '../includes/sidebar.php'; ?>
-    
+
     <div class="main-content">
-        <div class="nav-tabs">
-            <button onclick="showTab('money_flow')" class="tab-btn <?php echo $view === 'money_flow' ? 'active' : ''; ?>">💸 Money Flow</button>
-            <button onclick="showTab('quotations')" class="tab-btn <?php echo $view === 'quotations' ? 'active' : ''; ?>">📋 Quotations</button>
-            <button onclick="showTab('invoices')" class="tab-btn <?php echo $view === 'invoices' ? 'active' : ''; ?>">🧾 Invoices</button>
-            <button onclick="showTab('purchase_orders')" class="tab-btn <?php echo $view === 'purchase_orders' ? 'active' : ''; ?>">🛒 Purchase Orders</button>
-            <button onclick="showTab('project_revenues')" class="tab-btn <?php echo $view === 'project_revenues' ? 'active' : ''; ?>">💵 Project Revenues</button>
-        </div>
-        
-        <!-- Tab Contents -->
-        <div id="overview" class="tab-content <?php echo $view === 'overview' ? 'active' : ''; ?>">
-            <h3>Department Overview</h3>
-            <p>Select a specific section from the navigation above to view detailed financial information.</p>
-        </div>
 
-        <div id="money_flow" class="tab-content <?php echo $view === 'money_flow' ? 'active' : ''; ?>">
-                    <h3>💸 Financial Overview & Cash Flow</h3>
-                    
-                    <div class="stats-overview">
-                        <div class="stat-card neutral">
-                            <div class="stat-number"><?php echo $total_quotations; ?></div>
-                            <div class="stat-label">Total Quotations</div>
-                        </div>
-                        <div class="stat-card neutral">
-                            <div class="stat-number"><?php echo $pending_quotations; ?></div>
-                            <div class="stat-label">Pending Quotations</div>
-                        </div>
-                        <div class="stat-card neutral">
-                            <div class="stat-number"><?php echo $total_invoices; ?></div>
-                            <div class="stat-label">Total Invoices</div>
-                        </div>
-                        <div class="stat-card expense">
-                            <div class="stat-number"><?php echo $unpaid_invoices; ?></div>
-                            <div class="stat-label">Unpaid Invoices</div>
-                        </div>
-                        <div class="stat-card neutral">
-                            <div class="stat-number"><?php echo $total_purchase_orders; ?></div>
-                            <div class="stat-label">Purchase Orders</div>
-                        </div>
-                        <div class="stat-card expense">
-                            <div class="stat-number"><?php echo $pending_purchase_orders; ?></div>
-                            <div class="stat-label">Pending POs</div>
-                        </div>
-                        <div class="stat-card income">
-                            <div class="stat-number positive">R <?php echo number_format($total_revenue, 2); ?></div>
-                            <div class="stat-label">Total Revenue</div>
-                        </div>
-                        <div class="stat-card expense">
-                            <div class="stat-number negative">R <?php echo number_format($outstanding_amount, 2); ?></div>
-                            <div class="stat-label">Outstanding Amount</div>
-                        </div>
-                        <div class="stat-card expense">
-                            <div class="stat-number negative">R <?php echo number_format($total_expenses, 2); ?></div>
-                            <div class="stat-label">Total Expenses</div>
-                        </div>
-                        <div class="stat-card income">
-                            <div class="stat-number positive">R <?php echo number_format($total_income, 2); ?></div>
-                            <div class="stat-label">Total Income</div>
-                        </div>
-                        <div class="stat-card expense">
-                            <div class="stat-number negative">R <?php echo number_format($total_expense_flow, 2); ?></div>
-                            <div class="stat-label">Total Expenses (Flow)</div>
-                        </div>
-                        <div class="stat-card <?php echo $net_cash_flow >= 0 ? 'income' : 'expense'; ?>">
-                            <div class="stat-number <?php echo $net_cash_flow >= 0 ? 'positive' : 'negative'; ?>">R <?php echo number_format($net_cash_flow, 2); ?></div>
-                            <div class="stat-label">Net Cash Flow</div>
-                        </div>
-                    </div>
+        <?php if (!empty($success_message)): ?>
+        <div class="fin-flash success">&#10003; <?php echo Security::escapeHTML($success_message); ?></div>
+        <?php endif; ?>
+        <?php if (!empty($error_message)): ?>
+        <div class="fin-flash error">&#10005; <?php echo Security::escapeHTML($error_message); ?></div>
+        <?php endif; ?>
 
-                    <div class="category-breakdown">
-                        <div class="category-section">
-                            <div class="category-title">💰 Income by Category</div>
-                            <?php if (empty($income_by_category)): ?>
-                                <p style="color: #666;">No income recorded yet.</p>
-                            <?php else: ?>
-                                <?php foreach ($income_by_category as $category => $amount): ?>
-                                    <div class="category-item">
-                                        <span><?php echo Security::escapeHTML($category); ?></span>
-                                        <span class="amount income">R <?php echo number_format($amount, 2); ?></span>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                            <div class="category-item" style="font-weight: bold; border-top: 2px solid #28a745; margin-top: 1rem; padding-top: 1rem;">
-                                <span>Recent Income (30 days)</span>
-                                <span class="amount income">R <?php echo number_format($recent_income, 2); ?></span>
-                            </div>
-                        </div>
-
-                        <div class="category-section">
-                            <div class="category-title">💸 Expenses by Category</div>
-                            <?php if (empty($expense_by_category)): ?>
-                                <p style="color: #666;">No expenses recorded yet.</p>
-                            <?php else: ?>
-                                <?php foreach ($expense_by_category as $category => $amount): ?>
-                                    <div class="category-item">
-                                        <span><?php echo Security::escapeHTML($category); ?></span>
-                                        <span class="amount expense">R <?php echo number_format($amount, 2); ?></span>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                            <div class="category-item" style="font-weight: bold; border-top: 2px solid #dc3545; margin-top: 1rem; padding-top: 1rem;">
-                                <span>Recent Expenses (30 days)</span>
-                                <span class="amount expense">R <?php echo number_format($recent_expenses, 2); ?></span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="cash-flow-chart" style="margin-top: 2rem;">
-                        <canvas id="cashFlowChart"></canvas>
-                    </div>
-                    
+        <!-- Hero -->
+        <div class="fin-hero">
+            <div class="fin-hero-left">
+                <div class="fin-hero-icon">&#128176;</div>
+                <div>
+                    <h1>Finance Department</h1>
+                    <p>Quotations &middot; Invoices &middot; Purchase Orders &middot; Cash Flow</p>
+                </div>
+            </div>
+            <?php if ($can_write): ?>
+            <div class="fin-hero-actions">
+                <button class="btn-hero" onclick="resetQuotationForm(); document.getElementById('quotationModal').style.display='block'">+ Quotation</button>
+                <button class="btn-hero" onclick="resetInvoiceForm(); document.getElementById('invoiceModal').style.display='block'">+ Invoice</button>
+                <button class="btn-hero" onclick="document.getElementById('purchaseOrderModal').style.display='block'">+ Purchase Order</button>
+                <button class="btn-hero amber" onclick="resetRevenueForm(); document.getElementById('projectRevenueModal').style.display='block'">+ Revenue</button>
+            </div>
+            <?php endif; ?>
         </div>
 
+        <!-- Stats bar -->
+        <div class="fin-stats">
+            <div class="fin-stat">
+                <div class="fin-stat-lbl">Total Revenue</div>
+                <div class="fin-stat-val green">R <?php echo number_format($total_revenue, 2); ?></div>
+            </div>
+            <div class="fin-stat">
+                <div class="fin-stat-lbl">Outstanding</div>
+                <div class="fin-stat-val amber">R <?php echo number_format($outstanding_amount, 2); ?></div>
+            </div>
+            <div class="fin-stat">
+                <div class="fin-stat-lbl">Total Expenses</div>
+                <div class="fin-stat-val red">R <?php echo number_format($total_expenses, 2); ?></div>
+            </div>
+            <div class="fin-stat">
+                <div class="fin-stat-lbl">Net Cash Flow</div>
+                <div class="fin-stat-val <?php echo $net_cash_flow >= 0 ? 'green' : 'red'; ?>">R <?php echo number_format($net_cash_flow, 2); ?></div>
+            </div>
+            <div class="fin-stat">
+                <div class="fin-stat-lbl">Unpaid Invoices</div>
+                <div class="fin-stat-val red"><?php echo (int)$unpaid_invoices; ?></div>
+            </div>
+        </div>
+
+        <!-- Tab navigation -->
+        <div class="fin-tabs">
+            <button class="fin-tab-btn tab-btn <?php echo $view === 'money_flow' ? 'active' : ''; ?>" onclick="showTab('money_flow')">Overview</button>
+            <button class="fin-tab-btn tab-btn <?php echo $view === 'quotations' ? 'active' : ''; ?>" onclick="showTab('quotations')">Quotations (<?php echo (int)$total_quotations; ?>)</button>
+            <button class="fin-tab-btn tab-btn <?php echo $view === 'invoices' ? 'active' : ''; ?>" onclick="showTab('invoices')">Invoices (<?php echo (int)$total_invoices; ?>)</button>
+            <button class="fin-tab-btn tab-btn <?php echo $view === 'purchase_orders' ? 'active' : ''; ?>" onclick="showTab('purchase_orders')">Purchase Orders (<?php echo (int)$total_purchase_orders; ?>)</button>
+            <button class="fin-tab-btn tab-btn <?php echo $view === 'project_revenues' ? 'active' : ''; ?>" onclick="showTab('project_revenues')">Revenues (<?php echo count($project_revenues); ?>)</button>
+        </div>
+
+        <!-- TAB: OVERVIEW -->
+        <div id="money_flow" class="tab-content <?php echo ($view === 'money_flow' || $view === 'overview') ? 'active' : ''; ?>">
+            <div class="fin-overview-grid">
+                <div class="fin-cat-card">
+                    <div class="fin-cat-title">Income by Category</div>
+                    <?php if (empty($income_by_category)): ?>
+                        <p style="color:#6b7280;font-size:.85rem;">No income recorded yet.</p>
+                    <?php else: ?>
+                        <?php foreach ($income_by_category as $cat => $amt): ?>
+                        <div class="fin-cat-row">
+                            <span><?php echo Security::escapeHTML($cat); ?></span>
+                            <span class="income-val">R <?php echo number_format($amt, 2); ?></span>
+                        </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                    <div class="fin-cat-total">
+                        <span>Recent (30 days)</span>
+                        <span class="income-val">R <?php echo number_format($recent_income, 2); ?></span>
+                    </div>
+                </div>
+                <div class="fin-cat-card">
+                    <div class="fin-cat-title">Expenses by Category</div>
+                    <?php if (empty($expense_by_category)): ?>
+                        <p style="color:#6b7280;font-size:.85rem;">No expenses recorded yet.</p>
+                    <?php else: ?>
+                        <?php foreach ($expense_by_category as $cat => $amt): ?>
+                        <div class="fin-cat-row">
+                            <span><?php echo Security::escapeHTML($cat); ?></span>
+                            <span class="expense-val">R <?php echo number_format($amt, 2); ?></span>
+                        </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                    <div class="fin-cat-total">
+                        <span>Recent (30 days)</span>
+                        <span class="expense-val">R <?php echo number_format($recent_expenses, 2); ?></span>
+                    </div>
+                </div>
+                <div class="fin-chart-card">
+                    <h3>Cash Flow Trend</h3>
+                    <canvas id="cashFlowChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: QUOTATIONS -->
         <div id="quotations" class="tab-content <?php echo $view === 'quotations' ? 'active' : ''; ?>">
-                    <div class="section-header">
-                        <span>📋 Quotations Management</span>
-                        <button class="btn btn-success" onclick="resetQuotationForm(); document.getElementById('quotationModal').style.display='block'">+ New Quotation</button>
-                    </div>
-                    
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Quotation #</th>
-                                <th>Client</th>
-                                <th>Date</th>
-                                <th>Valid Until</th>
-                                <th>Amount</th>
-                                <th>Status</th>
-                                <th>Created By</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($quotations as $quotation): ?>
-                            <tr>
-                                <td><?php echo Security::escapeHTML($quotation['quotation_number']); ?></td>
-                                <td><?php echo Security::escapeHTML($quotation['client_name'] ?? 'N/A'); ?></td>
-                                <td><?php echo date('M j, Y', strtotime($quotation['quotation_date'])); ?></td>
-                                <td><?php echo date('M j, Y', strtotime($quotation['valid_until'])); ?></td>
-                                <td>R <?php echo number_format($quotation['total_amount'], 2); ?></td>
-                                <td><span class="status-badge status-<?php echo $quotation['status']; ?>"><?php echo ucfirst($quotation['status']); ?></span></td>
-                                <td><?php echo Security::escapeHTML($quotation['created_by_name'] ?? 'N/A'); ?></td>
-                                <td class="action-buttons">
-                                    <button class="btn btn-small" onclick="viewQuotation(<?php echo $quotation['id']; ?>)" title="View Details">👁️ View</button>
-                                    <?php /* PDF always visible regardless of status */ ?>
-                                    <button class="btn btn-small btn-primary" onclick="printQuotationPDF(<?php echo $quotation['id']; ?>)" title="Download PDF">📄 PDF</button>
-
+            <div class="fin-controls">
+                <input type="text" id="q-search" placeholder="Search client or quotation #..." oninput="filterFinTab('q-tbody','q-search','q-status','q-count')">
+                <select id="q-status" onchange="filterFinTab('q-tbody','q-search','q-status','q-count')">
+                    <option value="">All Statuses</option>
+                    <option value="draft">Draft</option>
+                    <option value="sent">Sent</option>
+                    <option value="accepted">Accepted</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="completed">Completed</option>
+                </select>
+                <span class="fin-controls-count" id="q-count"><?php echo count($quotations); ?> quotation<?php echo count($quotations) !== 1 ? 's' : ''; ?></span>
+            </div>
+            <div class="fin-table-wrap">
+                <table class="fin-table">
+                    <thead><tr>
+                        <th>Quotation #</th><th>Client</th><th>Date</th><th>Valid Until</th><th>Amount</th><th>Status</th><th>Created By</th><th>Actions</th>
+                    </tr></thead>
+                    <tbody id="q-tbody">
+                        <?php foreach ($quotations as $quotation): ?>
+                        <tr data-search="<?php echo strtolower(Security::escapeHTML($quotation['quotation_number']).' '.Security::escapeHTML($quotation['client_name'] ?? '')); ?>"
+                            data-status="<?php echo $quotation['status']; ?>">
+                            <td class="mono"><?php echo Security::escapeHTML($quotation['quotation_number']); ?></td>
+                            <td><?php echo Security::escapeHTML($quotation['client_name'] ?? 'N/A'); ?></td>
+                            <td><?php echo date('d M Y', strtotime($quotation['quotation_date'])); ?></td>
+                            <td><?php echo date('d M Y', strtotime($quotation['valid_until'])); ?></td>
+                            <td class="amt">R <?php echo number_format($quotation['total_amount'], 2); ?></td>
+                            <td><span class="fbadge fbadge-<?php echo $quotation['status']; ?>"><?php echo ucfirst($quotation['status']); ?></span></td>
+                            <td><?php echo Security::escapeHTML($quotation['created_by_name'] ?? 'N/A'); ?></td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="fin-btn fin-btn-teal" onclick="viewQuotation(<?php echo $quotation['id']; ?>)">View</button>
+                                    <button class="fin-btn fin-btn-blue" onclick="printQuotationPDF(<?php echo $quotation['id']; ?>)">PDF</button>
                                     <?php if ($quotation['status'] === 'completed'): ?>
                                         <?php if ($quotation['converted_invoice_id']): ?>
-                                            <button class="btn btn-small btn-info" onclick="viewInvoice(<?php echo $quotation['converted_invoice_id']; ?>)" title="View Created Invoice">📋 View Invoice</button>
-                                            <a href="finance_pdf.php?type=invoice&id=<?php echo $quotation['converted_invoice_id']; ?>" target="_blank" class="btn btn-small btn-success" title="Download Invoice PDF">📄 Invoice PDF</a>
+                                        <button class="fin-btn fin-btn-green" onclick="viewInvoice(<?php echo $quotation['converted_invoice_id']; ?>)">Invoice</button>
                                         <?php endif; ?>
-                                        <span class="text-success" style="font-size: 0.8em;">✅ Completed</span>
-
                                     <?php elseif ($quotation['status'] === 'accepted'): ?>
-                                        <?php /* Accepted = locked — no status change, just convert */ ?>
-                                        <button class="btn btn-small btn-secondary" onclick="editQuotation(<?php echo $quotation['id']; ?>)" title="Edit Quotation">✏️ Edit</button>
-                                        <button class="btn btn-small btn-success" onclick="convertToInvoice(<?php echo $quotation['id']; ?>)">🔄 Convert to Invoice</button>
-
+                                        <button class="fin-btn fin-btn-amber" onclick="editQuotation(<?php echo $quotation['id']; ?>)">Edit</button>
+                                        <button class="fin-btn fin-btn-green" onclick="convertToInvoice(<?php echo $quotation['id']; ?>)">Convert</button>
                                     <?php else: ?>
-                                        <button class="btn btn-small btn-secondary" onclick="editQuotation(<?php echo $quotation['id']; ?>)" title="Edit Quotation">✏️ Edit</button>
-                                        <select onchange="updateQuotationStatus(<?php echo $quotation['id']; ?>, this.value)" class="btn btn-small" title="Update Status" style="cursor:pointer;">
-                                            <option value="">🔄 Status</option>
-                                            <option value="draft"    <?php echo $quotation['status']==='draft'    ?'selected':''; ?>>Draft</option>
-                                            <option value="sent"     <?php echo $quotation['status']==='sent'     ?'selected':''; ?>>Sent</option>
-                                            <option value="accepted" <?php echo $quotation['status']==='accepted' ?'selected':''; ?>>Accepted</option>
-                                            <option value="rejected" <?php echo $quotation['status']==='rejected' ?'selected':''; ?>>Rejected</option>
-                                        </select>
+                                        <button class="fin-btn fin-btn-amber" onclick="editQuotation(<?php echo $quotation['id']; ?>)">Edit</button>
+                                        <span class="fin-btn fin-btn-gray" style="padding:0;">
+                                            <select onchange="updateQuotationStatus(<?php echo $quotation['id']; ?>, this.value)" title="Update Status">
+                                                <option value="">Status</option>
+                                                <option value="draft"    <?php echo $quotation['status']==='draft'    ?'selected':''; ?>>Draft</option>
+                                                <option value="sent"     <?php echo $quotation['status']==='sent'     ?'selected':''; ?>>Sent</option>
+                                                <option value="accepted" <?php echo $quotation['status']==='accepted' ?'selected':''; ?>>Accepted</option>
+                                                <option value="rejected" <?php echo $quotation['status']==='rejected' ?'selected':''; ?>>Rejected</option>
+                                            </select>
+                                        </span>
                                     <?php endif; ?>
-                                </td>
-                            </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <div class="fin-no-results" id="q-tbody-no-results">No quotations match your filter.</div>
+            </div>
         </div>
 
+        <!-- TAB: INVOICES -->
         <div id="invoices" class="tab-content <?php echo $view === 'invoices' ? 'active' : ''; ?>">
-                    <div class="section-header">
-                        <span>🧾 Invoices Management</span>
-                        <button class="btn btn-success" onclick="resetInvoiceForm(); document.getElementById('invoiceModal').style.display='block'">+ New Invoice</button>
-                    </div>
-                    
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Invoice #</th>
-                                <th>Client</th>
-                                <th>Date</th>
-                                <th>Due Date</th>
-                                <th>Amount</th>
-                                <th>Paid</th>
-                                <th>Balance</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($invoices as $invoice): ?>
-                            <tr>
-                                <td><?php echo Security::escapeHTML($invoice['invoice_number']); ?></td>
-                                <td><?php echo Security::escapeHTML($invoice['client_name'] ?? 'N/A'); ?></td>
-                                <td><?php echo date('M j, Y', strtotime($invoice['invoice_date'])); ?></td>
-                                <td><?php echo date('M j, Y', strtotime($invoice['due_date'])); ?></td>
-                                <td>R <?php echo number_format($invoice['total_amount'], 2); ?></td>
-                                <td>R <?php echo number_format($invoice['paid_amount'], 2); ?></td>
-                                <td>R <?php echo number_format($invoice['total_amount'] - $invoice['paid_amount'], 2); ?></td>
-                                <td><span class="status-badge status-<?php echo $invoice['status']; ?>"><?php echo ucfirst(str_replace('_', ' ', $invoice['status'])); ?></span></td>
-                                <td class="action-buttons">
-                                    <button class="btn btn-small" onclick="viewInvoice(<?php echo $invoice['id']; ?>)" title="View Details">👁️ View</button>
-                                    <button class="btn btn-small btn-secondary" onclick="editInvoice(<?php echo $invoice['id']; ?>)" title="Edit Invoice">✏️ Edit</button>
-                                    <button class="btn btn-small btn-primary" onclick="printInvoicePDF(<?php echo $invoice['id']; ?>)" title="Download PDF">📄 PDF</button>
+            <div class="fin-controls">
+                <input type="text" id="inv-search" placeholder="Search client or invoice #..." oninput="filterFinTab('inv-tbody','inv-search','inv-status','inv-count')">
+                <select id="inv-status" onchange="filterFinTab('inv-tbody','inv-search','inv-status','inv-count')">
+                    <option value="">All Statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="paid">Paid</option>
+                    <option value="partially_paid">Partially Paid</option>
+                    <option value="overdue">Overdue</option>
+                    <option value="cancelled">Cancelled</option>
+                </select>
+                <span class="fin-controls-count" id="inv-count"><?php echo count($invoices); ?> invoice<?php echo count($invoices) !== 1 ? 's' : ''; ?></span>
+            </div>
+            <div class="fin-table-wrap">
+                <table class="fin-table">
+                    <thead><tr>
+                        <th>Invoice #</th><th>Client</th><th>Date</th><th>Due Date</th><th>Amount</th><th>Paid</th><th>Balance</th><th>Status</th><th>Actions</th>
+                    </tr></thead>
+                    <tbody id="inv-tbody">
+                        <?php foreach ($invoices as $invoice): ?>
+                        <?php $balance = $invoice['total_amount'] - $invoice['paid_amount']; ?>
+                        <tr data-search="<?php echo strtolower(Security::escapeHTML($invoice['invoice_number']).' '.Security::escapeHTML($invoice['client_name'] ?? '')); ?>"
+                            data-status="<?php echo $invoice['status']; ?>">
+                            <td class="mono"><?php echo Security::escapeHTML($invoice['invoice_number']); ?></td>
+                            <td><?php echo Security::escapeHTML($invoice['client_name'] ?? 'N/A'); ?></td>
+                            <td><?php echo date('d M Y', strtotime($invoice['invoice_date'])); ?></td>
+                            <td style="<?php echo (strtotime($invoice['due_date'])<time()&&$invoice['status']!=='paid')?'color:#dc2626;font-weight:600;':''; ?>">
+                                <?php echo date('d M Y', strtotime($invoice['due_date'])); ?></td>
+                            <td class="amt">R <?php echo number_format($invoice['total_amount'], 2); ?></td>
+                            <td style="color:#059669;font-weight:600;">R <?php echo number_format($invoice['paid_amount'], 2); ?></td>
+                            <td class="<?php echo $balance>0?'amt-red':'amt'; ?>">R <?php echo number_format($balance, 2); ?></td>
+                            <td><span class="fbadge fbadge-<?php echo $invoice['status']; ?>"><?php echo ucfirst(str_replace('_',' ',$invoice['status'])); ?></span></td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="fin-btn fin-btn-teal" onclick="viewInvoice(<?php echo $invoice['id']; ?>)">View</button>
+                                    <button class="fin-btn fin-btn-amber" onclick="editInvoice(<?php echo $invoice['id']; ?>)">Edit</button>
+                                    <button class="fin-btn fin-btn-blue" onclick="printInvoicePDF(<?php echo $invoice['id']; ?>)">PDF</button>
                                     <?php if ($invoice['status'] === 'paid'): ?>
-                                        <button class="btn btn-small btn-info" disabled>✅ Paid</button>
+                                        <span class="fin-btn fin-btn-green">Paid</span>
                                     <?php else: ?>
-                                        <button class="btn btn-small btn-success" onclick="recordPayment(<?php echo $invoice['id']; ?>, <?php echo $invoice['total_amount'] - $invoice['paid_amount']; ?>)">💳 Record Payment</button>
-                                        <select onchange="updateInvoiceStatus(<?php echo $invoice['id']; ?>, this.value)" class="btn btn-small" title="Update Status" style="cursor:pointer;">
-                                            <option value="">🔄 Status</option>
-                                            <option value="pending" <?php echo $invoice['status']==='pending'?'selected':''; ?>>Pending</option>
-                                            <option value="overdue" <?php echo $invoice['status']==='overdue'?'selected':''; ?>>Overdue</option>
-                                            <option value="cancelled" <?php echo $invoice['status']==='cancelled'?'selected':''; ?>>Cancelled</option>
-                                        </select>
+                                        <button class="fin-btn fin-btn-green" onclick="recordPayment(<?php echo $invoice['id']; ?>, <?php echo $balance; ?>)">Pay</button>
+                                        <span class="fin-btn fin-btn-gray" style="padding:0;">
+                                            <select onchange="updateInvoiceStatus(<?php echo $invoice['id']; ?>, this.value)" title="Update Status">
+                                                <option value="">Status</option>
+                                                <option value="pending"   <?php echo $invoice['status']==='pending'  ?'selected':''; ?>>Pending</option>
+                                                <option value="overdue"   <?php echo $invoice['status']==='overdue'  ?'selected':''; ?>>Overdue</option>
+                                                <option value="cancelled" <?php echo $invoice['status']==='cancelled'?'selected':''; ?>>Cancelled</option>
+                                            </select>
+                                        </span>
                                     <?php endif; ?>
-                                </td>
-                            </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <div class="fin-no-results" id="inv-tbody-no-results">No invoices match your filter.</div>
+            </div>
         </div>
 
+        <!-- TAB: PURCHASE ORDERS -->
         <div id="purchase_orders" class="tab-content <?php echo $view === 'purchase_orders' ? 'active' : ''; ?>">
-                    <div class="section-header">
-                        <span>🛒 Purchase Orders Management</span>
-                        <button class="btn btn-success" onclick="document.getElementById('purchaseOrderModal').style.display='block'">+ New Purchase Order</button>
-                    </div>
-                    
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>PO #</th>
-                                <th>Supplier</th>
-                                <th>Project</th>
-                                <th>Order Date</th>
-                                <th>Expected Delivery</th>
-                                <th>Amount</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($purchase_orders as $po): ?>
-                            <tr>
-                                <td><?php echo Security::escapeHTML($po['po_number']); ?></td>
-                                <td>
-                                    <strong><?php echo Security::escapeHTML($po['supplier_name']); ?></strong><br>
-                                    <small><?php echo Security::escapeHTML($po['supplier_email']); ?></small>
-                                </td>
-                                <td><?php echo Security::escapeHTML($po['project_name'] ?? 'N/A'); ?></td>
-                                <td><?php echo date('M j, Y', strtotime($po['order_date'])); ?></td>
-                                <td><?php echo $po['expected_delivery'] ? date('M j, Y', strtotime($po['expected_delivery'])) : 'N/A'; ?></td>
-                                <td>R <?php echo number_format($po['total_amount'], 2); ?></td>
-                                <td><span class="status-badge status-<?php echo $po['status']; ?>"><?php echo ucfirst($po['status']); ?></span></td>
-                                <td class="action-buttons">
-                                    <button class="btn btn-small" onclick="viewPurchaseOrder(<?php echo $po['id']; ?>)" title="View Details">👁️ View</button>
-                                    <button class="btn btn-small btn-secondary" onclick="editPurchaseOrder(<?php echo $po['id']; ?>)" title="Edit Purchase Order">✏️ Edit</button>
-                                    <?php if (in_array($po['status'], ['approved', 'completed'])): ?>
-                                        <button class="btn btn-small btn-primary" onclick="printPurchaseOrderPDF(<?php echo $po['id']; ?>)" title="Download PDF">📄 PDF</button>
+            <div class="fin-controls">
+                <input type="text" id="po-search" placeholder="Search supplier or PO #..." oninput="filterFinTab('po-tbody','po-search','po-status','po-count')">
+                <select id="po-status" onchange="filterFinTab('po-tbody','po-search','po-status','po-count')">
+                    <option value="">All Statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="received">Received</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                </select>
+                <span class="fin-controls-count" id="po-count"><?php echo count($purchase_orders); ?> order<?php echo count($purchase_orders) !== 1 ? 's' : ''; ?></span>
+            </div>
+            <div class="fin-table-wrap">
+                <table class="fin-table">
+                    <thead><tr>
+                        <th>PO #</th><th>Supplier</th><th>Project</th><th>Order Date</th><th>Expected Delivery</th><th>Amount</th><th>Status</th><th>Actions</th>
+                    </tr></thead>
+                    <tbody id="po-tbody">
+                        <?php foreach ($purchase_orders as $po): ?>
+                        <tr data-search="<?php echo strtolower(Security::escapeHTML($po['po_number']).' '.Security::escapeHTML($po['supplier_name'])); ?>"
+                            data-status="<?php echo $po['status']; ?>">
+                            <td class="mono"><?php echo Security::escapeHTML($po['po_number']); ?></td>
+                            <td>
+                                <div style="font-weight:600;"><?php echo Security::escapeHTML($po['supplier_name']); ?></div>
+                                <div style="font-size:.78rem;color:#6b7280;"><?php echo Security::escapeHTML($po['supplier_email']); ?></div>
+                            </td>
+                            <td><?php echo Security::escapeHTML($po['project_name'] ?? '—'); ?></td>
+                            <td><?php echo date('d M Y', strtotime($po['order_date'])); ?></td>
+                            <td><?php echo $po['expected_delivery'] ? date('d M Y', strtotime($po['expected_delivery'])) : '—'; ?></td>
+                            <td class="amt">R <?php echo number_format($po['total_amount'], 2); ?></td>
+                            <td><span class="fbadge fbadge-<?php echo $po['status']; ?>"><?php echo ucfirst($po['status']); ?></span></td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="fin-btn fin-btn-teal" onclick="viewPurchaseOrder(<?php echo $po['id']; ?>)">View</button>
+                                    <button class="fin-btn fin-btn-amber" onclick="editPurchaseOrder(<?php echo $po['id']; ?>)">Edit</button>
+                                    <?php if (in_array($po['status'], ['approved','completed'])): ?>
+                                        <button class="fin-btn fin-btn-blue" onclick="printPurchaseOrderPDF(<?php echo $po['id']; ?>)">PDF</button>
                                     <?php else: ?>
-                                        <button class="btn btn-small btn-primary" onclick="printPurchaseOrderPDF(<?php echo $po['id']; ?>)" title="Download PDF" disabled>📄 PDF</button>
+                                        <button class="fin-btn fin-btn-gray" disabled title="Approve first">PDF</button>
                                     <?php endif; ?>
                                     <?php if ($po['status'] === 'pending'): ?>
-                                        <select onchange="updatePOStatus(<?php echo $po['id']; ?>, this.value)" class="btn btn-small btn-warning" title="Update Status">
+                                    <span class="fin-btn fin-btn-gray" style="padding:0;">
+                                        <select onchange="updatePOStatus(<?php echo $po['id']; ?>, this.value)" title="Update Status">
                                             <option value="pending">Pending</option>
-                                            <option value="approved">Approved</option>
+                                            <option value="approved">Approve</option>
                                             <option value="received">Received</option>
-                                            <option value="cancelled">Cancelled</option>
+                                            <option value="cancelled">Cancel</option>
                                         </select>
-                                    <?php else: ?>
-                                        <span class="btn btn-small btn-info" style="cursor: default;">Status: <?php echo ucfirst($po['status']); ?></span>
+                                    </span>
                                     <?php endif; ?>
-                                </td>
-                            </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <div class="fin-no-results" id="po-tbody-no-results">No purchase orders match your filter.</div>
+            </div>
         </div>
 
+        <!-- TAB: PROJECT REVENUES -->
         <div id="project_revenues" class="tab-content <?php echo $view === 'project_revenues' ? 'active' : ''; ?>">
-                    <div class="section-header">
-                        <span>💵 Project Revenues</span>
-                        <button class="btn btn-success" onclick="resetRevenueForm(); document.getElementById('projectRevenueModal').style.display='block'">+ Record Revenue</button>
-                    </div>
-                    
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Project</th>
-                                <th>Client</th>
-                                <th>Revenue Type</th>
-                                <th>Amount</th>
-                                <th>Received Date</th>
-                                <th>Payment Method</th>
-                                <th>Reference</th>
-                                <th>Notes</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($project_revenues as $revenue): ?>
-                            <tr>
-                                <td><?php echo Security::escapeHTML($revenue['project_name'] ?? 'N/A'); ?></td>
-                                <td><?php echo Security::escapeHTML($revenue['client_name'] ?? 'N/A'); ?></td>
-                                <td><span class="status-badge status-accepted"><?php echo ucfirst($revenue['revenue_type']); ?></span></td>
-                                <td class="amount income">R <?php echo number_format($revenue['amount'], 2); ?></td>
-                                <td><?php echo $revenue['received_date'] ? date('M j, Y', strtotime($revenue['received_date'])) : 'N/A'; ?></td>
-                                <td><?php echo Security::escapeHTML($revenue['payment_method'] ?? 'N/A'); ?></td>
-                                <td><?php echo Security::escapeHTML($revenue['reference_number'] ?? 'N/A'); ?></td>
-                                <td><?php echo Security::escapeHTML($revenue['notes'] ?? 'N/A'); ?></td>
-                                <td>
-                                    <button onclick="viewRevenue(<?php echo htmlspecialchars(json_encode($revenue)); ?>)" class="btn btn-small">View</button>
-                                    <button onclick="editRevenue(<?php echo htmlspecialchars(json_encode($revenue)); ?>)" class="btn btn-small">Edit</button>
-                                    <button onclick="confirmDeleteRevenue(<?php echo $revenue['id']; ?>, '<?php echo addslashes($revenue['project_name'] ?? 'N/A'); ?>', <?php echo $revenue['amount']; ?>)" class="btn btn-small btn-danger">Delete</button>
-                                </td>
-                            </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+            <div class="fin-controls">
+                <input type="text" id="rev-search" placeholder="Search project or client..." oninput="filterFinTab('rev-tbody','rev-search','rev-type','rev-count')">
+                <select id="rev-type" onchange="filterFinTab('rev-tbody','rev-search','rev-type','rev-count')">
+                    <option value="">All Types</option>
+                    <option value="milestone">Milestone</option>
+                    <option value="final">Final Payment</option>
+                    <option value="deposit">Deposit</option>
+                    <option value="retainer">Retainer</option>
+                    <option value="bonus">Bonus</option>
+                    <option value="other">Other</option>
+                </select>
+                <span class="fin-controls-count" id="rev-count"><?php echo count($project_revenues); ?> record<?php echo count($project_revenues) !== 1 ? 's' : ''; ?></span>
+            </div>
+            <div class="fin-table-wrap">
+                <table class="fin-table">
+                    <thead><tr>
+                        <th>Project</th><th>Client</th><th>Type</th><th>Amount</th><th>Received Date</th><th>Payment Method</th><th>Reference</th><th>Actions</th>
+                    </tr></thead>
+                    <tbody id="rev-tbody">
+                        <?php foreach ($project_revenues as $revenue): ?>
+                        <tr data-search="<?php echo strtolower(Security::escapeHTML($revenue['project_name'] ?? '').' '.Security::escapeHTML($revenue['client_name'] ?? '')); ?>"
+                            data-status="<?php echo $revenue['revenue_type']; ?>">
+                            <td style="font-weight:600;"><?php echo Security::escapeHTML($revenue['project_name'] ?? 'N/A'); ?></td>
+                            <td><?php echo Security::escapeHTML($revenue['client_name'] ?? 'N/A'); ?></td>
+                            <td><span class="fbadge fbadge-accepted"><?php echo ucfirst($revenue['revenue_type']); ?></span></td>
+                            <td class="amt">R <?php echo number_format($revenue['amount'], 2); ?></td>
+                            <td><?php echo $revenue['received_date'] ? date('d M Y', strtotime($revenue['received_date'])) : '—'; ?></td>
+                            <td><?php echo Security::escapeHTML(str_replace('_',' ',$revenue['payment_method'] ?? '—')); ?></td>
+                            <td style="font-size:.8rem;color:#6b7280;"><?php echo Security::escapeHTML($revenue['reference_number'] ?? '—'); ?></td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="fin-btn fin-btn-teal" onclick="viewRevenue(<?php echo htmlspecialchars(json_encode($revenue)); ?>)">View</button>
+                                    <button class="fin-btn fin-btn-amber" onclick="editRevenue(<?php echo htmlspecialchars(json_encode($revenue)); ?>)">Edit</button>
+                                    <button class="fin-btn fin-btn-red" onclick="confirmDeleteRevenue(<?php echo $revenue['id']; ?>, '<?php echo addslashes($revenue['project_name'] ?? 'N/A'); ?>', <?php echo $revenue['amount']; ?>)">Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <div class="fin-no-results" id="rev-tbody-no-results">No revenue records match your filter.</div>
+            </div>
         </div>
-    </div>
-    
+
+    </div><!-- /.main-content -->
     <script src="../js/notification.js"></script>  
     <script>
         // Tab functionality
@@ -1816,6 +1712,27 @@ if (!isset($expenses)) {
             
             // Add active class to clicked tab button
             event.target.classList.add('active');
+        }
+
+        // Finance table filter function
+        function filterFinTab(tbodyId, searchId, filterDropId, countId) {
+            const q  = document.getElementById(searchId).value.toLowerCase().trim();
+            const st = document.getElementById(filterDropId).value;
+            const rows = document.querySelectorAll('#' + tbodyId + ' tr');
+            let visible = 0;
+            rows.forEach(row => {
+                const matchQ  = !q  || (row.dataset.search||'').toLowerCase().includes(q);
+                const matchSt = !st || (row.dataset.status||'') === st;
+                if (matchQ && matchSt) { row.style.display = ''; visible++; }
+                else                   { row.style.display = 'none'; }
+            });
+            const nr = document.getElementById(tbodyId + '-no-results');
+            if (nr) nr.style.display = visible === 0 ? 'block' : 'none';
+            const nouns = {q:'quotation',inv:'invoice',po:'order',rev:'record'};
+            const prefix = tbodyId.split('-')[0];
+            const noun = nouns[prefix] || 'item';
+            const c = document.getElementById(countId);
+            if (c) c.textContent = visible + ' ' + noun + (visible !== 1 ? 's' : '');
         }
 
         // Global variables for modal item management

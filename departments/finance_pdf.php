@@ -27,7 +27,7 @@ if (!$type || !$id) {
 switch ($type) {
     case 'quotation':
         // Get quotation data
-        $query = "SELECT q.*, c.name as client_name, c.email as client_email, u.username as created_by_name
+        $query = "SELECT q.*, c.name as client_name, c.email as client_email, c.phone as client_phone, c.company as client_company, u.username as created_by_name
                   FROM quotations q
                   LEFT JOIN clients c ON q.client_id = c.id
                   LEFT JOIN users u ON q.created_by = u.id
@@ -52,7 +52,7 @@ switch ($type) {
         
     case 'invoice':
         // Get invoice data
-        $query = "SELECT i.*, c.name as client_name, c.email as client_email, u.username as created_by_name
+        $query = "SELECT i.*, c.name as client_name, c.email as client_email, c.phone as client_phone, c.company as client_company, u.username as created_by_name
                   FROM invoices i
                   LEFT JOIN clients c ON i.client_id = c.id
                   LEFT JOIN users u ON i.created_by = u.id
