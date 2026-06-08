@@ -114,12 +114,17 @@ if ($_POST && isset($_POST['update_quotation'])) {
     try {
         $db->beginTransaction();
         
-        // Verify quotation exists and can be updated (not converted)
-        $query = "SELECT * FROM quotations WHERE id = ? AND created_by = ? AND status NOT IN ('converted', 'completed')";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$quotation_id, $_SESSION['user_id']]);
+        // Admins/managers can edit any quotation; others only their own
+        $role = $_SESSION['role'] ?? '';
+        if (in_array($role, ['admin', 'manager'])) {
+            $q2 = "SELECT * FROM quotations WHERE id = ? AND status NOT IN ('converted', 'completed')";
+            $stmt = $db->prepare($q2); $stmt->execute([$quotation_id]);
+        } else {
+            $q2 = "SELECT * FROM quotations WHERE id = ? AND created_by = ? AND status NOT IN ('converted', 'completed')";
+            $stmt = $db->prepare($q2); $stmt->execute([$quotation_id, $_SESSION['user_id']]);
+        }
         $existing = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         if (!$existing) {
             throw new Exception('Quotation not found or cannot be updated');
         }
@@ -179,11 +184,13 @@ if ($_POST && isset($_POST['update_quotation'])) {
             error_log("Email sending failed: " . $email_error->getMessage());
         }
         
-        $success_message = "Quotation updated successfully. Email notification sent.";
-        
+        header('Location: finance.php?view=quotations&msg=' . urlencode('Quotation updated successfully.'));
+        exit();
+
     } catch (Exception $e) {
         $db->rollBack();
-        $error_message = "Update failed: " . $e->getMessage();
+        header('Location: finance.php?view=quotations&err=' . urlencode('Update failed: ' . $e->getMessage()));
+        exit();
     }
 }
 
@@ -232,6 +239,8 @@ if ($_POST && isset($_POST['create_quotation'])) {
         $update_stmt = $db->prepare($update_query);
         $update_stmt->execute([$subtotal, $vat_amount, $total_amount, $quotation_id]);
     }
+    header('Location: finance.php?view=quotations&msg=' . urlencode("Quotation {$quotation_number} created successfully."));
+    exit();
 }
 
 // Handle quotation to invoice conversion
@@ -332,12 +341,13 @@ if ($_POST && isset($_POST['convert_to_invoice'])) {
             error_log("Email sending failed: " . $email_error->getMessage());
         }
         
-        $success_message = "Quotation successfully converted to Invoice {$invoice_number}. Email sent to client.";
+        header('Location: finance.php?view=invoices&msg=' . urlencode("Quotation converted to Invoice {$invoice_number} successfully."));
+        exit();
         
     } catch (Exception $e) {
-        // Rollback transaction on failure
         $db->rollBack();
-        $error_message = "Conversion failed: " . $e->getMessage();
+        header('Location: finance.php?view=quotations&err=' . urlencode('Conversion failed: ' . $e->getMessage()));
+        exit();
     }
 }
 
@@ -356,12 +366,17 @@ if ($_POST && isset($_POST['update_invoice'])) {
     try {
         $db->beginTransaction();
         
-        // Verify invoice exists and can be updated (not paid)
-        $query = "SELECT * FROM invoices WHERE id = ? AND created_by = ? AND status != 'paid'";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$invoice_id, $_SESSION['user_id']]);
+        // Admins/managers can edit any invoice; others only their own (paid invoices always locked)
+        $role = $_SESSION['role'] ?? '';
+        if (in_array($role, ['admin', 'manager'])) {
+            $q2 = "SELECT * FROM invoices WHERE id = ? AND status != 'paid'";
+            $stmt = $db->prepare($q2); $stmt->execute([$invoice_id]);
+        } else {
+            $q2 = "SELECT * FROM invoices WHERE id = ? AND created_by = ? AND status != 'paid'";
+            $stmt = $db->prepare($q2); $stmt->execute([$invoice_id, $_SESSION['user_id']]);
+        }
         $existing = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         if (!$existing) {
             throw new Exception('Invoice not found or cannot be updated (paid invoices are locked)');
         }
@@ -405,11 +420,13 @@ if ($_POST && isset($_POST['update_invoice'])) {
         $update_stmt->execute([$subtotal, $vat_amount, $total_amount, $invoice_id]);
         
         $db->commit();
-        $success_message = "Invoice updated successfully";
-        
+        header('Location: finance.php?view=invoices&msg=' . urlencode('Invoice updated successfully.'));
+        exit();
+
     } catch (Exception $e) {
         $db->rollBack();
-        $error_message = "Update failed: " . $e->getMessage();
+        header('Location: finance.php?view=invoices&err=' . urlencode('Update failed: ' . $e->getMessage()));
+        exit();
     }
 }
 
@@ -473,7 +490,8 @@ if ($_POST && isset($_POST['create_invoice'])) {
             error_log("Email sending failed: " . $email_error->getMessage());
         }
         
-        $success_message = "Invoice {$invoice_number} created successfully. Email sent to client.";
+        header('Location: finance.php?view=invoices&msg=' . urlencode("Invoice {$invoice_number} created successfully."));
+        exit();
     }
 }
 
@@ -576,11 +594,13 @@ if ($_POST && isset($_POST['update_purchase_order'])) {
         $update_stmt->execute([$subtotal, $vat_amount, $total_amount, $po_id]);
         
         $db->commit();
-        $success_message = "Purchase order updated successfully";
-        
+        header('Location: finance.php?view=purchase_orders&msg=' . urlencode('Purchase order updated successfully.'));
+        exit();
+
     } catch (Exception $e) {
         $db->rollBack();
-        $error_message = "Update failed: " . $e->getMessage();
+        header('Location: finance.php?view=purchase_orders&err=' . urlencode('Update failed: ' . $e->getMessage()));
+        exit();
     }
 }
 
@@ -639,9 +659,11 @@ if ($_POST && isset($_POST['create_purchase_order'])) {
         $query = "INSERT INTO money_flow (transaction_type, category, amount, description, transaction_date, purchase_order_id, created_by) 
                   VALUES (?, ?, ?, ?, ?, ?, ?)";
         $stmt = $db->prepare($query);
-        $stmt->execute(['expense', 'Purchase Order', $total_amount, "Purchase order {$po_number}", 
+        $stmt->execute(['expense', 'Purchase Order', $total_amount, "Purchase order {$po_number}",
                        $order_date, $po_id, $_SESSION['user_id']]);
     }
+    header('Location: finance.php?view=purchase_orders&msg=' . urlencode("Purchase order {$po_number} created successfully."));
+    exit();
 }
 
 // Handle purchase order status update
@@ -1560,9 +1582,11 @@ if (!isset($expenses)) {
                                         <button class="fin-btn fin-btn-green" onclick="viewInvoice(<?php echo $quotation['converted_invoice_id']; ?>)">Invoice</button>
                                         <?php endif; ?>
                                     <?php elseif ($quotation['status'] === 'accepted'): ?>
-                                        <button class="fin-btn fin-btn-amber" onclick="editQuotation(<?php echo $quotation['id']; ?>)">Edit</button>
-                                        <button class="fin-btn fin-btn-green" onclick="convertToInvoice(<?php echo $quotation['id']; ?>)">Convert</button>
-                                    <?php else: ?>
+                                        <?php if ($can_write): ?>
+                                        <button class="fin-btn fin-btn-green" onclick="convertToInvoice(<?php echo $quotation['id']; ?>)">Convert to Invoice</button>
+                                        <?php endif; ?>
+                                    <?php elseif (!in_array($quotation['status'], ['rejected'])): ?>
+                                        <?php if ($can_write): ?>
                                         <button class="fin-btn fin-btn-amber" onclick="editQuotation(<?php echo $quotation['id']; ?>)">Edit</button>
                                         <span class="fin-btn fin-btn-gray" style="padding:0;">
                                             <select onchange="updateQuotationStatus(<?php echo $quotation['id']; ?>, this.value)" title="Update Status">
@@ -1573,6 +1597,7 @@ if (!isset($expenses)) {
                                                 <option value="rejected" <?php echo $quotation['status']==='rejected' ?'selected':''; ?>>Rejected</option>
                                             </select>
                                         </span>
+                                        <?php endif; ?>
                                     <?php endif; ?>
                                 </div>
                             </td>
@@ -1620,11 +1645,12 @@ if (!isset($expenses)) {
                             <td>
                                 <div class="action-buttons">
                                     <button class="fin-btn fin-btn-teal" onclick="viewInvoice(<?php echo $invoice['id']; ?>)">View</button>
-                                    <button class="fin-btn fin-btn-amber" onclick="editInvoice(<?php echo $invoice['id']; ?>)">Edit</button>
                                     <button class="fin-btn fin-btn-blue" onclick="printInvoicePDF(<?php echo $invoice['id']; ?>)">PDF</button>
                                     <?php if ($invoice['status'] === 'paid'): ?>
-                                        <span class="fin-btn fin-btn-green">Paid</span>
+                                        <span class="fin-btn fin-btn-green" style="cursor:default;">&#10003; Paid</span>
                                     <?php else: ?>
+                                        <?php if ($can_write): ?>
+                                        <button class="fin-btn fin-btn-amber" onclick="editInvoice(<?php echo $invoice['id']; ?>)">Edit</button>
                                         <button class="fin-btn fin-btn-green" onclick="recordPayment(<?php echo $invoice['id']; ?>, <?php echo $balance; ?>)">Pay</button>
                                         <span class="fin-btn fin-btn-gray" style="padding:0;">
                                             <select onchange="updateInvoiceStatus(<?php echo $invoice['id']; ?>, this.value)" title="Update Status">
@@ -1636,6 +1662,7 @@ if (!isset($expenses)) {
                                                 <option value="cancelled" <?php echo $invoice['status']==='cancelled'?'selected':''; ?>>Cancelled</option>
                                             </select>
                                         </span>
+                                        <?php endif; ?>
                                     <?php endif; ?>
                                 </div>
                             </td>
@@ -2611,10 +2638,6 @@ if (!isset($expenses)) {
                     console.error('Error loading invoice:', error);
                     alert('Unable to load invoice data for editing: ' + error.message);
                 });
-        }
-        
-        function printInvoicePDF(id) {
-            window.open('finance_pdf.php?type=invoice&id=' + id, '_blank');
         }
         
         function updatePOStatus(poId, newStatus) {
