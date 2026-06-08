@@ -361,27 +361,10 @@ try {
     </style>
 </head>
 <body>
-    <!-- Navigation -->
-    <div class="header" style="position: relative; z-index: 1000; background: #1a1a1a;">
-        <div class="nav-container" style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 2rem; max-width: 100%; overflow: visible;">
-            <div class="logo">
-                <a href="../dashboard.php" style="color: white; text-decoration: none; font-weight: bold;">Business Management System</a>
-            </div>
-            <nav class="main-nav" style="display: flex; gap: 1rem; align-items: center;">
-                <a href="../dashboard.php" style="color: #ccc; text-decoration: none; padding: 0.5rem 1rem;">Dashboard</a>
-                <a href="../departments/it.php" style="color: #ccc; text-decoration: none; padding: 0.5rem 1rem;">IT</a>
-                <a href="../departments/marketing.php" style="color: #ccc; text-decoration: none; padding: 0.5rem 1rem;">Marketing</a>
-                <a href="../departments/bd.php" style="color: #ccc; text-decoration: none; padding: 0.5rem 1rem;">Business Development</a>
-                <a href="../departments/finance.php" style="color: #ccc; text-decoration: none; padding: 0.5rem 1rem;">Finance</a>
-                <a href="../departments/hr.php" style="color: #ccc; text-decoration: none; padding: 0.5rem 1rem;">HR</a>
-                <a href="../departments/clients.php" class="active" style="color: white; text-decoration: none; padding: 0.5rem 1rem; background: rgba(255,255,255,0.1); border-radius: 4px;">Clients</a>
-                <a href="../departments/insights.php" style="color: #ccc; text-decoration: none; padding: 0.5rem 1rem;">Insights</a>
-                <a href="../auth/logout.php" class="logout-btn" style="color: white; text-decoration: none; background: #dc3545; padding: 0.5rem 1rem; border-radius: 4px; margin-left: 1rem;">Logout</a>
-            </nav>
-        </div>
-    </div>
+    <?php include '../includes/header.php'; ?>
+    <?php include '../includes/sidebar.php'; ?>
 
-    <div class="client-detail-container">
+    <div class="main-content">
         <!-- Success/Error Messages -->
         <?php if (isset($success_message)): ?>
             <div class="alert alert-success" style="background: #d4edda; color: #155724; padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">

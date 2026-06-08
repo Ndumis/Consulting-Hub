@@ -154,19 +154,10 @@ foreach ($all_comments as $comment) {
     <link rel="stylesheet" href="../css/main.css">
 </head>
 <body>
-    <div class="header">
-        <div class="logo-section">
-            <img src="../img/KConsultingLogo.png" alt="KConsulting" class="logo-img">
-            <h1>Business Management System</h1>
-        </div>
-        <div class="user-info">
-            <span>Welcome, <?php echo Security::escapeHTML($_SESSION['username']); ?></span>
-            <span class="user-role">(<?php echo Security::escapeHTML($_SESSION['role']); ?>)</span>
-            <a href="../auth/logout.php" class="logout-btn">Logout</a>
-        </div>
-    </div>
+    <?php include '../includes/header.php'; ?>
+    <?php include '../includes/sidebar.php'; ?>
 
-    <div class="main-content" style="padding: 2rem; max-width: 1400px; margin: 0 auto;">
+    <div class="main-content" style="padding: 2rem;">
         <div class="project-header" style="margin-bottom: 2rem;">
             <a href="it.php" class="back-btn">← Back to IT Department</a>
             <h1 style="margin: 1rem 0; display: flex; align-items: center; gap: 1rem;">

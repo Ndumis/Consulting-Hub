@@ -296,12 +296,14 @@ $dept_stats = $db->query("SELECT u.department,
     </style>
 </head>
 <body>
-    <div class="admin-header">
-        <h1>🔍 System Activity Log</h1>
-        <p>Administrative monitoring of all user activities across departments</p>
-    </div>
-    
-    <div class="container">
+    <?php include '../includes/header.php'; ?>
+    <?php include '../includes/sidebar.php'; ?>
+
+    <div class="main-content">
+        <div class="page-title-bar" style="background:linear-gradient(135deg,#dc3545 0%,#c82333 100%);color:#fff;padding:1.25rem 1.5rem;border-radius:8px;margin-bottom:1.5rem;">
+            <h1 style="margin:0;font-size:1.3rem;">🔍 System Activity Log</h1>
+            <p style="margin:0.25rem 0 0;opacity:0.85;font-size:0.85rem;">Administrative monitoring of all user activities across departments</p>
+        </div>
         <!-- Statistics Section -->
         <div class="stats-grid">
             <div class="stat-card">
@@ -471,5 +473,6 @@ $dept_stats = $db->query("SELECT u.department,
             <?php endif; ?>
         </div>
     </div>
+</div><!-- /.main-content -->
 </body>
 </html>

@@ -460,6 +460,10 @@ if (count($monthly_trends) >= 3) {
     </style>
 </head>
 <body>
+    <?php include '../includes/header.php'; ?>
+    <?php include '../includes/sidebar.php'; ?>
+
+    <div class="main-content">
     <div class="analytics-container">
         <!-- Analytics Header -->
         <div class="analytics-header">
@@ -657,7 +661,9 @@ if (count($monthly_trends) >= 3) {
         </div>
     </div>
 
-    <script src="../js/notification.js"></script>  
+    </div><!-- /.main-content -->
+
+    <script src="../js/notification.js"></script>
     <script>
         // Revenue Trends Chart
         const revenueCtx = document.getElementById('revenueChart').getContext('2d');

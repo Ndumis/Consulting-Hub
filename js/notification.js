@@ -1,33 +1,32 @@
-// Mobile sidebar toggle
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
-    sidebar.classList.toggle('active');
+    const overlay = document.getElementById('sidebarOverlay');
+    if (!sidebar) return;
+    const isOpen = sidebar.classList.toggle('sidebar-open');
+    if (overlay) overlay.style.display = (isOpen && window.innerWidth <= 768) ? 'block' : 'none';
 }
 
-// Toggle notifications dropdown
-function toggleNotifications(){
-    const d=document.getElementById('notificationsDropdown');
-    if(!d) return;
-    const cur=getComputedStyle(d).display;
-    d.style.display = (cur==='none') ? 'block' : 'none';
+function toggleNotifications() {
+    const d = document.getElementById('notificationsDropdown');
+    if (!d) return;
+    d.style.display = d.style.display === 'none' ? 'block' : 'none';
 }
 
-// Close sidebar when clicking outside on mobile
-document.addEventListener('click', function(event) {
-    const sidebar = document.getElementById('sidebar');
-    const menuToggle = document.querySelector('.menu-toggle');
+document.addEventListener('click', function(e) {
+    const sidebar  = document.getElementById('sidebar');
+    const toggle   = document.querySelector('.sidebar-toggle');
     const dropdown = document.getElementById('notificationsDropdown');
-    const notificationIcon = document.querySelector('.notification-icon');
-    
-    if (window.innerWidth <= 768 && 
-        !sidebar.contains(event.target) && 
-        !menuToggle.contains(event.target) && 
-        sidebar.classList.contains('active')) {
-        sidebar.classList.remove('active');
+    const notifWrap = document.querySelector('.header-notif-wrap');
+
+    if (window.innerWidth <= 768 && sidebar && toggle &&
+        !sidebar.contains(e.target) && !toggle.contains(e.target) &&
+        sidebar.classList.contains('sidebar-open')) {
+        sidebar.classList.remove('sidebar-open');
+        const overlay = document.getElementById('sidebarOverlay');
+        if (overlay) overlay.style.display = 'none';
     }
-    
-    // Close notifications if clicked outside
-    if (dropdown && !dropdown.contains(event.target) && !notificationIcon.contains(event.target)) {
+
+    if (dropdown && notifWrap && !notifWrap.contains(e.target)) {
         dropdown.style.display = 'none';
     }
 });

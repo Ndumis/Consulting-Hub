@@ -282,19 +282,10 @@ $type_info = [
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="logo-section">
-            <img src="../img/KConsultingLogo.png" alt="KConsulting" class="logo-img">
-            <h1>Business Management System</h1>
-        </div>
-        <div class="user-info">
-            <span>Welcome, <?php echo Security::escapeHTML($_SESSION['username']); ?></span>
-            <span class="user-role">(<?php echo Security::escapeHTML($_SESSION['role']); ?>)</span>
-            <a href="../auth/logout.php" class="logout-btn">Logout</a>
-        </div>
-    </div>
+    <?php include '../includes/header.php'; ?>
+    <?php include '../includes/sidebar.php'; ?>
 
-    <div class="main-content" style="margin-left: 0; padding: 2rem;">
+    <div class="main-content">
         <a href="marketing.php" class="back-btn">← Back to Marketing Department</a>
         
         <div class="detail-header">
