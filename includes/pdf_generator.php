@@ -289,6 +289,8 @@ class EnterprisePDFGenerator {
 <tr>
   <td class="num">' . ($i + 1) . '</td>
   <td class="desc">' . Security::escapeHTML($item['description']) . '</td>
+  <td class="center">' . number_format($item['quantity'], 2) . '</td>
+  <td class="right">R ' . number_format($item['unit_price'], 2) . '</td>
   <td class="right">R ' . number_format($item['total_price'], 2) . '</td>
 </tr>';
         }
@@ -297,7 +299,9 @@ class EnterprisePDFGenerator {
   <thead><tr>
     <th style="width:38px;">#</th>
     <th>SCOPE &amp; INFRASTRUCTURE SPECIFICATIONS</th>
-    <th class="right" style="width:130px;">TOTAL (ZAR)</th>
+    <th class="center" style="width:55px;">QTY</th>
+    <th class="right" style="width:110px;">UNIT PRICE</th>
+    <th class="right" style="width:120px;">TOTAL (ZAR)</th>
   </tr></thead>
   <tbody>' . $rows . '</tbody>
 </table>';
