@@ -13,6 +13,7 @@ $_tab = match($_cur) {
     'hr.php'        => 'hr',
     'clients.php', 'client_detail.php'     => 'clients',
     'insights.php'  => 'insights',
+    'reports.php'   => 'reports',
     'dashboard.php' => 'dashboard',
     default         => '',
 };
@@ -42,6 +43,7 @@ function _nav($href, $icon, $label, $active) {
         <div class="nav-section-label">Management</div>
         <?= _nav($_nb . 'clients.php',   '🏢', 'Clients',   $_tab === 'clients')  ?>
         <?= _nav($_nb . 'insights.php',  '📉', 'Insights',  $_tab === 'insights') ?>
+        <?= _nav($_nb . 'reports.php',   '📑', 'Reports',   $_tab === 'reports')  ?>
 
         <?php if ($_role_s === 'admin'): ?>
             <div class="nav-divider"></div>
