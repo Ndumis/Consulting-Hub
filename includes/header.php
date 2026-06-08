@@ -64,10 +64,6 @@ try {
         </button>
         <a href="<?= $_ab ?>dashboard.php" class="header-brand">
             <img src="<?= $_ab ?>img/KConsultingLogo.png" alt="KConsulting" class="header-logo">
-            <div class="header-brand-text">
-                <span class="header-brand-name">KConsulting</span>
-                <span class="header-brand-sub">Hub</span>
-            </div>
         </a>
     </div>
 

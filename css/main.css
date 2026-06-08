@@ -872,6 +872,12 @@ textarea {
     margin-bottom: 1rem;
 }
 
+/* ── Universal dark-slate hero gradient ──────────────────────────────────── */
+.fin-hero, .bd-hero, .mkt-hero, .it-hero, .hr-hero,
+.cl-hero, .cl-detail-hero, .in-hero, .rp-hero, .al-hero, .pr-hero, .page-hero {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
+}
+
 .status-active {
     background: #d4edda;
     color: #155724;
