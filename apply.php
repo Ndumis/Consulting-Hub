@@ -94,7 +94,7 @@ if ($_POST && isset($_POST['create_candidate'])) {
                         Security::sanitizeInput($experience['position_title']),
                         !empty($experience['start_date']) ? Security::sanitizeInput($experience['start_date']) : null,
                         isset($experience['is_current']) ? null : (!empty($experience['end_date']) ? Security::sanitizeInput($experience['end_date']) : null),
-                        isset($experience['is_current']) ? 't' : 'f',
+                        isset($experience['is_current']) ? 1 : 0,
                         Security::sanitizeInput($experience['responsibilities'] ?? ''),
                         Security::sanitizeInput($experience['achievements'] ?? '')
                     ]);
@@ -119,7 +119,7 @@ if ($_POST && isset($_POST['create_candidate'])) {
                         Security::sanitizeInput($education['field_of_study'] ?? ''),
                         !empty($education['start_year']) ? (int)$education['start_year'] : null,
                         isset($education['is_current']) ? null : (!empty($education['end_year']) ? (int)$education['end_year'] : null),
-                        isset($education['is_current']) ? 't' : 'f',
+                        isset($education['is_current']) ? 1 : 0,
                         !empty($education['gpa']) ? floatval($education['gpa']) : null,
                         Security::sanitizeInput($education['honors'] ?? ''),
                         Security::sanitizeInput($education['description'] ?? '')

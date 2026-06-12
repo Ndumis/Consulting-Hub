@@ -286,9 +286,9 @@ if ($_POST && isset($_POST['create_candidate'])) {
             foreach ($_POST['work_experience'] as $we) {
                 if (!empty($we['company_name']) && !empty($we['position_title'])) {
                     $stmt = $db->prepare("INSERT INTO candidate_work_experience (candidate_id,company_name,position_title,start_date,end_date,is_current,responsibilities,achievements) VALUES (?,?,?,?,?,?,?,?)");
-                    $is_cur = isset($we['is_current']) ? 't' : 'f';
+                    $is_cur = isset($we['is_current']) ? 1 : 0;
                     $stmt->execute([$candidate_id,Security::sanitizeInput($we['company_name']),Security::sanitizeInput($we['position_title']),
-                        Security::sanitizeInput($we['start_date']),($is_cur==='t'?null:Security::sanitizeInput($we['end_date']??'')),
+                        Security::sanitizeInput($we['start_date']),($is_cur?null:Security::sanitizeInput($we['end_date']??'')),
                         $is_cur,Security::sanitizeInput($we['responsibilities']??''),Security::sanitizeInput($we['achievements']??'')]);
                 }
             }
@@ -298,11 +298,11 @@ if ($_POST && isset($_POST['create_candidate'])) {
             foreach ($_POST['education'] as $ed) {
                 if (!empty($ed['institution_name']) && !empty($ed['degree_type'])) {
                     $stmt = $db->prepare("INSERT INTO candidate_education (candidate_id,institution_name,degree_type,field_of_study,start_year,end_year,is_current,gpa,honors,description) VALUES (?,?,?,?,?,?,?,?,?,?)");
-                    $is_cur = isset($ed['is_current']) ? 't' : 'f';
+                    $is_cur = isset($ed['is_current']) ? 1 : 0;
                     $stmt->execute([$candidate_id,Security::sanitizeInput($ed['institution_name']),Security::sanitizeInput($ed['degree_type']),
                         Security::sanitizeInput($ed['field_of_study']??''),
                         !empty($ed['start_year'])?(int)$ed['start_year']:null,
-                        ($is_cur==='t'?null:(!empty($ed['end_year'])?(int)$ed['end_year']:null)),
+                        ($is_cur?null:(!empty($ed['end_year'])?(int)$ed['end_year']:null)),
                         $is_cur,!empty($ed['gpa'])?floatval($ed['gpa']):null,
                         Security::sanitizeInput($ed['honors']??''),Security::sanitizeInput($ed['description']??'')]);
                 }

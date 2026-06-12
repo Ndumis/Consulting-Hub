@@ -545,11 +545,18 @@ if ($_POST && isset($_POST['update_purchase_order'])) {
         $db->beginTransaction();
         
         // Verify purchase order exists and can be updated (not completed)
-        $query = "SELECT * FROM purchase_orders WHERE id = ? AND created_by = ? AND status != 'completed'";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$po_id, $_SESSION['user_id']]);
+        $role = $_SESSION['role'] ?? '';
+        if (in_array($role, ['admin', 'manager'])) {
+            $query = "SELECT * FROM purchase_orders WHERE id = ? AND status != 'completed'";
+            $stmt = $db->prepare($query);
+            $stmt->execute([$po_id]);
+        } else {
+            $query = "SELECT * FROM purchase_orders WHERE id = ? AND created_by = ? AND status != 'completed'";
+            $stmt = $db->prepare($query);
+            $stmt->execute([$po_id, $_SESSION['user_id']]);
+        }
         $existing = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         if (!$existing) {
             throw new Exception('Purchase order not found or cannot be updated (completed orders are locked)');
         }

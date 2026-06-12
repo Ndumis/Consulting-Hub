@@ -110,11 +110,13 @@ class FileUpload {
         }
 
         $max_size = 5 * 1024 * 1024; // 5MB
-        $allowed_extensions = ['pdf', 'jpg', 'jpeg', 'png'];
+        $allowed_extensions = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp'];
         $allowed_mimes = [
             'application/pdf',
             'image/jpeg',
-            'image/png'
+            'image/png',
+            'image/gif',
+            'image/webp'
         ];
 
         $errors = [];
@@ -125,7 +127,7 @@ class FileUpload {
 
         $file_extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
         if (!in_array($file_extension, $allowed_extensions)) {
-            $errors[] = "Invalid file type. Only PDF, JPG, and PNG files are allowed.";
+            $errors[] = "Invalid file type. Only PDF, JPG, PNG, GIF, and WEBP files are allowed.";
         }
 
         $finfo = finfo_open(FILEINFO_MIME_TYPE);
