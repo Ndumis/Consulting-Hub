@@ -134,7 +134,7 @@ Consulting-Hub/
    mysql -u root kconsulting < db/kconsulting.sql
    ```
 
-3. **Run the migrations** in `db/migrations/`, in numeric order (001 → 009),
+3. **Run the migrations** in `db/migrations/`, in numeric order (001 → 010),
    against the `kconsulting` database. These add columns/tables introduced
    since the base dump was created (notifications, password resets, IT
    assets, revenue/expense proof attachments, extended candidate fields,
