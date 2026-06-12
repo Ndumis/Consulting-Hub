@@ -787,6 +787,22 @@ $nav_base   = '';
                     <option value="inactive">Inactive</option>
                     <option value="terminated">Terminated</option>
                 </select>
+                <div class="lc-date-filter">
+                    <select id="emp-date-range">
+                        <option value="all">All Dates</option>
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="year">This Year</option>
+                        <option value="lastyear">Last Year</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                    <span class="lc-custom-range">
+                        <input type="date" id="emp-date-from">
+                        <span>to</span>
+                        <input type="date" id="emp-date-to">
+                    </span>
+                </div>
                 <span class="hr-count" id="emp-count"><?php echo $total_emp; ?> employees</span>
             </div>
 
@@ -811,7 +827,8 @@ $nav_base   = '';
                 ?>
                 <tr data-search="<?php echo htmlspecialchars($search_str,ENT_QUOTES); ?>"
                     data-dept="<?php echo strtolower(htmlspecialchars($emp['department']??'')); ?>"
-                    data-status="<?php echo $emp['status']; ?>">
+                    data-status="<?php echo $emp['status']; ?>"
+                    data-date="<?php echo $emp['hire_date'] ?? ''; ?>">
                     <td>
                         <div class="emp-name-cell">
                             <div class="hr-avatar"><?php echo $initials; ?></div>
@@ -843,6 +860,7 @@ $nav_base   = '';
                 </tbody>
             </table>
             <div class="hr-no-results" id="emp-tbody-no-results">No employees match your search.</div>
+            <div class="lc-pagination" id="emp-pagination"></div>
             </div>
         </div>
 
@@ -902,6 +920,22 @@ $nav_base   = '';
                     <option value="rejected">Rejected</option>
                     <option value="cancelled">Cancelled</option>
                 </select>
+                <div class="lc-date-filter">
+                    <select id="lv-date-range">
+                        <option value="all">All Dates</option>
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="year">This Year</option>
+                        <option value="lastyear">Last Year</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                    <span class="lc-custom-range">
+                        <input type="date" id="lv-date-from">
+                        <span>to</span>
+                        <input type="date" id="lv-date-to">
+                    </span>
+                </div>
                 <span class="hr-count" id="lv-count"><?php echo count($leave_requests); ?> requests</span>
             </div>
 
@@ -925,7 +959,8 @@ $nav_base   = '';
                 ?>
                 <tr data-search="<?php echo htmlspecialchars($search_lv,ENT_QUOTES); ?>"
                     data-dept="<?php echo $lr['leave_type']; ?>"
-                    data-status="<?php echo $lr['status']; ?>">
+                    data-status="<?php echo $lr['status']; ?>"
+                    data-date="<?php echo $lr['start_date'] ?? ''; ?>">
                     <td style="font-weight:500;"><?php echo Security::escapeHTML($lr['first_name'].' '.$lr['last_name']); ?></td>
                     <td style="text-transform:capitalize;"><?php echo Security::escapeHTML($lr['leave_type']); ?></td>
                     <td><?php echo date('d M Y',strtotime($lr['start_date'])); ?></td>
@@ -960,6 +995,7 @@ $nav_base   = '';
                 </tbody>
             </table>
             <div class="hr-no-results" id="lv-tbody-no-results">No leave requests match your filter.</div>
+            <div class="lc-pagination" id="lv-pagination"></div>
             </div>
         </div>
 
@@ -1026,6 +1062,22 @@ $nav_base   = '';
                     <option value="published">Published</option>
                     <option value="completed">Completed</option>
                 </select>
+                <div class="lc-date-filter">
+                    <select id="rv-date-range">
+                        <option value="all">All Dates</option>
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="year">This Year</option>
+                        <option value="lastyear">Last Year</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                    <span class="lc-custom-range">
+                        <input type="date" id="rv-date-from">
+                        <span>to</span>
+                        <input type="date" id="rv-date-to">
+                    </span>
+                </div>
                 <span class="hr-count" id="rv-count"><?php echo count($performance_reviews); ?> reviews</span>
             </div>
 
@@ -1048,7 +1100,8 @@ $nav_base   = '';
                 ?>
                 <tr data-search="<?php echo htmlspecialchars($search_rv,ENT_QUOTES); ?>"
                     data-dept="<?php echo $rv['overall_rating']; ?>"
-                    data-status="<?php echo $rv['status']; ?>">
+                    data-status="<?php echo $rv['status']; ?>"
+                    data-date="<?php echo $rv['review_period_start'] ?? ''; ?>">
                     <td style="font-weight:500;"><?php echo Security::escapeHTML($rv['first_name'].' '.$rv['last_name']); ?></td>
                     <td style="font-size:.8rem;">
                         <?php echo date('M Y',strtotime($rv['review_period_start'])); ?>
@@ -1063,6 +1116,7 @@ $nav_base   = '';
                 </tbody>
             </table>
             <div class="hr-no-results" id="rv-tbody-no-results">No reviews match your filter.</div>
+            <div class="lc-pagination" id="rv-pagination"></div>
             </div>
         </div>
 
@@ -1112,6 +1166,22 @@ $nav_base   = '';
                     <option value="draft">Draft</option>
                     <option value="closed">Closed</option>
                 </select>
+                <div class="lc-date-filter">
+                    <select id="jp-date-range">
+                        <option value="all">All Dates</option>
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="year">This Year</option>
+                        <option value="lastyear">Last Year</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                    <span class="lc-custom-range">
+                        <input type="date" id="jp-date-from">
+                        <span>to</span>
+                        <input type="date" id="jp-date-to">
+                    </span>
+                </div>
                 <span class="hr-count" id="jp-count"><?php echo count($job_postings); ?> postings</span>
             </div>
 
@@ -1135,7 +1205,8 @@ $nav_base   = '';
                 ?>
                 <tr data-search="<?php echo htmlspecialchars($search_jp,ENT_QUOTES); ?>"
                     data-dept="<?php echo strtolower(htmlspecialchars($jp['department']??'')); ?>"
-                    data-status="<?php echo $jp['status']; ?>">
+                    data-status="<?php echo $jp['status']; ?>"
+                    data-date="<?php echo !empty($jp['created_at']) ? date('Y-m-d', strtotime($jp['created_at'])) : ''; ?>">
                     <td style="font-weight:600;"><?php echo Security::escapeHTML($jp['title']); ?></td>
                     <td><?php echo Security::escapeHTML($jp['department']); ?></td>
                     <td style="font-size:.82rem;"><?php echo Security::escapeHTML($jp['salary_range'] ?? '—'); ?></td>
@@ -1158,6 +1229,7 @@ $nav_base   = '';
                 </tbody>
             </table>
             <div class="hr-no-results" id="jp-tbody-no-results">No job postings match your filter.</div>
+            <div class="lc-pagination" id="jp-pagination"></div>
             </div>
 
             <!-- Candidates section -->
@@ -1206,6 +1278,22 @@ $nav_base   = '';
                     <option value="hired">Hired</option>
                     <option value="rejected">Rejected</option>
                 </select>
+                <div class="lc-date-filter">
+                    <select id="cand-date-range">
+                        <option value="all">All Dates</option>
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="year">This Year</option>
+                        <option value="lastyear">Last Year</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                    <span class="lc-custom-range">
+                        <input type="date" id="cand-date-from">
+                        <span>to</span>
+                        <input type="date" id="cand-date-to">
+                    </span>
+                </div>
                 <span class="hr-count" id="cand-count"><?php echo count($candidates); ?> candidates</span>
             </div>
 
@@ -1227,7 +1315,8 @@ $nav_base   = '';
                 ?>
                 <tr data-search="<?php echo htmlspecialchars($search_cand,ENT_QUOTES); ?>"
                     data-dept="<?php echo strtolower(htmlspecialchars($cand['job_title']??'')); ?>"
-                    data-status="<?php echo $cand['status']; ?>">
+                    data-status="<?php echo $cand['status']; ?>"
+                    data-date="<?php echo !empty($cand['created_at']) ? date('Y-m-d', strtotime($cand['created_at'])) : ''; ?>">
                     <td>
                         <div style="font-weight:600;"><?php echo Security::escapeHTML($cand['first_name'].' '.$cand['last_name']); ?></div>
                         <div style="font-size:.75rem;color:#9ca3af;"><?php echo Security::escapeHTML($cand['email']); ?></div>
@@ -1248,6 +1337,7 @@ $nav_base   = '';
                 </tbody>
             </table>
             <div class="hr-no-results" id="cand-tbody-no-results">No candidates match your filter.</div>
+            <div class="lc-pagination" id="cand-pagination"></div>
             </div>
         </div>
 
@@ -1353,6 +1443,7 @@ $nav_base   = '';
     </div>
 
     <script src="../js/notification.js"></script>
+    <script src="../js/list-controls.js"></script>
     <script>
     // ── Tab switching ────────────────────────────────────────────────────────
     function switchTab(name) {
@@ -1402,7 +1493,34 @@ $nav_base   = '';
         if (noRes) noRes.style.display = visible ? 'none' : 'block';
         const cnt = document.getElementById(countId);
         if (cnt) cnt.textContent = visible + ' ' + (tbodyId.includes('emp')?'employees':tbodyId.includes('lv')?'requests':tbodyId.includes('rv')?'reviews':tbodyId.includes('jp')?'postings':'candidates');
+
+        const prefix = tbodyId.split('-')[0];
+        ListControls.applyDateFilterAndPaginate(tbodyId, 'tr', prefix+'-date-range', prefix+'-date-from', prefix+'-date-to', prefix+'-pagination');
     }
+
+    // Init pagination + date-range filters for HR lists
+    document.addEventListener('DOMContentLoaded', function() {
+        ListControls.initDateRangeControl('emp-date-range', 'emp-date-from', 'emp-date-to', function() {
+            filterHR('emp-tbody','emp-search','emp-dept-filter','emp-status-filter','emp-count');
+        });
+        ListControls.initDateRangeControl('lv-date-range', 'lv-date-from', 'lv-date-to', function() {
+            filterHR('lv-tbody','lv-search','lv-type-filter','lv-status-filter','lv-count');
+        });
+        ListControls.initDateRangeControl('rv-date-range', 'rv-date-from', 'rv-date-to', function() {
+            filterHR('rv-tbody','rv-search','rv-dept-filter','rv-status-filter','rv-count');
+        });
+        ListControls.initDateRangeControl('jp-date-range', 'jp-date-from', 'jp-date-to', function() {
+            filterHR('jp-tbody','jp-search','jp-dept-filter','jp-status-filter','jp-count');
+        });
+        ListControls.initDateRangeControl('cand-date-range', 'cand-date-from', 'cand-date-to', function() {
+            filterHR('cand-tbody','cand-search','cand-job-filter','cand-status-filter','cand-count');
+        });
+        filterHR('emp-tbody','emp-search','emp-dept-filter','emp-status-filter','emp-count');
+        filterHR('lv-tbody','lv-search','lv-type-filter','lv-status-filter','lv-count');
+        filterHR('rv-tbody','rv-search','rv-dept-filter','rv-status-filter','rv-count');
+        filterHR('jp-tbody','jp-search','jp-dept-filter','jp-status-filter','jp-count');
+        filterHR('cand-tbody','cand-search','cand-job-filter','cand-status-filter','cand-count');
+    });
 
     // ── Modals ───────────────────────────────────────────────────────────────
     function closeModal(id) { document.getElementById(id).classList.remove('open'); }

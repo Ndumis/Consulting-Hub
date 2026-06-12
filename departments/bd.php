@@ -33,6 +33,28 @@ if ($_POST && isset($_POST['update_lead'])) {
     header("Location: bd.php?view=leads&msg=lead_updated"); exit();
 }
 
+if ($_POST && isset($_POST['convert_lead_to_client'])) {
+    Security::checkCSRFToken();
+    Security::requireWriteAccess('Business Development');
+    $lead_id = (int)$_POST['lead_id'];
+    $stmt = $db->prepare("SELECT * FROM bd_leads WHERE id=?");
+    $stmt->execute([$lead_id]);
+    $lead = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if ($lead && $lead['status'] !== 'client') {
+        $db->prepare("INSERT INTO clients (name,email,phone,company,status) VALUES (?,?,?,?,'active')")
+           ->execute([
+               $lead['contact_person'] ?: $lead['company_name'],
+               $lead['email'],
+               $lead['phone'],
+               $lead['company_name'],
+           ]);
+        $db->prepare("UPDATE bd_leads SET status='client' WHERE id=?")->execute([$lead_id]);
+        header("Location: bd.php?view=leads&msg=lead_converted"); exit();
+    }
+    header("Location: bd.php?view=leads&msg=lead_already_client"); exit();
+}
+
 if ($_POST && isset($_POST['log_activity'])) {
     Security::checkCSRFToken();
     Security::requireWriteAccess('Business Development');
@@ -320,6 +342,7 @@ $flash_map = [
     'activity_logged'=>'✅ Activity logged.','task_created'=>'✅ Task created.',
     'task_completed'=>'✅ Task marked complete.','targets_updated'=>'✅ Targets updated.',
     'targets_failed'=>'❌ Failed to save targets — please try again.',
+    'lead_converted'=>'✅ Lead converted to client.','lead_already_client'=>'ℹ️ This lead is already a client.',
 ];
 if ($msg && isset($flash_map[$msg])): ?>
 <div class="flash <?= str_starts_with($msg,'targets_failed')?'flash-error':'flash-success' ?>" id="flashMsg"><?= $flash_map[$msg] ?></div>
@@ -521,6 +544,22 @@ if ($msg && isset($flash_map[$msg])): ?>
         <option value="">All Statuses</option>
         <?php foreach ($lead_statuses as $v=>$l): ?><option value="<?= $v ?>"><?= $l ?></option><?php endforeach; ?>
     </select>
+    <div class="lc-date-filter">
+        <select id="lead-date-range">
+            <option value="all">All Dates</option>
+            <option value="today">Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+            <option value="year">This Year</option>
+            <option value="lastyear">Last Year</option>
+            <option value="custom">Custom Range</option>
+        </select>
+        <span class="lc-custom-range">
+            <input type="date" id="lead-date-from">
+            <span>to</span>
+            <input type="date" id="lead-date-to">
+        </span>
+    </div>
     <span class="result-count" id="lead-count"><?= count($leads) ?> lead<?= count($leads)!=1?'s':'' ?></span>
 </div>
 
@@ -537,7 +576,8 @@ if ($msg && isset($flash_map[$msg])): ?>
     <div class="lead-card"
          data-search="<?= htmlspecialchars($searchText,ENT_QUOTES) ?>"
          data-industry="<?= $lead['industry'] ?>"
-         data-status="<?= $lead['status'] ?>">
+         data-status="<?= $lead['status'] ?>"
+         data-date="<?= !empty($lead['created_at']) ? date('Y-m-d', strtotime($lead['created_at'])) : '' ?>">
         <div class="lead-score-bar" style="background:linear-gradient(90deg,<?= $scCol ?> <?= $sc ?>%,#e5e7eb <?= $sc ?>%);"></div>
         <div class="lead-card-body">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem;margin-bottom:.3rem;">
@@ -561,9 +601,15 @@ if ($msg && isset($flash_map[$msg])): ?>
         <div class="lead-card-foot">
             <span style="font-size:.7rem;color:#9ca3af;"><?= date('M j, Y',strtotime($lead['created_at'])) ?></span>
             <?php if (in_array($role,['admin','manager'])): ?>
-            <div style="display:flex;gap:.35rem;">
+            <div style="display:flex;gap:.35rem;flex-wrap:wrap;">
                 <button class="btn-xs" onclick="toggleInlineEdit('lead-<?= $lead['id'] ?>')">✏️ Edit</button>
                 <a href="?view=activities&lead_id=<?= $lead['id'] ?>" class="btn-xs">📞 Log</a>
+                <?php if ($lead['status'] !== 'client'): ?>
+                <form method="post" style="display:inline;" onsubmit="return confirm('Convert this lead into a client record?');">
+                    <?= Security::getCSRFTokenField() ?><input type="hidden" name="lead_id" value="<?= $lead['id'] ?>">
+                    <button type="submit" name="convert_lead_to_client" class="btn-xs" style="background:#059669;color:#fff;border-color:#059669;">🤝 Convert to Client</button>
+                </form>
+                <?php endif; ?>
             </div>
             <?php endif; ?>
         </div>
@@ -601,6 +647,7 @@ if ($msg && isset($flash_map[$msg])): ?>
     </div>
     <?php endforeach; ?>
 </div>
+<div class="lc-pagination" id="lead-pagination"></div>
 <?php endif; ?>
 
 <!-- ══ ACTIVITIES ══ -->
@@ -665,6 +712,22 @@ if ($msg && isset($flash_map[$msg])): ?>
         <option value="">All Types</option>
         <?php foreach ($activity_types as $v=>$l): ?><option value="<?= $v ?>"><?= $l ?></option><?php endforeach; ?>
     </select>
+    <div class="lc-date-filter">
+        <select id="act-date-range">
+            <option value="all">All Dates</option>
+            <option value="today">Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+            <option value="year">This Year</option>
+            <option value="lastyear">Last Year</option>
+            <option value="custom">Custom Range</option>
+        </select>
+        <span class="lc-custom-range">
+            <input type="date" id="act-date-from">
+            <span>to</span>
+            <input type="date" id="act-date-to">
+        </span>
+    </div>
     <span class="result-count" id="act-count"><?= count($all_activities) ?> activit<?= count($all_activities)!=1?'ies':'y' ?></span>
 </div>
 
@@ -678,7 +741,8 @@ if ($msg && isset($flash_map[$msg])): ?>
     ?>
     <div class="act-item type-<?= $act['activity_type'] ?>"
          data-search="<?= htmlspecialchars($searchText,ENT_QUOTES) ?>"
-         data-type="<?= $act['activity_type'] ?>">
+         data-type="<?= $act['activity_type'] ?>"
+         data-date="<?= !empty($act['activity_date']) ? date('Y-m-d', strtotime($act['activity_date'])) : '' ?>">
         <div class="act-icon"><?= $act_icons[$act['activity_type']]??'📝' ?></div>
         <div class="act-body">
             <div class="act-company"><?= Security::escapeHTML($act['company_name']??'General Activity') ?> <span style="font-size:.72rem;color:#9ca3af;font-weight:400;">· <?= ucfirst(str_replace('_',' ',$act['activity_type'])) ?></span></div>
@@ -692,6 +756,7 @@ if ($msg && isset($flash_map[$msg])): ?>
     </div>
     <?php endforeach; ?>
 </div>
+<div class="lc-pagination" id="act-pagination"></div>
 <?php endif; ?>
 
 <!-- ══ TASKS ══ -->
@@ -761,6 +826,22 @@ if ($msg && isset($flash_map[$msg])): ?>
         <option value="pending">Pending</option>
         <option value="completed">Completed</option>
     </select>
+    <div class="lc-date-filter">
+        <select id="task-date-range">
+            <option value="all">All Dates</option>
+            <option value="today">Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+            <option value="year">This Year</option>
+            <option value="lastyear">Last Year</option>
+            <option value="custom">Custom Range</option>
+        </select>
+        <span class="lc-custom-range">
+            <input type="date" id="task-date-from">
+            <span>to</span>
+            <input type="date" id="task-date-to">
+        </span>
+    </div>
     <span class="result-count" id="task-count"><?= count($all_tasks) ?> task<?= count($all_tasks)!=1?'s':'' ?></span>
 </div>
 
@@ -776,7 +857,8 @@ if ($msg && isset($flash_map[$msg])): ?>
     <div class="task-card"
          data-search="<?= htmlspecialchars($searchText,ENT_QUOTES) ?>"
          data-priority="<?= $task['priority'] ?>"
-         data-status="<?= $task['status'] ?>">
+         data-status="<?= $task['status'] ?>"
+         data-date="<?= !empty($task['due_date']) ? date('Y-m-d', strtotime($task['due_date'])) : '' ?>">
         <div class="task-priority-strip <?= $task['priority'] ?>"></div>
         <div class="task-body">
             <div class="task-desc"><?= Security::escapeHTML($task['task_description']) ?></div>
@@ -801,6 +883,7 @@ if ($msg && isset($flash_map[$msg])): ?>
     </div>
     <?php endforeach; ?>
 </div>
+<div class="lc-pagination" id="task-pagination"></div>
 <?php endif; ?>
 
 <!-- ══ TARGETS ══ -->
@@ -961,6 +1044,7 @@ if ($msg && isset($flash_map[$msg])): ?>
 </div><!-- /.main-content -->
 
 <script src="../js/notification.js"></script>
+<script src="../js/list-controls.js"></script>
 <script>
 function toggleForm(wrapId, btnId, labelOpen, labelClose) {
     const wrap = document.getElementById(wrapId);
@@ -999,7 +1083,26 @@ function filterBD(containerId, searchInputId, filterMap, countId) {
     const noRes = document.getElementById(containerId.split('-')[0] + '-no-results') ||
                   document.getElementById(containerId + '-no-results');
     if (noRes) noRes.style.display = visible === 0 ? 'block' : 'none';
+
+    const prefix = containerId.split('-')[0];
+    ListControls.applyDateFilterAndPaginate(containerId, '[data-search]', prefix+'-date-range', prefix+'-date-from', prefix+'-date-to', prefix+'-pagination');
 }
+
+// Init pagination + date-range filters for BD lists (only the active view's elements exist)
+document.addEventListener('DOMContentLoaded', function() {
+    ListControls.initDateRangeControl('lead-date-range', 'lead-date-from', 'lead-date-to', function() {
+        filterBD('lead-grid','lead-search',{industry:'lead-f-ind',status:'lead-f-status'},'lead-count');
+    });
+    ListControls.initDateRangeControl('act-date-range', 'act-date-from', 'act-date-to', function() {
+        filterBD('act-timeline','act-search',{type:'act-f-type'},'act-count');
+    });
+    ListControls.initDateRangeControl('task-date-range', 'task-date-from', 'task-date-to', function() {
+        filterBD('task-list','task-search',{priority:'task-f-pri',status:'task-f-status'},'task-count');
+    });
+    filterBD('lead-grid','lead-search',{industry:'lead-f-ind',status:'lead-f-status'},'lead-count');
+    filterBD('act-timeline','act-search',{type:'act-f-type'},'act-count');
+    filterBD('task-list','task-search',{priority:'task-f-pri',status:'task-f-status'},'task-count');
+});
 
 const flash = document.getElementById('flashMsg');
 if (flash) setTimeout(() => { flash.style.transition='opacity .5s'; flash.style.opacity=0; setTimeout(()=>flash.remove(),500); }, 3500);

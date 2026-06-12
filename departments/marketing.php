@@ -632,6 +632,22 @@ if ($msg && isset($flash_map[$msg])): ?>
         <option value="scheduled">Scheduled</option>
         <option value="published">Published</option>
     </select>
+    <div class="lc-date-filter">
+        <select id="sp-date-range">
+            <option value="all">All Dates</option>
+            <option value="today">Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+            <option value="year">This Year</option>
+            <option value="lastyear">Last Year</option>
+            <option value="custom">Custom Range</option>
+        </select>
+        <span class="lc-custom-range">
+            <input type="date" id="sp-date-from">
+            <span>to</span>
+            <input type="date" id="sp-date-to">
+        </span>
+    </div>
     <span class="result-count" id="sp-count"><?= count($social_posts) ?> post<?= count($social_posts)!=1?'s':'' ?></span>
 </div>
 
@@ -650,7 +666,8 @@ if ($msg && isset($flash_map[$msg])): ?>
     <div class="mkt-card"
          data-search="<?= htmlspecialchars($searchText,ENT_QUOTES) ?>"
          data-platform="<?= Security::escapeHTML($sp['platform']) ?>"
-         data-status="<?= $sp['status'] ?>">
+         data-status="<?= $sp['status'] ?>"
+         data-date="<?= !empty($sp['scheduled_for']) ? date('Y-m-d', strtotime($sp['scheduled_for'])) : '' ?>">
         <div class="mkt-card-top">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.6rem;">
                 <div>
@@ -709,6 +726,7 @@ if ($msg && isset($flash_map[$msg])): ?>
     </div>
     <?php endforeach; ?>
 </div>
+<div class="lc-pagination" id="sp-pagination"></div>
 <?php endif; ?>
 
 <!-- ══ EMAIL CAMPAIGNS ══ -->
@@ -764,6 +782,22 @@ if ($msg && isset($flash_map[$msg])): ?>
         <option value="scheduled">Scheduled</option>
         <option value="sent">Sent</option>
     </select>
+    <div class="lc-date-filter">
+        <select id="ec-date-range">
+            <option value="all">All Dates</option>
+            <option value="today">Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+            <option value="year">This Year</option>
+            <option value="lastyear">Last Year</option>
+            <option value="custom">Custom Range</option>
+        </select>
+        <span class="lc-custom-range">
+            <input type="date" id="ec-date-from">
+            <span>to</span>
+            <input type="date" id="ec-date-to">
+        </span>
+    </div>
     <span class="result-count" id="ec-count"><?= count($email_campaigns) ?> campaign<?= count($email_campaigns)!=1?'s':'' ?></span>
 </div>
 
@@ -779,7 +813,8 @@ if ($msg && isset($flash_map[$msg])): ?>
     ?>
     <div class="ec-campaign-card"
          data-search="<?= htmlspecialchars($searchText, ENT_QUOTES) ?>"
-         data-status="<?= $ec['status'] ?>">
+         data-status="<?= $ec['status'] ?>"
+         data-date="<?= !empty($ec['send_date']) ? date('Y-m-d', strtotime($ec['send_date'])) : '' ?>">
 
         <!-- Hero gradient header -->
         <div class="ec-card-hero">
@@ -906,6 +941,7 @@ if ($msg && isset($flash_map[$msg])): ?>
     </div>
     <?php endforeach; ?>
 </div>
+<div class="lc-pagination" id="ec-pagination"></div>
 <?php endif; ?>
 
 <!-- ══ BLOG POSTS ══ -->
@@ -988,6 +1024,22 @@ if ($msg && isset($flash_map[$msg])): ?>
         <option value="scheduled">Scheduled</option>
         <option value="published">Published</option>
     </select>
+    <div class="lc-date-filter">
+        <select id="bp-date-range">
+            <option value="all">All Dates</option>
+            <option value="today">Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+            <option value="year">This Year</option>
+            <option value="lastyear">Last Year</option>
+            <option value="custom">Custom Range</option>
+        </select>
+        <span class="lc-custom-range">
+            <input type="date" id="bp-date-from">
+            <span>to</span>
+            <input type="date" id="bp-date-to">
+        </span>
+    </div>
     <span class="result-count" id="bp-count"><?= count($blog_posts) ?> post<?= count($blog_posts)!=1?'s':'' ?></span>
 </div>
 
@@ -1003,7 +1055,8 @@ if ($msg && isset($flash_map[$msg])): ?>
     <div class="mkt-card"
          data-search="<?= htmlspecialchars($searchText,ENT_QUOTES) ?>"
          data-category="<?= Security::escapeHTML($bp['category']??'') ?>"
-         data-status="<?= $bp['status'] ?>">
+         data-status="<?= $bp['status'] ?>"
+         data-date="<?= date('Y-m-d', strtotime($bp['published_at']??$bp['created_at'])) ?>">
         <?php if ($bp['featured_image']): ?>
         <img src="<?= Security::escapeHTML($bp['featured_image']) ?>" alt="" class="blog-img" onerror="this.style.display='none'">
         <?php else: ?>
@@ -1077,6 +1130,7 @@ if ($msg && isset($flash_map[$msg])): ?>
     </div>
     <?php endforeach; ?>
 </div>
+<div class="lc-pagination" id="bp-pagination"></div>
 <?php endif; ?>
 
 <!-- ══ CAMPAIGNS ══ -->
@@ -1137,6 +1191,22 @@ if ($msg && isset($flash_map[$msg])): ?>
         <option value="completed">Completed</option>
         <option value="paused">Paused</option>
     </select>
+    <div class="lc-date-filter">
+        <select id="cp-date-range">
+            <option value="all">All Dates</option>
+            <option value="today">Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+            <option value="year">This Year</option>
+            <option value="lastyear">Last Year</option>
+            <option value="custom">Custom Range</option>
+        </select>
+        <span class="lc-custom-range">
+            <input type="date" id="cp-date-from">
+            <span>to</span>
+            <input type="date" id="cp-date-to">
+        </span>
+    </div>
     <span class="result-count" id="cp-count"><?= count($campaigns) ?> campaign<?= count($campaigns)!=1?'s':'' ?></span>
 </div>
 
@@ -1156,7 +1226,8 @@ if ($msg && isset($flash_map[$msg])): ?>
     <div class="mkt-card" style="border-top:3px solid <?= $bgCol ?>;"
          data-search="<?= htmlspecialchars($searchText,ENT_QUOTES) ?>"
          data-type="<?= Security::escapeHTML($c['campaign_type']??'') ?>"
-         data-status="<?= $c['status'] ?>">
+         data-status="<?= $c['status'] ?>"
+         data-date="<?= !empty($c['start_date']) ? date('Y-m-d', strtotime($c['start_date'])) : '' ?>">
         <div class="mkt-card-top">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.5rem;flex-wrap:wrap;gap:.4rem;">
                 <div style="font-size:.95rem;font-weight:700;color:#111827;"><?= Security::escapeHTML($c['campaign_name']) ?></div>
@@ -1204,6 +1275,7 @@ if ($msg && isset($flash_map[$msg])): ?>
     </div>
     <?php endforeach; ?>
 </div>
+<div class="lc-pagination" id="cp-pagination"></div>
 <?php endif; ?>
 
 <?php endif; ?>
@@ -1233,6 +1305,7 @@ if ($msg && isset($flash_map[$msg])): ?>
 </div>
 
 <script src="../js/notification.js"></script>
+<script src="../js/list-controls.js"></script>
 <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
 <script>
 // Toggle create form visibility
@@ -1282,7 +1355,30 @@ function filterMkt(containerId, searchInputId, filterMap, countId) {
     // Show "no results" message
     const noRes = document.getElementById(containerId.replace('-grid','-no-results').replace('-list','-no-results'));
     if (noRes) noRes.style.display = visible === 0 ? 'block' : 'none';
+
+    const prefix = containerId.replace('-grid','').replace('-list','');
+    ListControls.applyDateFilterAndPaginate(containerId, '[data-search]', prefix+'-date-range', prefix+'-date-from', prefix+'-date-to', prefix+'-pagination');
 }
+
+// Init pagination + date-range filters for Marketing lists (only the active view's elements exist)
+document.addEventListener('DOMContentLoaded', function() {
+    ListControls.initDateRangeControl('sp-date-range', 'sp-date-from', 'sp-date-to', function() {
+        filterMkt('sp-grid','sp-search',{platform:'sp-filter-platform',status:'sp-filter-status'},'sp-count');
+    });
+    ListControls.initDateRangeControl('ec-date-range', 'ec-date-from', 'ec-date-to', function() {
+        filterMkt('ec-list','ec-search',{status:'ec-filter-status'},'ec-count');
+    });
+    ListControls.initDateRangeControl('bp-date-range', 'bp-date-from', 'bp-date-to', function() {
+        filterMkt('bp-grid','bp-search',{category:'bp-filter-cat',status:'bp-filter-status'},'bp-count');
+    });
+    ListControls.initDateRangeControl('cp-date-range', 'cp-date-from', 'cp-date-to', function() {
+        filterMkt('cp-grid','cp-search',{type:'cp-filter-type',status:'cp-filter-status'},'cp-count');
+    });
+    filterMkt('sp-grid','sp-search',{platform:'sp-filter-platform',status:'sp-filter-status'},'sp-count');
+    filterMkt('ec-list','ec-search',{status:'ec-filter-status'},'ec-count');
+    filterMkt('bp-grid','bp-search',{category:'bp-filter-cat',status:'bp-filter-status'},'bp-count');
+    filterMkt('cp-grid','cp-search',{type:'cp-filter-type',status:'cp-filter-status'},'cp-count');
+});
 
 // Modal
 function openRecipientModal(id) {

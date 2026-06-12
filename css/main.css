@@ -894,6 +894,86 @@ textarea {
     }
 }
 
+/* ============================================================
+   LIST CONTROLS — shared date-range filter + pagination
+   ============================================================ */
+.lc-date-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.lc-date-filter select,
+.lc-date-filter input[type="date"] {
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    color: #374151;
+    background: #fff;
+    outline: none;
+    transition: border .2s;
+}
+.lc-date-filter select:focus,
+.lc-date-filter input[type="date"]:focus {
+    border-color: var(--nav-accent);
+}
+.lc-custom-range {
+    display: none;
+    align-items: center;
+    gap: 8px;
+}
+.lc-custom-range.show {
+    display: inline-flex;
+}
+.lc-custom-range span {
+    font-size: 0.8rem;
+    color: #6b7280;
+}
+
+.lc-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+    padding: 8px 0;
+}
+.lc-pagination button {
+    min-width: 34px;
+    height: 34px;
+    padding: 0 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #fff;
+    color: #374151;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .15s;
+}
+.lc-pagination button:hover:not(:disabled):not(.active) {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+}
+.lc-pagination button.active {
+    background: var(--nav-bg);
+    border-color: var(--nav-bg);
+    color: #fff;
+    cursor: default;
+}
+.lc-pagination button:disabled {
+    color: #d1d5db;
+    cursor: not-allowed;
+    background: #f9fafb;
+}
+.lc-pagination .lc-ellipsis {
+    padding: 0 4px;
+    color: #9ca3af;
+    font-size: 0.82rem;
+}
+
 @media (max-width: 768px) {
     .main-content {
         margin-left: 0 !important;

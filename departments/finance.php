@@ -10,6 +10,7 @@ require_once '../config/security.php';
 require_once '../includes/functions.php';
 require_once '../includes/email_service.php';
 require_once '../includes/page_tracker.php';
+require_once '../includes/file_upload.php';
 
 // Check department access
 Security::requireDepartmentAccess('Finance');
@@ -207,12 +208,12 @@ if ($_POST && isset($_POST['create_quotation'])) {
     
     $quotation_number = Utils::generateQuotationNumber();
     
-    $query = "INSERT INTO quotations (quotation_number, client_id, quotation_date, valid_until, vat_rate, notes, created_by) 
-              VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id";
+    $query = "INSERT INTO quotations (quotation_number, client_id, quotation_date, valid_until, vat_rate, notes, created_by)
+              VALUES (?, ?, ?, ?, ?, ?, ?)";
     $stmt = $db->prepare($query);
     $stmt->execute([$quotation_number, $client_id, $quotation_date, $valid_until, $vat_rate, $notes, $_SESSION['user_id']]);
-    
-    $quotation_id = $stmt->fetchColumn();
+
+    $quotation_id = $db->lastInsertId();
     
     // Process quotation items
     if (!empty($_POST['items'])) {
@@ -275,18 +276,18 @@ if ($_POST && isset($_POST['convert_to_invoice'])) {
         $due_date = date('Y-m-d', strtotime('+30 days')); // 30 days payment terms
         
         // Create invoice from quotation
-        $query = "INSERT INTO invoices (invoice_number, quotation_id, client_id, project_id, invoice_date, due_date, 
-                  vat_rate, subtotal, vat_amount, total_amount, notes, created_by) 
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id";
+        $query = "INSERT INTO invoices (invoice_number, quotation_id, client_id, project_id, invoice_date, due_date,
+                  vat_rate, subtotal, vat_amount, total_amount, notes, created_by)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $db->prepare($query);
         $stmt->execute([
             $invoice_number, $quotation_id, $quotation['client_id'], $quotation['project_id'],
             $invoice_date, $due_date, $quotation['vat_rate'], $quotation['subtotal'],
-            $quotation['vat_amount'], $quotation['total_amount'], 
+            $quotation['vat_amount'], $quotation['total_amount'],
             "Converted from quotation: " . $quotation['quotation_number'], $_SESSION['user_id']
         ]);
-        
-        $invoice_id = $stmt->fetchColumn();
+
+        $invoice_id = $db->lastInsertId();
         if (!$invoice_id) {
             throw new Exception('Failed to create invoice');
         }
@@ -443,12 +444,12 @@ if ($_POST && isset($_POST['create_invoice'])) {
     
     $invoice_number = Utils::generateInvoiceNumber();
     
-    $query = "INSERT INTO invoices (invoice_number, client_id, invoice_date, due_date, vat_rate, notes, created_by) 
-              VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id";
+    $query = "INSERT INTO invoices (invoice_number, client_id, invoice_date, due_date, vat_rate, notes, created_by)
+              VALUES (?, ?, ?, ?, ?, ?, ?)";
     $stmt = $db->prepare($query);
     $stmt->execute([$invoice_number, $client_id, $invoice_date, $due_date, $vat_rate, $notes, $_SESSION['user_id']]);
-    
-    $invoice_id = $stmt->fetchColumn();
+
+    $invoice_id = $db->lastInsertId();
     
     // Process invoice items
     if (!empty($_POST['items'])) {
@@ -620,14 +621,14 @@ if ($_POST && isset($_POST['create_purchase_order'])) {
     
     $po_number = Utils::generatePONumber();
     
-    $query = "INSERT INTO purchase_orders (po_number, supplier_name, supplier_email, supplier_phone, project_id, 
-              order_date, expected_delivery, vat_rate, notes, created_by) 
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id";
+    $query = "INSERT INTO purchase_orders (po_number, supplier_name, supplier_email, supplier_phone, project_id,
+              order_date, expected_delivery, vat_rate, notes, created_by)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     $stmt = $db->prepare($query);
-    $stmt->execute([$po_number, $supplier_name, $supplier_email, $supplier_phone, $project_id, 
+    $stmt->execute([$po_number, $supplier_name, $supplier_email, $supplier_phone, $project_id,
                    $order_date, $expected_delivery, $vat_rate, $notes, $_SESSION['user_id']]);
-    
-    $po_id = $stmt->fetchColumn();
+
+    $po_id = $db->lastInsertId();
     
     // Process purchase order items
     if (!empty($_POST['items'])) {
@@ -718,7 +719,7 @@ if ($_POST && isset($_POST['update_invoice_status'])) {
 if ($_POST && isset($_POST['record_project_revenue'])) {
     Security::checkCSRFToken();
     Security::requireWriteAccess('Finance');
-    
+
     $project_id = (int)$_POST['project_id'];
     $client_id = (int)$_POST['client_id'];
     $revenue_type = Security::sanitizeInput($_POST['revenue_type']);
@@ -727,21 +728,31 @@ if ($_POST && isset($_POST['record_project_revenue'])) {
     $payment_method = Security::sanitizeInput($_POST['payment_method']);
     $reference_number = Security::sanitizeInput($_POST['reference_number']);
     $notes = Security::sanitizeInput($_POST['notes']);
-    
-    $query = "INSERT INTO project_revenues (project_id, client_id, revenue_type, amount, received_date, 
-              payment_method, reference_number, notes, created_by) 
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+    $upload = FileUpload::uploadDepartmentFile($_FILES['proof_file'] ?? null, 'finance', 'revenue');
+    if (!$upload['success']) {
+        header('Location: finance.php?view=project_revenues&err=' . urlencode(implode(' ', $upload['errors'])));
+        exit();
+    }
+    $proof_file = $upload['filename'] !== null ? $upload['path'] : null;
+
+    $query = "INSERT INTO project_revenues (project_id, client_id, revenue_type, amount, received_date,
+              payment_method, reference_number, notes, proof_file, created_by)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     $stmt = $db->prepare($query);
-    $stmt->execute([$project_id, $client_id, $revenue_type, $amount, $received_date, 
-                   $payment_method, $reference_number, $notes, $_SESSION['user_id']]);
-    
+    $stmt->execute([$project_id, $client_id, $revenue_type, $amount, $received_date,
+                   $payment_method, $reference_number, $notes, $proof_file, $_SESSION['user_id']]);
+
     // Record in money flow
-    $query = "INSERT INTO money_flow (transaction_type, category, amount, description, transaction_date, 
-              project_id, client_id, created_by) 
+    $query = "INSERT INTO money_flow (transaction_type, category, amount, description, transaction_date,
+              project_id, client_id, created_by)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
     $stmt = $db->prepare($query);
-    $stmt->execute(['income', ucfirst($revenue_type), $amount, $notes ?: "Project revenue - {$revenue_type}", 
+    $stmt->execute(['income', ucfirst($revenue_type), $amount, $notes ?: "Project revenue - {$revenue_type}",
                    $received_date, $project_id, $client_id, $_SESSION['user_id']]);
+
+    header('Location: finance.php?view=project_revenues&msg=' . urlencode('Revenue recorded successfully.'));
+    exit();
 }
 
 // Handle update project revenue
@@ -759,48 +770,80 @@ if ($_POST && isset($_POST['update_project_revenue'])) {
     $reference_number = Security::sanitizeInput($_POST['reference_number']);
     $notes = Security::sanitizeInput($_POST['notes']);
     
-    // Get old revenue for money_flow update
-    $query = "SELECT * FROM project_revenues WHERE id = ? AND created_by = ?";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$revenue_id, $_SESSION['user_id']]);
-    $old_revenue = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    if ($old_revenue) {
-        // Update project revenue
-        $query = "UPDATE project_revenues SET project_id = ?, client_id = ?, revenue_type = ?, amount = ?, 
-                  received_date = ?, payment_method = ?, reference_number = ?, notes = ?, updated_at = NOW() 
-                  WHERE id = ? AND created_by = ?";
+    // Admins/managers can edit any revenue record; others only their own
+    $role = $_SESSION['role'] ?? '';
+    if (in_array($role, ['admin', 'manager'])) {
+        $query = "SELECT * FROM project_revenues WHERE id = ?";
         $stmt = $db->prepare($query);
-        $stmt->execute([$project_id, $client_id, $revenue_type, $amount, $received_date, 
-                       $payment_method, $reference_number, $notes, $revenue_id, $_SESSION['user_id']]);
-        
-        // Update corresponding money_flow entry
-        $query = "UPDATE money_flow
-                  SET category = ?, amount = ?, description = ?, transaction_date = ?,
-                      project_id = ?, client_id = ?
-                  WHERE transaction_type = 'income'
-                    AND project_id = ?
-                    AND client_id = ?
-                    AND amount = ?
-                    AND DATE(transaction_date) = DATE(?)
-                    AND created_by = ?
-                  ORDER BY created_at DESC
-                  LIMIT 1";
+        $stmt->execute([$revenue_id]);
+    } else {
+        $query = "SELECT * FROM project_revenues WHERE id = ? AND created_by = ?";
         $stmt = $db->prepare($query);
-        $stmt->execute([
-            ucfirst($revenue_type),
-            $amount,
-            $notes ?: "Project revenue - {$revenue_type}",
-            $received_date,
-            $project_id,
-            $client_id,
-            $old_revenue['project_id'],
-            $old_revenue['client_id'],
-            $old_revenue['amount'],
-            $old_revenue['received_date'],
-            $_SESSION['user_id'],
-        ]);
+        $stmt->execute([$revenue_id, $_SESSION['user_id']]);
     }
+    $old_revenue = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$old_revenue) {
+        header('Location: finance.php?view=project_revenues&err=' . urlencode('Revenue record not found or you do not have permission to edit it.'));
+        exit();
+    }
+
+    $proof_file = $old_revenue['proof_file'];
+
+    $upload = FileUpload::uploadDepartmentFile($_FILES['proof_file'] ?? null, 'finance', 'revenue');
+    if (!$upload['success']) {
+        header('Location: finance.php?view=project_revenues&err=' . urlencode(implode(' ', $upload['errors'])));
+        exit();
+    }
+    if ($upload['filename'] !== null) {
+        if ($proof_file) {
+            FileUpload::deleteDepartmentFile($proof_file);
+        }
+        $proof_file = $upload['path'];
+    } elseif (!empty($_POST['remove_proof_file'])) {
+        if ($proof_file) {
+            FileUpload::deleteDepartmentFile($proof_file);
+        }
+        $proof_file = null;
+    }
+
+    // Update project revenue
+    $query = "UPDATE project_revenues SET project_id = ?, client_id = ?, revenue_type = ?, amount = ?,
+              received_date = ?, payment_method = ?, reference_number = ?, notes = ?, proof_file = ?, updated_at = NOW()
+              WHERE id = ?";
+    $stmt = $db->prepare($query);
+    $stmt->execute([$project_id, $client_id, $revenue_type, $amount, $received_date,
+                   $payment_method, $reference_number, $notes, $proof_file, $revenue_id]);
+
+    // Update corresponding money_flow entry
+    $query = "UPDATE money_flow
+              SET category = ?, amount = ?, description = ?, transaction_date = ?,
+                  project_id = ?, client_id = ?
+              WHERE transaction_type = 'income'
+                AND project_id = ?
+                AND client_id = ?
+                AND amount = ?
+                AND DATE(transaction_date) = DATE(?)
+                AND created_by = ?
+              ORDER BY created_at DESC
+              LIMIT 1";
+    $stmt = $db->prepare($query);
+    $stmt->execute([
+        ucfirst($revenue_type),
+        $amount,
+        $notes ?: "Project revenue - {$revenue_type}",
+        $received_date,
+        $project_id,
+        $client_id,
+        $old_revenue['project_id'],
+        $old_revenue['client_id'],
+        $old_revenue['amount'],
+        $old_revenue['received_date'],
+        $old_revenue['created_by'],
+    ]);
+
+    header('Location: finance.php?view=project_revenues&msg=' . urlencode('Revenue record updated successfully.'));
+    exit();
 }
 
 // Handle delete project revenue
@@ -810,43 +853,58 @@ if ($_POST && isset($_POST['delete_project_revenue'])) {
     
     $revenue_id = (int)$_POST['revenue_id'];
     
-    // Get project revenue record and verify ownership
-    $query = "SELECT * FROM project_revenues WHERE id = ? AND created_by = ?";
-    $stmt = $db->prepare($query);
-    $stmt->execute([$revenue_id, $_SESSION['user_id']]);
-    $revenue = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    if ($revenue) {
-        // Delete corresponding money_flow entry using CTE for precise targeting
-        $query = "WITH target_row AS (
-                    SELECT id FROM money_flow 
-                    WHERE transaction_type = 'income' 
-                      AND project_id = ? 
-                      AND client_id = ? 
-                      AND amount = ? 
-                      AND DATE(transaction_date) = DATE(?)
-                      AND created_by = ?
-                    ORDER BY created_at DESC 
-                    LIMIT 1
-                  )
-                  DELETE FROM money_flow 
-                  WHERE id = (SELECT id FROM target_row)";
+    // Admins/managers can delete any revenue record; others only their own
+    $role = $_SESSION['role'] ?? '';
+    if (in_array($role, ['admin', 'manager'])) {
+        $query = "SELECT * FROM project_revenues WHERE id = ?";
         $stmt = $db->prepare($query);
-        $stmt->execute([
-            $revenue['project_id'], 
-            $revenue['client_id'], 
-            $revenue['amount'], 
-            $revenue['received_date'], 
-            $_SESSION['user_id']
-        ]);
-        
-        // Delete the project revenue record
-        $query = "DELETE FROM project_revenues WHERE id = ? AND created_by = ?";
+        $stmt->execute([$revenue_id]);
+    } else {
+        $query = "SELECT * FROM project_revenues WHERE id = ? AND created_by = ?";
         $stmt = $db->prepare($query);
         $stmt->execute([$revenue_id, $_SESSION['user_id']]);
-        
-        Utils::logActivity($db, 'delete', "Deleted project revenue ID {$revenue_id}, amount R" . number_format($revenue['amount'], 2));
     }
+    $revenue = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$revenue) {
+        header('Location: finance.php?view=project_revenues&err=' . urlencode('Revenue record not found or you do not have permission to delete it.'));
+        exit();
+    }
+
+    // Delete corresponding money_flow entry using CTE for precise targeting
+    $query = "WITH target_row AS (
+                SELECT id FROM money_flow
+                WHERE transaction_type = 'income'
+                  AND project_id = ?
+                  AND client_id = ?
+                  AND amount = ?
+                  AND DATE(transaction_date) = DATE(?)
+                  AND created_by = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+              )
+              DELETE FROM money_flow
+              WHERE id = (SELECT id FROM target_row)";
+    $stmt = $db->prepare($query);
+    $stmt->execute([
+        $revenue['project_id'],
+        $revenue['client_id'],
+        $revenue['amount'],
+        $revenue['received_date'],
+        $revenue['created_by']
+    ]);
+
+    // Delete the project revenue record
+    $query = "DELETE FROM project_revenues WHERE id = ?";
+    $stmt = $db->prepare($query);
+    $stmt->execute([$revenue_id]);
+
+    if (!empty($revenue['proof_file'])) {
+        FileUpload::deleteDepartmentFile($revenue['proof_file']);
+    }
+
+    Utils::logActivity($db, 'delete', "Deleted project revenue ID {$revenue_id}, amount R" . number_format($revenue['amount'], 2));
+
     header('Location: finance.php?view=project_revenues&msg=' . urlencode('Revenue record deleted.'));
     exit();
 }
@@ -883,9 +941,16 @@ if ($_POST && isset($_POST['create_expense'])) {
     $description = Security::sanitizeInput($_POST['description']);
     $project_id  = !empty($_POST['project_id']) ? (int)$_POST['project_id'] : null;
 
-    $db->prepare("INSERT INTO expenses (category, description, amount, expense_date, project_id, status, submitted_by)
-                  VALUES (?, ?, ?, ?, ?, 'pending', ?)")
-       ->execute([$category, $description, $amount, $expense_date, $project_id, $_SESSION['user_id']]);
+    $upload = FileUpload::uploadDepartmentFile($_FILES['receipt_file'] ?? null, 'finance', 'expense');
+    if (!$upload['success']) {
+        header('Location: finance.php?view=expenses&err=' . urlencode(implode(' ', $upload['errors'])));
+        exit();
+    }
+    $receipt_file = $upload['filename'] !== null ? $upload['path'] : null;
+
+    $db->prepare("INSERT INTO expenses (category, description, amount, expense_date, project_id, receipt_file, status, submitted_by)
+                  VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)")
+       ->execute([$category, $description, $amount, $expense_date, $project_id, $receipt_file, $_SESSION['user_id']]);
 
     // Record in money flow as a pending expense
     $db->prepare("INSERT INTO money_flow (transaction_type, category, amount, description, transaction_date, project_id, created_by)
@@ -893,6 +958,87 @@ if ($_POST && isset($_POST['create_expense'])) {
        ->execute([ucfirst(str_replace('_', ' ', $category)), $amount, "Expense: {$description}", $expense_date, $project_id, $_SESSION['user_id']]);
 
     header('Location: finance.php?view=expenses&msg=' . urlencode('Expense submitted for approval.'));
+    exit();
+}
+
+// Handle expense edit
+if ($_POST && isset($_POST['update_expense'])) {
+    Security::checkCSRFToken();
+    Security::requireWriteAccess('Finance');
+
+    $expense_id   = (int)$_POST['expense_id'];
+    $category     = Security::sanitizeInput($_POST['category']);
+    $amount       = floatval($_POST['amount']);
+    $expense_date = Security::sanitizeInput($_POST['expense_date']);
+    $description  = Security::sanitizeInput($_POST['description']);
+    $project_id   = !empty($_POST['project_id']) ? (int)$_POST['project_id'] : null;
+
+    // Admins/managers can edit any expense; others only their own
+    $role = $_SESSION['role'] ?? '';
+    if (in_array($role, ['admin', 'manager'])) {
+        $query = "SELECT * FROM expenses WHERE id = ?";
+        $stmt = $db->prepare($query);
+        $stmt->execute([$expense_id]);
+    } else {
+        $query = "SELECT * FROM expenses WHERE id = ? AND submitted_by = ?";
+        $stmt = $db->prepare($query);
+        $stmt->execute([$expense_id, $_SESSION['user_id']]);
+    }
+    $old_expense = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$old_expense) {
+        header('Location: finance.php?view=expenses&err=' . urlencode('Expense not found or you do not have permission to edit it.'));
+        exit();
+    }
+
+    $receipt_file = $old_expense['receipt_file'];
+
+    $upload = FileUpload::uploadDepartmentFile($_FILES['receipt_file'] ?? null, 'finance', 'expense');
+    if (!$upload['success']) {
+        header('Location: finance.php?view=expenses&err=' . urlencode(implode(' ', $upload['errors'])));
+        exit();
+    }
+    if ($upload['filename'] !== null) {
+        if ($receipt_file) {
+            FileUpload::deleteDepartmentFile($receipt_file);
+        }
+        $receipt_file = $upload['path'];
+    } elseif (!empty($_POST['remove_receipt_file'])) {
+        if ($receipt_file) {
+            FileUpload::deleteDepartmentFile($receipt_file);
+        }
+        $receipt_file = null;
+    }
+
+    $query = "UPDATE expenses SET category = ?, description = ?, amount = ?, expense_date = ?, project_id = ?, receipt_file = ?, updated_at = NOW()
+              WHERE id = ?";
+    $stmt = $db->prepare($query);
+    $stmt->execute([$category, $description, $amount, $expense_date, $project_id, $receipt_file, $expense_id]);
+
+    // Update corresponding money_flow entry
+    $query = "UPDATE money_flow
+              SET category = ?, amount = ?, description = ?, transaction_date = ?, project_id = ?
+              WHERE transaction_type = 'expense'
+                AND project_id <=> ?
+                AND amount = ?
+                AND DATE(transaction_date) = DATE(?)
+                AND created_by = ?
+              ORDER BY created_at DESC
+              LIMIT 1";
+    $stmt = $db->prepare($query);
+    $stmt->execute([
+        ucfirst(str_replace('_', ' ', $category)),
+        $amount,
+        "Expense: {$description}",
+        $expense_date,
+        $project_id,
+        $old_expense['project_id'],
+        $old_expense['amount'],
+        $old_expense['expense_date'],
+        $old_expense['submitted_by'],
+    ]);
+
+    header('Location: finance.php?view=expenses&msg=' . urlencode('Expense updated successfully.'));
     exit();
 }
 
@@ -1243,7 +1389,7 @@ if (!isset($expenses)) {
         /* ── Data tables ── */
         .fin-table-wrap {
             background: #fff; border-radius: 12px;
-            border: 1px solid #e5e7eb; overflow: hidden;
+            border: 1px solid #e5e7eb; overflow-x: auto;
             box-shadow: 0 1px 4px rgba(0,0,0,.06);
         }
         .fin-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
@@ -1251,6 +1397,7 @@ if (!isset($expenses)) {
         .fin-table thead th {
             color: #fff; font-weight: 600; font-size: 0.77rem;
             letter-spacing: .4px; padding: 11px 14px; text-align: left;
+            white-space: nowrap;
         }
         .fin-table tbody tr { border-bottom: 1px solid #f3f4f6; transition: background .15s; }
         .fin-table tbody tr:last-child { border-bottom: none; }
@@ -1302,6 +1449,7 @@ if (!isset($expenses)) {
         .fin-btn-gray   { background: #f3f4f6; color: #374151; }
         .fin-btn-gray:hover   { background: #6b7280; color: #fff; }
         .fin-btn select { background: transparent; border: none; color: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
+        .fin-btn select option { background: #fff; color: #374151; }
 
         /* ── Overview tab ── */
         .fin-overview-grid {
@@ -1557,6 +1705,22 @@ if (!isset($expenses)) {
                     <option value="rejected">Rejected</option>
                     <option value="completed">Completed</option>
                 </select>
+                <div class="lc-date-filter">
+                    <select id="q-date-range">
+                        <option value="all">All Dates</option>
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="year">This Year</option>
+                        <option value="lastyear">Last Year</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                    <span class="lc-custom-range">
+                        <input type="date" id="q-date-from">
+                        <span>to</span>
+                        <input type="date" id="q-date-to">
+                    </span>
+                </div>
                 <span class="fin-controls-count" id="q-count"><?php echo count($quotations); ?> quotation<?php echo count($quotations) !== 1 ? 's' : ''; ?></span>
             </div>
             <div class="fin-table-wrap">
@@ -1567,7 +1731,8 @@ if (!isset($expenses)) {
                     <tbody id="q-tbody">
                         <?php foreach ($quotations as $quotation): ?>
                         <tr data-search="<?php echo strtolower(Security::escapeHTML($quotation['quotation_number']).' '.Security::escapeHTML($quotation['client_name'] ?? '')); ?>"
-                            data-status="<?php echo $quotation['status']; ?>">
+                            data-status="<?php echo $quotation['status']; ?>"
+                            data-date="<?php echo $quotation['quotation_date'] ?? ''; ?>">
                             <td class="mono"><?php echo Security::escapeHTML($quotation['quotation_number']); ?></td>
                             <td><?php echo Security::escapeHTML($quotation['client_name'] ?? 'N/A'); ?></td>
                             <td><?php echo date('d M Y', strtotime($quotation['quotation_date'])); ?></td>
@@ -1608,6 +1773,7 @@ if (!isset($expenses)) {
                     </tbody>
                 </table>
                 <div class="fin-no-results" id="q-tbody-no-results">No quotations match your filter.</div>
+                <div class="lc-pagination" id="q-pagination"></div>
             </div>
         </div>
 
@@ -1623,6 +1789,22 @@ if (!isset($expenses)) {
                     <option value="overdue">Overdue</option>
                     <option value="cancelled">Cancelled</option>
                 </select>
+                <div class="lc-date-filter">
+                    <select id="inv-date-range">
+                        <option value="all">All Dates</option>
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="year">This Year</option>
+                        <option value="lastyear">Last Year</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                    <span class="lc-custom-range">
+                        <input type="date" id="inv-date-from">
+                        <span>to</span>
+                        <input type="date" id="inv-date-to">
+                    </span>
+                </div>
                 <span class="fin-controls-count" id="inv-count"><?php echo count($invoices); ?> invoice<?php echo count($invoices) !== 1 ? 's' : ''; ?></span>
             </div>
             <div class="fin-table-wrap">
@@ -1634,7 +1816,8 @@ if (!isset($expenses)) {
                         <?php foreach ($invoices as $invoice): ?>
                         <?php $balance = $invoice['total_amount'] - $invoice['paid_amount']; ?>
                         <tr data-search="<?php echo strtolower(Security::escapeHTML($invoice['invoice_number']).' '.Security::escapeHTML($invoice['client_name'] ?? '')); ?>"
-                            data-status="<?php echo $invoice['status']; ?>">
+                            data-status="<?php echo $invoice['status']; ?>"
+                            data-date="<?php echo $invoice['invoice_date'] ?? ''; ?>">
                             <td class="mono"><?php echo Security::escapeHTML($invoice['invoice_number']); ?></td>
                             <td><?php echo Security::escapeHTML($invoice['client_name'] ?? 'N/A'); ?></td>
                             <td><?php echo date('d M Y', strtotime($invoice['invoice_date'])); ?></td>
@@ -1673,6 +1856,7 @@ if (!isset($expenses)) {
                     </tbody>
                 </table>
                 <div class="fin-no-results" id="inv-tbody-no-results">No invoices match your filter.</div>
+                <div class="lc-pagination" id="inv-pagination"></div>
             </div>
         </div>
 
@@ -1688,6 +1872,22 @@ if (!isset($expenses)) {
                     <option value="completed">Completed</option>
                     <option value="cancelled">Cancelled</option>
                 </select>
+                <div class="lc-date-filter">
+                    <select id="po-date-range">
+                        <option value="all">All Dates</option>
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="year">This Year</option>
+                        <option value="lastyear">Last Year</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                    <span class="lc-custom-range">
+                        <input type="date" id="po-date-from">
+                        <span>to</span>
+                        <input type="date" id="po-date-to">
+                    </span>
+                </div>
                 <span class="fin-controls-count" id="po-count"><?php echo count($purchase_orders); ?> order<?php echo count($purchase_orders) !== 1 ? 's' : ''; ?></span>
             </div>
             <div class="fin-table-wrap">
@@ -1698,7 +1898,8 @@ if (!isset($expenses)) {
                     <tbody id="po-tbody">
                         <?php foreach ($purchase_orders as $po): ?>
                         <tr data-search="<?php echo strtolower(Security::escapeHTML($po['po_number']).' '.Security::escapeHTML($po['supplier_name'])); ?>"
-                            data-status="<?php echo $po['status']; ?>">
+                            data-status="<?php echo $po['status']; ?>"
+                            data-date="<?php echo $po['order_date'] ?? ''; ?>">
                             <td class="mono"><?php echo Security::escapeHTML($po['po_number']); ?></td>
                             <td>
                                 <div style="font-weight:600;"><?php echo Security::escapeHTML($po['supplier_name']); ?></div>
@@ -1737,6 +1938,7 @@ if (!isset($expenses)) {
                     </tbody>
                 </table>
                 <div class="fin-no-results" id="po-tbody-no-results">No purchase orders match your filter.</div>
+                <div class="lc-pagination" id="po-pagination"></div>
             </div>
         </div>
 
@@ -1753,17 +1955,34 @@ if (!isset($expenses)) {
                     <option value="bonus">Bonus</option>
                     <option value="other">Other</option>
                 </select>
+                <div class="lc-date-filter">
+                    <select id="rev-date-range">
+                        <option value="all">All Dates</option>
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="year">This Year</option>
+                        <option value="lastyear">Last Year</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                    <span class="lc-custom-range">
+                        <input type="date" id="rev-date-from">
+                        <span>to</span>
+                        <input type="date" id="rev-date-to">
+                    </span>
+                </div>
                 <span class="fin-controls-count" id="rev-count"><?php echo count($project_revenues); ?> record<?php echo count($project_revenues) !== 1 ? 's' : ''; ?></span>
             </div>
             <div class="fin-table-wrap">
                 <table class="fin-table">
                     <thead><tr>
-                        <th>Project</th><th>Client</th><th>Type</th><th>Amount</th><th>Received Date</th><th>Payment Method</th><th>Reference</th><th>Actions</th>
+                        <th>Project</th><th>Client</th><th>Type</th><th>Amount</th><th>Received Date</th><th>Payment Method</th><th>Reference</th><th>Proof</th><th>Actions</th>
                     </tr></thead>
                     <tbody id="rev-tbody">
                         <?php foreach ($project_revenues as $revenue): ?>
                         <tr data-search="<?php echo strtolower(Security::escapeHTML($revenue['project_name'] ?? '').' '.Security::escapeHTML($revenue['client_name'] ?? '')); ?>"
-                            data-status="<?php echo $revenue['revenue_type']; ?>">
+                            data-status="<?php echo $revenue['revenue_type']; ?>"
+                            data-date="<?php echo $revenue['received_date'] ?? ''; ?>">
                             <td style="font-weight:600;"><?php echo Security::escapeHTML($revenue['project_name'] ?? 'N/A'); ?></td>
                             <td><?php echo Security::escapeHTML($revenue['client_name'] ?? 'N/A'); ?></td>
                             <td><span class="fbadge fbadge-accepted"><?php echo ucfirst($revenue['revenue_type']); ?></span></td>
@@ -1771,6 +1990,13 @@ if (!isset($expenses)) {
                             <td><?php echo $revenue['received_date'] ? date('d M Y', strtotime($revenue['received_date'])) : '—'; ?></td>
                             <td><?php echo Security::escapeHTML(str_replace('_',' ',$revenue['payment_method'] ?? '—')); ?></td>
                             <td style="font-size:.8rem;color:#6b7280;"><?php echo Security::escapeHTML($revenue['reference_number'] ?? '—'); ?></td>
+                            <td>
+                                <?php if (!empty($revenue['proof_file'])): ?>
+                                    <a class="fin-btn fin-btn-blue" href="../uploads/<?php echo Security::escapeHTML($revenue['proof_file']); ?>" target="_blank">View</a>
+                                <?php else: ?>
+                                    <span style="color:#9ca3af;">—</span>
+                                <?php endif; ?>
+                            </td>
                             <td>
                                 <div class="action-buttons">
                                     <button class="fin-btn fin-btn-teal" onclick="viewRevenue(<?php echo htmlspecialchars(json_encode($revenue)); ?>)">View</button>
@@ -1783,6 +2009,7 @@ if (!isset($expenses)) {
                     </tbody>
                 </table>
                 <div class="fin-no-results" id="rev-tbody-no-results">No revenue records match your filter.</div>
+                <div class="lc-pagination" id="rev-pagination"></div>
             </div>
         </div>
 
@@ -1796,17 +2023,34 @@ if (!isset($expenses)) {
                     <option value="approved">Approved</option>
                     <option value="rejected">Rejected</option>
                 </select>
+                <div class="lc-date-filter">
+                    <select id="exp-date-range">
+                        <option value="all">All Dates</option>
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="year">This Year</option>
+                        <option value="lastyear">Last Year</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                    <span class="lc-custom-range">
+                        <input type="date" id="exp-date-from">
+                        <span>to</span>
+                        <input type="date" id="exp-date-to">
+                    </span>
+                </div>
                 <span class="fin-controls-count" id="exp-count"><?php echo count($expenses); ?> expense<?php echo count($expenses) !== 1 ? 's' : ''; ?></span>
             </div>
             <div class="fin-table-wrap">
                 <table class="fin-table">
                     <thead><tr>
-                        <th>Category</th><th>Description</th><th>Amount</th><th>Date</th><th>Project</th><th>Submitted By</th><th>Status</th><?php if ($can_write): ?><th>Actions</th><?php endif; ?>
+                        <th>Category</th><th>Description</th><th>Amount</th><th>Date</th><th>Project</th><th>Submitted By</th><th>Attachment</th><th>Status</th><?php if ($can_write): ?><th>Actions</th><?php endif; ?>
                     </tr></thead>
                     <tbody id="exp-tbody">
                         <?php foreach ($expenses as $exp): ?>
                         <tr data-search="<?php echo strtolower(Security::escapeHTML($exp['category']).' '.Security::escapeHTML($exp['description'])); ?>"
-                            data-status="<?php echo $exp['status']; ?>">
+                            data-status="<?php echo $exp['status']; ?>"
+                            data-date="<?php echo $exp['expense_date'] ?? ''; ?>">
                             <td><span class="fbadge fbadge-sent"><?php echo Security::escapeHTML(ucfirst(str_replace('_',' ',$exp['category']))); ?></span></td>
                             <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<?php echo Security::escapeHTML($exp['description']); ?>"><?php echo Security::escapeHTML($exp['description']); ?></td>
                             <td class="amt">R <?php echo number_format($exp['amount'], 2); ?></td>
@@ -1814,14 +2058,23 @@ if (!isset($expenses)) {
                             <td><?php echo Security::escapeHTML($exp['project_name'] ?? '—'); ?></td>
                             <td><?php echo Security::escapeHTML($exp['submitted_by_name'] ?? '—'); ?></td>
                             <td>
+                                <?php if (!empty($exp['receipt_file'])): ?>
+                                    <a class="fin-btn fin-btn-blue" href="../uploads/<?php echo Security::escapeHTML($exp['receipt_file']); ?>" target="_blank">View</a>
+                                <?php else: ?>
+                                    <span style="color:#9ca3af;">—</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
                                 <span class="fbadge fbadge-<?php echo $exp['status']; ?>">
                                     <?php echo ucfirst($exp['status']); ?>
                                 </span>
                             </td>
                             <?php if ($can_write): ?>
                             <td>
-                                <?php if ($exp['status'] === 'pending'): ?>
                                 <div class="action-buttons">
+                                    <button class="fin-btn fin-btn-teal" onclick="viewExpense(<?php echo htmlspecialchars(json_encode($exp)); ?>)">View</button>
+                                    <button class="fin-btn fin-btn-amber" onclick="editExpense(<?php echo htmlspecialchars(json_encode($exp)); ?>)">Edit</button>
+                                    <?php if ($exp['status'] === 'pending'): ?>
                                     <form method="POST" style="display:inline;">
                                         <?php echo Security::getCSRFTokenField(); ?>
                                         <input type="hidden" name="expense_id" value="<?php echo $exp['id']; ?>">
@@ -1834,25 +2087,25 @@ if (!isset($expenses)) {
                                         <input type="hidden" name="status" value="rejected">
                                         <button type="submit" name="update_expense_status" value="1" class="fin-btn fin-btn-red">Reject</button>
                                     </form>
+                                    <?php endif; ?>
                                 </div>
-                                <?php else: ?>
-                                <span style="font-size:.78rem;color:#94a3b8;">—</span>
-                                <?php endif; ?>
                             </td>
                             <?php endif; ?>
                         </tr>
                         <?php endforeach; ?>
                         <?php if (empty($expenses)): ?>
-                        <tr><td colspan="8" class="fin-no-results" style="display:table-cell;text-align:center;padding:40px;color:#6b7280;">No expenses recorded yet.</td></tr>
+                        <tr><td colspan="<?php echo $can_write ? 9 : 8; ?>" class="fin-no-results" style="display:table-cell;text-align:center;padding:40px;color:#6b7280;">No expenses recorded yet.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
                 <div class="fin-no-results" id="exp-tbody-no-results">No expenses match your filter.</div>
+                <div class="lc-pagination" id="exp-pagination"></div>
             </div>
         </div>
 
     </div><!-- /.main-content -->
-    <script src="../js/notification.js"></script>  
+    <script src="../js/notification.js"></script>
+    <script src="../js/list-controls.js"></script>
     <script>
         // Tab functionality
         function showTab(tabName) {
@@ -1892,12 +2145,32 @@ if (!isset($expenses)) {
             });
             const nr = document.getElementById(tbodyId + '-no-results');
             if (nr) nr.style.display = visible === 0 ? 'block' : 'none';
-            const nouns = {q:'quotation',inv:'invoice',po:'order',rev:'record'};
+            const nouns = {q:'quotation',inv:'invoice',po:'order',rev:'record',exp:'expense'};
             const prefix = tbodyId.split('-')[0];
             const noun = nouns[prefix] || 'item';
             const c = document.getElementById(countId);
             if (c) c.textContent = visible + ' ' + noun + (visible !== 1 ? 's' : '');
+
+            ListControls.applyDateFilterAndPaginate(tbodyId, 'tr', prefix+'-date-range', prefix+'-date-from', prefix+'-date-to', prefix+'-pagination');
         }
+
+        // Init pagination + date-range filters for all Finance tabs
+        const finTabConfigs = [
+            { tbody: 'q-tbody',   search: 'q-search',   filter: 'q-status', count: 'q-count' },
+            { tbody: 'inv-tbody', search: 'inv-search', filter: 'inv-status', count: 'inv-count' },
+            { tbody: 'po-tbody',  search: 'po-search',  filter: 'po-status', count: 'po-count' },
+            { tbody: 'rev-tbody', search: 'rev-search', filter: 'rev-type', count: 'rev-count' },
+            { tbody: 'exp-tbody', search: 'exp-search', filter: 'exp-status', count: 'exp-count' }
+        ];
+        document.addEventListener('DOMContentLoaded', function() {
+            finTabConfigs.forEach(function(cfg) {
+                const prefix = cfg.tbody.split('-')[0];
+                ListControls.initDateRangeControl(prefix+'-date-range', prefix+'-date-from', prefix+'-date-to', function() {
+                    filterFinTab(cfg.tbody, cfg.search, cfg.filter, cfg.count);
+                });
+                filterFinTab(cfg.tbody, cfg.search, cfg.filter, cfg.count);
+            });
+        });
 
         // Global variables for modal item management
         var quotationItemCount = 1;
@@ -2838,72 +3111,6 @@ if (!isset($expenses)) {
             }
         }
         
-        // Project Revenue Functions
-        function viewRevenue(revenueData) {
-            alert(`💵 Project Revenue Details\n\n` +
-                  `Project: ${revenueData.project_name || 'N/A'}\n` +
-                  `Client: ${revenueData.client_name || 'N/A'}\n` +
-                  `Revenue Type: ${revenueData.revenue_type}\n` +
-                  `Amount: R ${parseFloat(revenueData.amount).toLocaleString('en-ZA', {minimumFractionDigits: 2})}\n` +
-                  `Received Date: ${new Date(revenueData.received_date).toLocaleDateString('en-ZA')}\n` +
-                  `Payment Method: ${revenueData.payment_method || 'N/A'}\n` +
-                  `Reference: ${revenueData.reference_number || 'N/A'}\n` +
-                  `Notes: ${revenueData.notes || 'N/A'}`);
-        }
-        
-        function editRevenue(revenueData) {
-            // Populate the revenue modal with existing data
-            document.querySelector('#projectRevenueModal input[name="project_id"]').value = revenueData.project_id || '';
-            document.querySelector('#projectRevenueModal input[name="client_id"]').value = revenueData.client_id || '';
-            document.querySelector('#projectRevenueModal select[name="revenue_type"]').value = revenueData.revenue_type || '';
-            document.querySelector('#projectRevenueModal input[name="amount"]').value = revenueData.amount || '';
-            document.querySelector('#projectRevenueModal input[name="received_date"]').value = revenueData.received_date || '';
-            document.querySelector('#projectRevenueModal select[name="payment_method"]').value = revenueData.payment_method || '';
-            document.querySelector('#projectRevenueModal input[name="reference_number"]').value = revenueData.reference_number || '';
-            document.querySelector('#projectRevenueModal textarea[name="notes"]').value = revenueData.notes || '';
-            
-            // Add hidden field for revenue ID to enable updates
-            let revenueIdField = document.querySelector('#projectRevenueModal input[name="revenue_id"]');
-            if (!revenueIdField) {
-                revenueIdField = document.createElement('input');
-                revenueIdField.type = 'hidden';
-                revenueIdField.name = 'revenue_id';
-                document.querySelector('#projectRevenueModal form').appendChild(revenueIdField);
-            }
-            revenueIdField.value = revenueData.id;
-            
-            // Change form action to update
-            document.querySelector('#projectRevenueModal button[name="record_project_revenue"]').name = 'update_project_revenue';
-            document.querySelector('#projectRevenueModal button[name="update_project_revenue"]').innerHTML = '💾 Update Revenue';
-            
-            // Change modal title
-            document.querySelector('#projectRevenueModal h3').textContent = '✏️ Edit Project Revenue';
-            
-            // Show modal
-            document.getElementById('projectRevenueModal').style.display = 'block';
-        }
-        
-        function resetRevenueForm() {
-            // Reset form to create new revenue mode
-            document.querySelector('#projectRevenueModal form').reset();
-            document.querySelector('#projectRevenueModal button[name="update_project_revenue"]').name = 'record_project_revenue';
-            document.querySelector('#projectRevenueModal button[name="record_project_revenue"]').innerHTML = '💾 Record Revenue';
-            document.querySelector('#projectRevenueModal h3').textContent = '💵 Record Project Revenue';
-            
-            // Remove revenue_id field if exists
-            const revenueIdField = document.querySelector('#projectRevenueModal input[name="revenue_id"]');
-            if (revenueIdField) {
-                revenueIdField.remove();
-            }
-        }
-        
-        function confirmDeleteRevenue(revenueId, projectName, amount) {
-            document.getElementById('deleteRevenueId').value = revenueId;
-            document.getElementById('deleteRevenueDetails').innerHTML = 
-                `<strong>Project:</strong> ${projectName}<br>` +
-                `<strong>Amount:</strong> R ${parseFloat(amount).toLocaleString('en-ZA', {minimumFractionDigits: 2})}`;
-            document.getElementById('deleteRevenueModal').style.display = 'block';
-        }
     </script>
 
     <!-- Quotation Modal -->
@@ -3151,7 +3358,7 @@ if (!isset($expenses)) {
                 <span onclick="closeModal('projectRevenueModal')" style="color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
             </div>
             
-            <form method="POST" id="revenueForm">
+            <form method="POST" id="revenueForm" enctype="multipart/form-data">
                 <?php echo Security::getCSRFTokenField(); ?>
                 <input type="hidden" name="revenue_id" id="revenue_id" value="">
                 
@@ -3212,10 +3419,22 @@ if (!isset($expenses)) {
                 </div>
                 
                 <div class="form-group">
+                    <label>Proof of Payment:</label>
+                    <input type="file" name="proof_file" id="proof_file" accept=".pdf,.jpg,.jpeg,.png">
+                    <small style="color:#6b7280;">PDF, JPG or PNG, max 5MB. Optional.</small>
+                    <div id="currentProofWrap" style="display:none; margin-top:6px;">
+                        <a href="#" id="currentProofLink" target="_blank" class="fin-btn fin-btn-blue">View current file</a>
+                        <label style="margin-left:10px; font-weight:normal; font-size:0.85rem;">
+                            <input type="checkbox" name="remove_proof_file" id="remove_proof_file" value="1"> Remove attached proof
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
                     <label>Notes:</label>
                     <textarea name="notes" id="notes" placeholder="Additional notes about this revenue..."></textarea>
                 </div>
-                
+
                 <div style="margin-top: 20px;">
                     <button type="submit" name="record_project_revenue" id="submitRevenueBtn" class="btn">Record Revenue</button>
                     <button type="button" onclick="closeModal('projectRevenueModal')" class="btn btn-secondary">Cancel</button>
@@ -3271,15 +3490,16 @@ if (!isset($expenses)) {
     <div id="expenseModal" style="display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;overflow:auto;background:rgba(0,0,0,0.4);">
         <div style="background:#fefefe;margin:5% auto;padding:20px;border:1px solid #888;width:90%;max-width:560px;border-radius:8px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-                <h3>Submit Expense Claim</h3>
+                <h3 id="expenseModalTitle">Submit Expense Claim</h3>
                 <span onclick="closeModal('expenseModal')" style="color:#aaa;font-size:28px;font-weight:bold;cursor:pointer;">&times;</span>
             </div>
-            <form method="POST" action="?view=expenses">
+            <form method="POST" action="?view=expenses" id="expenseForm" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
+                <input type="hidden" name="expense_id" id="expense_id" value="">
                 <div class="form-grid">
                     <div class="form-group">
                         <label>Category *</label>
-                        <select name="category" required>
+                        <select name="category" id="expense_category" required>
                             <option value="">Select category...</option>
                             <option value="office">Office Supplies</option>
                             <option value="travel">Travel</option>
@@ -3292,15 +3512,15 @@ if (!isset($expenses)) {
                     </div>
                     <div class="form-group">
                         <label>Amount (ZAR) *</label>
-                        <input type="number" name="amount" step="0.01" min="0.01" required>
+                        <input type="number" name="amount" id="expense_amount" step="0.01" min="0.01" required>
                     </div>
                     <div class="form-group">
                         <label>Expense Date *</label>
-                        <input type="date" name="expense_date" value="<?php echo date('Y-m-d'); ?>" required>
+                        <input type="date" name="expense_date" id="expense_date" value="<?php echo date('Y-m-d'); ?>" required>
                     </div>
                     <div class="form-group">
                         <label>Project (optional)</label>
-                        <select name="project_id">
+                        <select name="project_id" id="expense_project_id">
                             <option value="">— None —</option>
                             <?php foreach ($projects as $project): ?>
                             <option value="<?php echo $project['id']; ?>"><?php echo Security::escapeHTML($project['name']); ?></option>
@@ -3310,13 +3530,40 @@ if (!isset($expenses)) {
                 </div>
                 <div class="form-group">
                     <label>Description *</label>
-                    <textarea name="description" rows="3" placeholder="What was this expense for?" required></textarea>
+                    <textarea name="description" id="expense_description" rows="3" placeholder="What was this expense for?" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Receipt / Attachment:</label>
+                    <input type="file" name="receipt_file" id="expense_receipt_file" accept=".pdf,.jpg,.jpeg,.png">
+                    <small style="color:#6b7280;">PDF, JPG or PNG, max 5MB. Optional.</small>
+                    <div id="currentReceiptWrap" style="display:none; margin-top:6px;">
+                        <a href="#" id="currentReceiptLink" target="_blank" class="fin-btn fin-btn-blue">View current file</a>
+                        <label style="margin-left:10px; font-weight:normal; font-size:0.85rem;">
+                            <input type="checkbox" name="remove_receipt_file" id="remove_receipt_file" value="1"> Remove attached receipt
+                        </label>
+                    </div>
                 </div>
                 <div style="margin-top:16px;display:flex;gap:10px;">
-                    <button type="submit" name="create_expense" value="1" class="btn">Submit Expense</button>
+                    <button type="submit" name="create_expense" id="submitExpenseBtn" value="1" class="btn">Submit Expense</button>
                     <button type="button" onclick="closeModal('expenseModal')" class="btn btn-secondary">Cancel</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Expense View Modal -->
+    <div id="expenseViewModal" style="display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;overflow:auto;background:rgba(0,0,0,0.4);">
+        <div style="background:#fefefe;margin:5% auto;padding:20px;border:1px solid #888;width:90%;max-width:600px;border-radius:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <h3>Expense Details</h3>
+                <span onclick="closeModal('expenseViewModal')" style="color:#aaa;font-size:28px;font-weight:bold;cursor:pointer;">&times;</span>
+            </div>
+            <div id="expenseViewContent" class="form-grid">
+                <!-- Content will be populated by JavaScript -->
+            </div>
+            <div style="margin-top: 20px;">
+                <button type="button" onclick="closeModal('expenseViewModal')" class="btn">Close</button>
+            </div>
         </div>
     </div>
 
@@ -3365,9 +3612,13 @@ if (!isset($expenses)) {
                     <span style="font-weight: bold;">Reference Number:</span>
                     <span>${escapeHtml(revenue.reference_number || 'N/A')}</span>
                 </div>
-                <div class="detail-row" style="display: flex; justify-content: space-between; padding: 0.5rem 0;">
+                <div class="detail-row" style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #eee;">
                     <span style="font-weight: bold;">Notes:</span>
                     <span>${escapeHtml(revenue.notes || 'N/A')}</span>
+                </div>
+                <div class="detail-row" style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0;">
+                    <span style="font-weight: bold;">Proof of Payment:</span>
+                    <span>${revenue.proof_file ? '<a href="../uploads/' + revenue.proof_file + '" target="_blank" class="fin-btn fin-btn-blue">View File</a>' : 'Not attached'}</span>
                 </div>
             `;
             document.getElementById('revenueViewModal').style.display = 'block';
@@ -3389,11 +3640,21 @@ if (!isset($expenses)) {
             document.getElementById('payment_method').value = revenue.payment_method || '';
             document.getElementById('reference_number').value = revenue.reference_number || '';
             document.getElementById('notes').value = revenue.notes || '';
-            
+
+            // Proof of payment
+            document.getElementById('proof_file').value = '';
+            document.getElementById('remove_proof_file').checked = false;
+            if (revenue.proof_file) {
+                document.getElementById('currentProofLink').href = '../uploads/' + revenue.proof_file;
+                document.getElementById('currentProofWrap').style.display = 'block';
+            } else {
+                document.getElementById('currentProofWrap').style.display = 'none';
+            }
+
             // Show modal
             document.getElementById('projectRevenueModal').style.display = 'block';
         }
-        
+
         function resetRevenueForm() {
             document.getElementById('revenueModalTitle').textContent = 'Record Project Revenue';
             document.getElementById('submitRevenueBtn').textContent = 'Record Revenue';
@@ -3401,8 +3662,85 @@ if (!isset($expenses)) {
             document.getElementById('revenueForm').reset();
             document.getElementById('revenue_id').value = '';
             document.getElementById('received_date').value = '<?php echo date('Y-m-d'); ?>';
+            document.getElementById('currentProofWrap').style.display = 'none';
+            document.getElementById('remove_proof_file').checked = false;
         }
-        
+
+        function viewExpense(expense) {
+            const content = document.getElementById('expenseViewContent');
+            const categoryLabel = (expense.category || '').charAt(0).toUpperCase() + (expense.category || '').slice(1).replace(/_/g, ' ');
+            content.innerHTML = `
+                <div class="detail-row" style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #eee;">
+                    <span style="font-weight: bold;">Category:</span>
+                    <span>${escapeHtml(categoryLabel)}</span>
+                </div>
+                <div class="detail-row" style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #eee;">
+                    <span style="font-weight: bold;">Description:</span>
+                    <span>${escapeHtml(expense.description || 'N/A')}</span>
+                </div>
+                <div class="detail-row" style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #eee;">
+                    <span style="font-weight: bold;">Amount:</span>
+                    <span class="amount expense">R ${parseFloat(expense.amount).toLocaleString('en-ZA', {minimumFractionDigits: 2})}</span>
+                </div>
+                <div class="detail-row" style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #eee;">
+                    <span style="font-weight: bold;">Expense Date:</span>
+                    <span>${expense.expense_date || 'N/A'}</span>
+                </div>
+                <div class="detail-row" style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #eee;">
+                    <span style="font-weight: bold;">Project:</span>
+                    <span>${escapeHtml(expense.project_name || 'N/A')}</span>
+                </div>
+                <div class="detail-row" style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #eee;">
+                    <span style="font-weight: bold;">Submitted By:</span>
+                    <span>${escapeHtml(expense.submitted_by_name || 'N/A')}</span>
+                </div>
+                <div class="detail-row" style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #eee;">
+                    <span style="font-weight: bold;">Status:</span>
+                    <span><span class="fbadge fbadge-${expense.status}">${expense.status.charAt(0).toUpperCase() + expense.status.slice(1)}</span></span>
+                </div>
+                <div class="detail-row" style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0;">
+                    <span style="font-weight: bold;">Receipt / Attachment:</span>
+                    <span>${expense.receipt_file ? '<a href="../uploads/' + expense.receipt_file + '" target="_blank" class="fin-btn fin-btn-blue">View File</a>' : 'Not attached'}</span>
+                </div>
+            `;
+            document.getElementById('expenseViewModal').style.display = 'block';
+        }
+
+        function editExpense(expense) {
+            document.getElementById('expenseModalTitle').textContent = 'Edit Expense';
+            document.getElementById('submitExpenseBtn').textContent = 'Update Expense';
+            document.getElementById('submitExpenseBtn').name = 'update_expense';
+
+            document.getElementById('expense_id').value = expense.id;
+            document.getElementById('expense_category').value = expense.category;
+            document.getElementById('expense_amount').value = expense.amount;
+            document.getElementById('expense_date').value = expense.expense_date;
+            document.getElementById('expense_project_id').value = expense.project_id || '';
+            document.getElementById('expense_description').value = expense.description || '';
+
+            document.getElementById('expense_receipt_file').value = '';
+            document.getElementById('remove_receipt_file').checked = false;
+            if (expense.receipt_file) {
+                document.getElementById('currentReceiptLink').href = '../uploads/' + expense.receipt_file;
+                document.getElementById('currentReceiptWrap').style.display = 'block';
+            } else {
+                document.getElementById('currentReceiptWrap').style.display = 'none';
+            }
+
+            document.getElementById('expenseModal').style.display = 'block';
+        }
+
+        function resetExpenseForm() {
+            document.getElementById('expenseModalTitle').textContent = 'Submit Expense Claim';
+            document.getElementById('submitExpenseBtn').textContent = 'Submit Expense';
+            document.getElementById('submitExpenseBtn').name = 'create_expense';
+            document.getElementById('expenseForm').reset();
+            document.getElementById('expense_id').value = '';
+            document.getElementById('expense_date').value = '<?php echo date('Y-m-d'); ?>';
+            document.getElementById('currentReceiptWrap').style.display = 'none';
+            document.getElementById('remove_receipt_file').checked = false;
+        }
+
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
@@ -3427,6 +3765,10 @@ if (!isset($expenses)) {
             const addRevenueButton = document.querySelector('button[onclick*="projectRevenueModal"]');
             if (addRevenueButton) {
                 addRevenueButton.addEventListener('click', resetRevenueForm);
+            }
+            const addExpenseButton = document.querySelector('button[onclick*="expenseModal"]');
+            if (addExpenseButton) {
+                addExpenseButton.addEventListener('click', resetExpenseForm);
             }
         });
     </script>

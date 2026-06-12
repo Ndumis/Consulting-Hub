@@ -326,6 +326,22 @@ $nav_base   = '';
                     <option value="prospect">Prospect</option>
                     <option value="inactive">Inactive</option>
                 </select>
+                <div class="lc-date-filter">
+                    <select id="cl-date-range">
+                        <option value="all">All Dates</option>
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="year">This Year</option>
+                        <option value="lastyear">Last Year</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                    <span class="lc-custom-range">
+                        <input type="date" id="cl-date-from">
+                        <span>to</span>
+                        <input type="date" id="cl-date-to">
+                    </span>
+                </div>
                 <span class="cl-count" id="cl-count"><?php echo $total_clients; ?> clients</span>
             </div>
 
@@ -342,7 +358,8 @@ $nav_base   = '';
                     $search_str = strtolower($cl['name'].' '.$cl['company'].' '.$cl['email'].' '.$cl['phone']);
                 ?>
                 <tr data-search="<?php echo htmlspecialchars($search_str,ENT_QUOTES); ?>"
-                    data-status="<?php echo $cl['status']; ?>">
+                    data-status="<?php echo $cl['status']; ?>"
+                    data-date="<?php echo !empty($cl['created_at']) ? date('Y-m-d', strtotime($cl['created_at'])) : ''; ?>">
                     <td>
                         <div class="cl-name-cell">
                             <div class="cl-avatar"><?php echo $initials; ?></div>
@@ -375,6 +392,7 @@ $nav_base   = '';
                 </tbody>
             </table>
             <div class="cl-no-results" id="cl-tbody-no-results">No clients match your search.</div>
+            <div class="lc-pagination" id="cl-pagination"></div>
             </div>
         </div>
 
@@ -415,6 +433,22 @@ $nav_base   = '';
 
             <div class="cl-controls">
                 <input class="cl-search" type="text" id="ct-search" placeholder="Search contacts…" oninput="filterCL('ct-tbody','ct-search','','','ct-count')">
+                <div class="lc-date-filter">
+                    <select id="ct-date-range">
+                        <option value="all">All Dates</option>
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="year">This Year</option>
+                        <option value="lastyear">Last Year</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                    <span class="lc-custom-range">
+                        <input type="date" id="ct-date-from">
+                        <span>to</span>
+                        <input type="date" id="ct-date-to">
+                    </span>
+                </div>
                 <span class="cl-count" id="ct-count"><?php echo count($contacts); ?> contacts</span>
             </div>
 
@@ -425,7 +459,8 @@ $nav_base   = '';
                 <?php foreach ($contacts as $ct):
                     $search_ct = strtolower($ct['name'].' '.$ct['client_name'].' '.$ct['position'].' '.$ct['email']);
                 ?>
-                <tr data-search="<?php echo htmlspecialchars($search_ct,ENT_QUOTES); ?>" data-status="" data-dept="">
+                <tr data-search="<?php echo htmlspecialchars($search_ct,ENT_QUOTES); ?>" data-status="" data-dept=""
+                    data-date="<?php echo !empty($ct['created_at']) ? date('Y-m-d', strtotime($ct['created_at'])) : ''; ?>">
                     <td style="font-weight:500;"><?php echo Security::escapeHTML($ct['name']); ?></td>
                     <td><?php echo Security::escapeHTML($ct['client_name']); ?></td>
                     <td style="font-size:.82rem;"><?php echo Security::escapeHTML($ct['position']??'—'); ?></td>
@@ -440,6 +475,7 @@ $nav_base   = '';
             <div style="text-align:center;padding:32px;color:#9ca3af;font-size:.88rem;">No contacts yet. Add the first one above.</div>
             <?php endif; ?>
             <div class="cl-no-results" id="ct-tbody-no-results">No contacts match your search.</div>
+            <div class="lc-pagination" id="ct-pagination"></div>
             </div>
         </div>
 
@@ -482,6 +518,22 @@ $nav_base   = '';
                     <option value="completed">Completed</option>
                     <option value="cancelled">Cancelled</option>
                 </select>
+                <div class="lc-date-filter">
+                    <select id="mt-date-range">
+                        <option value="all">All Dates</option>
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="year">This Year</option>
+                        <option value="lastyear">Last Year</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                    <span class="lc-custom-range">
+                        <input type="date" id="mt-date-from">
+                        <span>to</span>
+                        <input type="date" id="mt-date-to">
+                    </span>
+                </div>
                 <span class="cl-count" id="mt-count"><?php echo count($meetings); ?> meetings</span>
             </div>
 
@@ -492,7 +544,8 @@ $nav_base   = '';
                 <?php foreach ($meetings as $mt):
                     $search_mt = strtolower($mt['meeting_title'].' '.$mt['client_name'].' '.$mt['location']);
                 ?>
-                <tr data-search="<?php echo htmlspecialchars($search_mt,ENT_QUOTES); ?>" data-dept="" data-status="<?php echo $mt['status']??'scheduled'; ?>">
+                <tr data-search="<?php echo htmlspecialchars($search_mt,ENT_QUOTES); ?>" data-dept="" data-status="<?php echo $mt['status']??'scheduled'; ?>"
+                    data-date="<?php echo !empty($mt['meeting_date']) ? date('Y-m-d', strtotime($mt['meeting_date'])) : ''; ?>">
                     <td style="font-weight:600;"><?php echo Security::escapeHTML($mt['meeting_title']); ?></td>
                     <td><?php echo Security::escapeHTML($mt['client_name']); ?></td>
                     <td style="font-size:.82rem;"><?php echo date('d M Y H:i',strtotime($mt['meeting_date'])); ?></td>
@@ -514,6 +567,7 @@ $nav_base   = '';
             <div style="text-align:center;padding:32px;color:#9ca3af;font-size:.88rem;">No meetings scheduled yet.</div>
             <?php endif; ?>
             <div class="cl-no-results" id="mt-tbody-no-results">No meetings match your filter.</div>
+            <div class="lc-pagination" id="mt-pagination"></div>
             </div>
         </div>
 
@@ -578,6 +632,7 @@ $nav_base   = '';
     </div>
 
     <script src="../js/notification.js"></script>
+    <script src="../js/list-controls.js"></script>
     <script>
     function switchTab(name) {
         document.querySelectorAll('.cl-tab-content').forEach(el => el.classList.remove('active'));
@@ -620,7 +675,26 @@ $nav_base   = '';
         const cnt = document.getElementById(countId);
         if (cnt) cnt.textContent = visible + (tbodyId.includes('ct')?'contacts':tbodyId.includes('mt')?'meetings':' clients').replace(/^\d+/,'');
         if (cnt) cnt.textContent = visible + ' ' + (tbodyId.includes('ct')?'contacts':tbodyId.includes('mt')?'meetings':'clients');
+
+        const prefix = tbodyId.replace('-tbody','');
+        ListControls.applyDateFilterAndPaginate(tbodyId, 'tr', prefix+'-date-range', prefix+'-date-from', prefix+'-date-to', prefix+'-pagination');
     }
+
+    // Init pagination + date-range filters for Clients/Contacts/Meetings
+    document.addEventListener('DOMContentLoaded', function() {
+        ListControls.initDateRangeControl('cl-date-range', 'cl-date-from', 'cl-date-to', function() {
+            filterCL('cl-tbody','cl-search','','cl-status-filter','cl-count');
+        });
+        ListControls.initDateRangeControl('ct-date-range', 'ct-date-from', 'ct-date-to', function() {
+            filterCL('ct-tbody','ct-search','','','ct-count');
+        });
+        ListControls.initDateRangeControl('mt-date-range', 'mt-date-from', 'mt-date-to', function() {
+            filterCL('mt-tbody','mt-search','','mt-status-filter','mt-count');
+        });
+        filterCL('cl-tbody','cl-search','','cl-status-filter','cl-count');
+        filterCL('ct-tbody','ct-search','','','ct-count');
+        filterCL('mt-tbody','mt-search','','mt-status-filter','mt-count');
+    });
 
     function closeModal(id) { document.getElementById(id).classList.remove('open'); }
     document.querySelectorAll('.cl-modal-overlay').forEach(o => {
