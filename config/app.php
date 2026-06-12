@@ -22,12 +22,15 @@ if (!defined('APP_URL')) {
 
     $__host = $_SERVER['HTTP_HOST'] ?? 'localhost';
 
-    // Derive the app base path from SCRIPT_NAME:
-    // e.g. /development/Consulting-Hub/auth/login.php → /development/Consulting-Hub
-    $__script = $_SERVER['SCRIPT_NAME'] ?? '/index.php';
-    $__parts  = explode('/', ltrim($__script, '/'));
-    // App lives 2 folders deep: development / Consulting-Hub / ...
-    $__base   = '/' . implode('/', array_slice($__parts, 0, 2));
+    // Derive the app base path by comparing the app's filesystem root
+    // (the parent of this config/ directory) against the web server's
+    $__appRoot = str_replace('\\', '/', rtrim(dirname(__DIR__), '\\/'));
+    $__docRoot = str_replace('\\', '/', rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '\\/'));
+
+    $__base = '';
+    if ($__docRoot !== '' && stripos($__appRoot, $__docRoot) === 0) {
+        $__base = substr($__appRoot, strlen($__docRoot));
+    }
 
     define('APP_URL', $__proto . '://' . $__host . $__base);
 }
