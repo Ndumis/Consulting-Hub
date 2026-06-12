@@ -10,6 +10,7 @@
     require_once '../config/security.php';
     require_once '../includes/functions.php';
     require_once '../includes/page_tracker.php';
+    require_once '../includes/file_upload.php';
 
     Security::requireDepartmentAccess('Marketing');
 
@@ -117,17 +118,47 @@
             $ar = $db->prepare("SELECT username FROM users WHERE id=?"); $ar->execute([$author_id]);
             $row = $ar->fetch(PDO::FETCH_ASSOC); if ($row) $author_name = $row['username'];
         }
+
+        $upload = FileUpload::uploadDepartmentFile($_FILES['featured_image_file'] ?? null, 'marketing', 'blog');
+        if (!$upload['success']) {
+            header("Location: marketing.php?view=blog-posts&err=" . urlencode(implode(' ', $upload['errors']))); exit();
+        }
+        $featured_image = $upload['filename'] !== null ? APP_URL . '/uploads/' . $upload['path'] : null;
+
         $slug = trim(strtolower(preg_replace('/[^A-Za-z0-9]+/','-',trim(Security::sanitizeInput($_POST['title'])))),'-') . '-' . substr(md5(uniqid()),0,6);
         $db->prepare("INSERT INTO blog_posts (client_id,campaign_id,slug,title,content,author,author_id,category,tags,published_at,status,featured_image,excerpt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
-           ->execute([!empty($_POST['client_id'])?(int)$_POST['client_id']:null,!empty($_POST['campaign_id'])?(int)$_POST['campaign_id']:null,$slug,Security::sanitizeInput($_POST['title']),Security::sanitizeInput($_POST['content']),$author_name,$author_id,Security::sanitizeInput($_POST['category']),Security::sanitizeInput($_POST['tags']),Security::sanitizeInput($_POST['publish_date']),Security::sanitizeInput($_POST['status']),Security::sanitizeInput($_POST['featured_image']??''),Security::sanitizeInput($_POST['excerpt']??'')]);
+           ->execute([!empty($_POST['client_id'])?(int)$_POST['client_id']:null,!empty($_POST['campaign_id'])?(int)$_POST['campaign_id']:null,$slug,Security::sanitizeInput($_POST['title']),Security::sanitizeInput($_POST['content']),$author_name,$author_id,Security::sanitizeInput($_POST['category']),Security::sanitizeInput($_POST['tags']),Security::sanitizeInput($_POST['publish_date']),Security::sanitizeInput($_POST['status']),$featured_image,Security::sanitizeInput($_POST['excerpt']??'')]);
         header("Location: marketing.php?view=blog-posts&msg=post_created"); exit();
     }
 
     if ($_POST && isset($_POST['update_blog_post'])) {
         Security::checkCSRFToken();
         Security::requireWriteAccess('Marketing');
+        $post_id = (int)$_POST['post_id'];
+
+        $pr = $db->prepare("SELECT featured_image FROM blog_posts WHERE id=?");
+        $pr->execute([$post_id]);
+        $existing_post = $pr->fetch(PDO::FETCH_ASSOC);
+        $featured_image = $existing_post['featured_image'] ?? null;
+
+        $upload = FileUpload::uploadDepartmentFile($_FILES['featured_image_file'] ?? null, 'marketing', 'blog');
+        if (!$upload['success']) {
+            header("Location: marketing.php?view=blog-posts&err=" . urlencode(implode(' ', $upload['errors']))); exit();
+        }
+        if ($upload['filename'] !== null) {
+            if ($featured_image) {
+                FileUpload::deleteDepartmentFile(str_replace(APP_URL . '/uploads/', '', $featured_image));
+            }
+            $featured_image = APP_URL . '/uploads/' . $upload['path'];
+        } elseif (!empty($_POST['remove_featured_image'])) {
+            if ($featured_image) {
+                FileUpload::deleteDepartmentFile(str_replace(APP_URL . '/uploads/', '', $featured_image));
+            }
+            $featured_image = null;
+        }
+
         $db->prepare("UPDATE blog_posts SET title=?,content=?,category=?,tags=?,published_at=?,status=?,featured_image=?,excerpt=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")
-           ->execute([Security::sanitizeInput($_POST['title']),Security::sanitizeInput($_POST['content']),Security::sanitizeInput($_POST['category']),Security::sanitizeInput($_POST['tags']),Security::sanitizeInput($_POST['publish_date']),Security::sanitizeInput($_POST['status']),Security::sanitizeInput($_POST['featured_image']??''),Security::sanitizeInput($_POST['excerpt']??''),(int)$_POST['post_id']]);
+           ->execute([Security::sanitizeInput($_POST['title']),Security::sanitizeInput($_POST['content']),Security::sanitizeInput($_POST['category']),Security::sanitizeInput($_POST['tags']),Security::sanitizeInput($_POST['publish_date']),Security::sanitizeInput($_POST['status']),$featured_image,Security::sanitizeInput($_POST['excerpt']??''),$post_id]);
         header("Location: marketing.php?view=blog-posts&msg=post_updated"); exit();
     }
 
@@ -140,6 +171,7 @@
 
     $view = $_GET['view'] ?? 'overview';
     $msg  = $_GET['msg']  ?? '';
+    $err  = $_GET['err']  ?? '';
 
     $campaigns = $db->query("SELECT mc.*,c.name as client_name,c.company as client_company FROM marketing_campaigns mc LEFT JOIN clients c ON mc.client_id=c.id ORDER BY mc.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
     $clients   = $db->query("SELECT id,name,company FROM clients ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
@@ -248,7 +280,9 @@
 .result-count{margin-left:auto;font-size:.8rem;color:#9ca3af;white-space:nowrap;}
 
 /* ── CARDS ── */
-.mkt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;}
+.mkt-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;}
+@media(max-width:1400px){.mkt-grid{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:768px){.mkt-grid{grid-template-columns:1fr;}}
 .mkt-card{background:#fff;border-radius:12px;border:1px solid #f3f4f6;box-shadow:0 2px 6px rgba(0,0,0,.06);overflow:hidden;transition:transform .2s,box-shadow .2s;}
 .mkt-card:hover{transform:translateY(-3px);box-shadow:0 6px 16px rgba(0,0,0,.1);}
 .mkt-card[style*="display:none"]{transform:none;box-shadow:none;}
@@ -304,6 +338,8 @@
 /* Blog image */
 .blog-img{width:100%;height:130px;object-fit:cover;display:block;}
 .blog-img-placeholder{width:100%;height:90px;background:linear-gradient(135deg,#fdf2f8,#ede9fe);display:flex;align-items:center;justify-content:center;font-size:2rem;}
+.img-preview{display:block;max-width:220px;max-height:140px;object-fit:cover;border-radius:8px;border:1px solid #e5e7eb;margin-top:.5rem;}
+.img-preview-wrap label.remove-img{display:flex;align-items:center;gap:.4rem;margin-top:.4rem;font-size:.8rem;font-weight:400;color:#374151;}
 
 /* Quick actions */
 .quick-actions{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:1rem;margin-bottom:1.5rem;}
@@ -336,6 +372,7 @@
 /* Flash */
 .flash{padding:.75rem 1.1rem;border-radius:8px;margin-bottom:1.1rem;font-size:.875rem;font-weight:500;}
 .flash-success{background:#dcfce7;color:#166534;border:1px solid #bbf7d0;}
+.flash-error{background:#fee2e2;color:#991b1b;border:1px solid #fecaca;}
 
 /* Empty */
 .empty-box{text-align:center;padding:3rem 1.5rem;background:#fff;border-radius:12px;border:2px dashed #e5e7eb;}
@@ -423,6 +460,9 @@ include '../includes/sidebar.php';
 <?php $flash_map=['campaign_added'=>'✅ Campaign created.','campaign_updated'=>'✅ Campaign updated.','post_added'=>'✅ Social post created.','post_updated'=>'✅ Post updated.','post_deleted'=>'✅ Post deleted.','email_added'=>'✅ Email campaign created.','email_updated'=>'✅ Email campaign updated.','email_sent'=>'✅ Campaign sent.','recipient_added'=>'✅ Recipient added.','post_created'=>'✅ Blog post created.','post_updated'=>'✅ Blog post updated.'];
 if ($msg && isset($flash_map[$msg])): ?>
 <div class="flash flash-success" id="flashMsg"><?= $flash_map[$msg] ?></div>
+<?php endif; ?>
+<?php if ($err): ?>
+<div class="flash flash-error" id="flashErr">⚠️ <?= Security::escapeHTML($err) ?></div>
 <?php endif; ?>
 
 <!-- Hero -->
@@ -956,7 +996,7 @@ if ($msg && isset($flash_map[$msg])): ?>
     <div class="form-card">
         <div class="form-card-head"><h3>📝 Create Blog Post</h3><p>Write and publish content for your clients</p></div>
         <div class="form-card-body">
-            <form method="post">
+            <form method="post" enctype="multipart/form-data">
                 <?= Security::getCSRFTokenField() ?>
                 <div class="form-section"><h4>📋 Post Details</h4>
                     <div class="form-2col">
@@ -992,7 +1032,11 @@ if ($msg && isset($flash_map[$msg])): ?>
                                 <?php foreach ($campaigns as $c): ?><option value="<?= $c['id'] ?>"><?= Security::escapeHTML($c['campaign_name']) ?></option><?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="fg" style="grid-column:1/-1;"><label>Featured Image URL</label><input type="url" name="featured_image" placeholder="https://example.com/image.jpg"></div>
+                        <div class="fg img-preview-wrap" style="grid-column:1/-1;">
+                            <label>Featured Image <span class="opt">(JPG, PNG, GIF or WEBP, max 5MB)</span></label>
+                            <input type="file" name="featured_image_file" accept="image/jpeg,image/png,image/gif,image/webp" onchange="previewFeaturedImage(this,'bp-create-preview')">
+                            <img id="bp-create-preview" class="img-preview" style="display:none;" alt="Preview">
+                        </div>
                     </div>
                 </div>
                 <div class="form-section" style="margin-top:1.25rem;"><h4>✍️ Content</h4>
@@ -1100,7 +1144,7 @@ if ($msg && isset($flash_map[$msg])): ?>
         <?php if (in_array($role,['admin','manager'])): ?>
         <div id="bp-<?= $bp['id'] ?>" class="inline-edit">
             <h5>✏️ Edit Blog Post</h5>
-            <form method="post">
+            <form method="post" enctype="multipart/form-data">
                 <?= Security::getCSRFTokenField() ?><input type="hidden" name="post_id" value="<?= $bp['id'] ?>">
                 <div class="form-2col">
                     <div class="fg" style="grid-column:1/-1;"><label>Title</label><input type="text" name="title" value="<?= Security::escapeHTML($bp['title']) ?>" required></div>
@@ -1116,7 +1160,14 @@ if ($msg && isset($flash_map[$msg])): ?>
                     </div>
                     <div class="fg"><label>Publish Date</label><input type="datetime-local" name="publish_date" value="<?= date('Y-m-d\TH:i',strtotime($bp['published_at']??'now')) ?>" required></div>
                     <div class="fg"><label>Tags</label><input type="text" name="tags" value="<?= Security::escapeHTML($bp['tags']??'') ?>"></div>
-                    <div class="fg" style="grid-column:1/-1;"><label>Featured Image URL</label><input type="url" name="featured_image" value="<?= Security::escapeHTML($bp['featured_image']??'') ?>"></div>
+                    <div class="fg img-preview-wrap" style="grid-column:1/-1;">
+                        <label>Featured Image <span class="opt">(JPG, PNG, GIF or WEBP, max 5MB)</span></label>
+                        <input type="file" name="featured_image_file" accept="image/jpeg,image/png,image/gif,image/webp" onchange="previewFeaturedImage(this,'bp-edit-preview-<?= $bp['id'] ?>')">
+                        <img id="bp-edit-preview-<?= $bp['id'] ?>" class="img-preview" src="<?= Security::escapeHTML($bp['featured_image']??'') ?>" style="<?= $bp['featured_image']?'':'display:none;' ?>" alt="Preview">
+                        <?php if ($bp['featured_image']): ?>
+                        <label class="remove-img"><input type="checkbox" name="remove_featured_image" value="1"> Remove current image</label>
+                        <?php endif; ?>
+                    </div>
                 </div>
                 <div class="fg"><label>Excerpt</label><textarea name="excerpt" rows="2"><?= Security::escapeHTML($bp['excerpt']??'') ?></textarea></div>
                 <div class="fg"><label>Content</label><textarea name="content" rows="6" required><?= Security::escapeHTML($bp['content']) ?></textarea></div>
@@ -1325,6 +1376,18 @@ function toggleForm(wrapId, btnId, labelOpen, labelClose) {
 function toggleInlineEdit(id) {
     const el = document.getElementById(id);
     el.style.display = el.style.display === 'block' ? 'none' : 'block';
+}
+
+// Live preview for a selected featured image file
+function previewFeaturedImage(input, previewId) {
+    const preview = document.getElementById(previewId);
+    if (!preview || !input.files || !input.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        preview.src = e.target.result;
+        preview.style.display = 'block';
+    };
+    reader.readAsDataURL(input.files[0]);
 }
 
 // Client-side filter for card grids / flex lists
