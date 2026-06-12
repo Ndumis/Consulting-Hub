@@ -54,16 +54,16 @@ if ($_POST && isset($_POST['create_candidate'])) {
                     job_posting_id, first_name, last_name, email, phone, cover_letter,
                     salary_expectation, availability_date, preferred_location, willing_to_relocate,
                     work_authorization, linkedin_profile, portfolio_website, years_experience, status
-                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending') RETURNING id";
-        
+                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
+
         $stmt = $db->prepare($query);
         $stmt->execute([
             $job_posting_id, $first_name, $last_name, $email, $phone, $cover_letter,
             $salary_expectation, $availability_date, $preferred_location, $willing_to_relocate,
             $work_authorization, $linkedin_profile, $portfolio_website, $years_experience
         ]);
-        
-        $candidate_id = $stmt->fetchColumn();
+
+        $candidate_id = $db->lastInsertId();
         
         // Handle CV upload with correct API
         if (isset($_FILES['resume_file']) && $_FILES['resume_file']['error'] === UPLOAD_ERR_OK) {
